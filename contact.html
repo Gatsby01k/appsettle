@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+
+  <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-RLY59FDEF2"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-RLY59FDEF2');
+</script>
+  
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+
+  <title>Contact — INRSettle</title>
+
+  <meta name="description" content="Request access to INRSettle stablecoin settlement infrastructure.">
+  <meta name="theme-color" content="#050816">
+
+  <meta property="og:title" content="Contact — INRSettle">
+  <meta property="og:description" content="Request access to INRSettle stablecoin settlement infrastructure.">
+  <meta property="og:type" content="website">
+
+  <link rel="icon" href="/assets/favicon.png" type="image/png">
+  <link rel="manifest" href="/site.webmanifest">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/styles.css">
+</head>
+
+<body>
+
+<header class="site-header">
+  <div class="container nav">
+
+    <a class="brand" href="/index.html">
+      <img src="/assets/mark.png" alt="INRSettle mark">
+      <span>INRSettle</span>
+    </a>
+
+    <nav class="nav-links">
+      <a href="/infrastructure.html">Infrastructure</a>
+      <a href="/api.html">API</a>
+      <a href="/use-cases.html">Use Cases</a>
+      <a href="/security.html">Security</a>
+      <a href="/compliance.html">Compliance</a>
+      <a href="/docs/index.html">Docs</a>
+    </nav>
+
+    <div class="nav-actions">
+      <a class="btn" href="/contact.html">Talk to Sales</a>
+      <a class="btn primary" href="/contact.html#access">Request Access</a>
+    </div>
+
+    <button class="menu-btn" data-menu>Menu</button>
+
+    <div class="mobile-panel" data-mobile>
+      <a href="/infrastructure.html">Infrastructure</a>
+      <a href="/api.html">API</a>
+      <a href="/use-cases.html">Use Cases</a>
+      <a href="/security.html">Security</a>
+      <a href="/compliance.html">Compliance</a>
+      <a href="/docs/index.html">Docs</a>
+      <a href="/contact.html">Contact</a>
+    </div>
+
+  </div>
+</header>
+
+<main>
+
+<section class="page-hero">
+  <div class="container">
+
+    <div class="eyebrow">Contact</div>
+
+    <h1>Talk to the INRSettle team.</h1>
+
+    <p>
+      Request access for India-focused treasury, PSP,
+      merchant, or payment operator settlement workflows.
+    </p>
+
+  </div>
+</section>
+
+<section class="section" id="access">
+
+  <div class="container split">
+
+    <div class="contact-box">
+
+      <h2>Request Access</h2>
+
+      <p class="muted">
+        Share your business profile and settlement use case.
+        The team will review fit, KYB requirements,
+        and operational needs.
+      </p>
+
+      <ul class="feature-list">
+        <li>Business-only onboarding</li>
+        <li>India corridor settlement workflows</li>
+        <li>INR ↔ USDT treasury operations</li>
+        <li>API and dashboard access</li>
+      </ul>
+
+    </div>
+
+    <form class="form card"
+          name="access-request"
+          method="POST"
+          data-netlify="true"
+          netlify-honeypot="bot-field">
+
+      <input type="hidden" name="form-name" value="access-request">
+
+      <p hidden>
+        <label>
+          Do not fill:
+          <input name="bot-field">
+        </label>
+      </p>
+
+      <input
+        name="name"
+        placeholder="Full name"
+        required
+      >
+
+      <input
+        name="email"
+        type="email"
+        placeholder="Work email"
+        required
+      >
+
+      <input
+        name="company"
+        placeholder="Company"
+        required
+      >
+
+      <select name="company_type" required>
+        <option value="">Company type</option>
+        <option>PSP</option>
+        <option>OTC Desk</option>
+        <option>Merchant</option>
+        <option>Payment Operator</option>
+        <option>Treasury Desk</option>
+        <option>Liquidity Provider</option>
+        <option>Other</option>
+      </select>
+
+      <select name="monthly_volume">
+        <option value="">Expected monthly settlement volume</option>
+        <option>Below $10k</option>
+        <option>$10k–$50k</option>
+        <option>$50k–$250k</option>
+        <option>$250k+</option>
+      </select>
+
+      <textarea
+        name="message"
+        placeholder="Describe your payment corridor and settlement needs"
+      ></textarea>
+
+      <button class="btn primary" type="submit">
+        Request Access
+      </button>
+
+      <div class="direct-contact">
+
+        <p>Prefer direct communication?</p>
+
+        <p>
+          Telegram:
+          <a
+            href="https://t.me/INRSettle_team"
+            target="_blank"
+            rel="noopener"
+          >
+            @INRSettle_team
+          </a>
+        </p>
+
+        <p>
+          Email:
+          <a href="mailto:info@inrsettle.com">
+            info@inrsettle.com
+          </a>
+        </p>
+
+      </div>
+
+    </form>
+
+  </div>
+
+</section>
+
+</main>
+
+<footer class="footer">
+
+  <div class="container footer-grid">
+
+    <div>
+      <a class="brand" href="/index.html">
+        <img src="/assets/mark.png" alt="INRSettle mark">
+        <span>INRSettle</span>
+      </a>
+
+      <p class="muted">
+        Stablecoin settlement infrastructure for India payment flows.
+      </p>
+    </div>
+
+    <div>
+      <h4>Product</h4>
+      <a href="/infrastructure.html">Infrastructure</a>
+      <a href="/api.html">API</a>
+      <a href="/use-cases.html">Use Cases</a>
+      <a href="/docs/index.html">Docs</a>
+    </div>
+
+    <div>
+      <h4>Trust</h4>
+      <a href="/security.html">Security</a>
+      <a href="/compliance.html">Compliance</a>
+      <a href="/risk.html">Risk Disclosure</a>
+      <a href="/status.html">Status</a>
+    </div>
+
+    <div>
+      <h4>Company</h4>
+      <a href="/contact.html">Contact</a>
+      <a href="/contact.html#access">Request Access</a>
+      <a href="/legal/privacy.html">Privacy</a>
+      <a href="/legal/terms.html">Terms</a>
+    </div>
+
+    <div>
+      <h4>Operations</h4>
+      <a href="/docs/integration.html">Integration</a>
+      <a href="/docs/api.html">API Reference</a>
+      <a href="/docs/webhooks.html">Webhooks</a>
+      <a href="/docs/reconciliation.html">Reconciliation</a>
+    </div>
+
+  </div>
+
+</footer>
+
+<script src="/script.js"></script>
+
+</body>
+</html>
