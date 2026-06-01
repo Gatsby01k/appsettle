@@ -1,5 +1,6 @@
-import { redirect } from "next/navigation";
+// app/page.tsx
+import LoginPage from "./(auth)/login/page";
 
 export default function HomePage() {
-  redirect("/login");
+  return <LoginPage />;
 }
