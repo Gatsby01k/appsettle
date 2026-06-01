@@ -1,0 +1,234 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OrganizationStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  TREASURY_MANAGER
+  SETTLEMENT_OPERATOR
+  COMPLIANCE_OFFICER
+  FINANCE_VIEWER
+}
+
+enum QuoteStatus {
+  ACTIVE
+  ACCEPTED
+  EXPIRED
+  REJECTED
+}
+
+enum SettlementStatus {
+  REQUESTED
+  QUOTED
+  PENDING_APPROVAL
+  APPROVED
+  EXECUTING
+  SETTLED
+  RECONCILED
+  FAILED
+  CANCELLED
+  ON_HOLD
+}
+
+enum Corridor {
+  INR_USDT
+  USDT_INR
+}
+
+enum ReconciliationStatus {
+  OPEN
+  MATCHED
+  PARTIALLY_MATCHED
+  UNMATCHED
+  EXCEPTION
+  RESOLVED
+}
+
+enum AuditActorType {
+  USER
+  API
+  SYSTEM
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  passwordHash String
+  mfaEnabled   Boolean      @default(false)
+  lastLoginAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  memberships  Membership[]
+  auditLogs    AuditLog[]
+  quotes       Quote[]      @relation("QuoteCreator")
+  settlements  Settlement[] @relation("SettlementCreator")
+
+  @@index([email])
+}
+
+model Organization {
+  id                 String                 @id @default(cuid())
+  legalName          String
+  displayName        String
+  country            String                 @default("IN")
+  status             OrganizationStatus     @default(PENDING)
+  baseCurrency       String                 @default("INR")
+  settlementLimit    Decimal?               @db.Decimal(20, 2)
+  dailyLimit         Decimal?               @db.Decimal(20, 2)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  memberships        Membership[]
+  settings           OrganizationSettings?
+  quotes             Quote[]
+  settlements        Settlement[]
+  reconciliation     ReconciliationRecord[]
+  auditLogs          AuditLog[]
+}
+
+model Membership {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  role           Role
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId, role])
+}
+
+model OrganizationSettings {
+  id                    String       @id @default(cuid())
+  organizationId        String       @unique
+  approvalThreshold     Decimal      @default(2500000.00) @db.Decimal(20, 2)
+  quoteTtlSeconds       Int          @default(900)
+  webhookUrl            String?
+  reconciliationEmail   String?
+  requireMfaForApproval Boolean      @default(true)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model Quote {
+  id              String        @id @default(cuid())
+  organizationId  String
+  createdById     String
+  corridor        Corridor
+  sourceCurrency  String
+  targetCurrency  String
+  sourceAmount    Decimal       @db.Decimal(20, 2)
+  targetAmount    Decimal       @db.Decimal(20, 6)
+  rate            Decimal       @db.Decimal(20, 8)
+  feeBps          Int           @default(45)
+  feeAmount       Decimal       @db.Decimal(20, 2)
+  settlementWindow String       @default("same_day")
+  status          QuoteStatus   @default(ACTIVE)
+  expiresAt       DateTime
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  createdBy       User          @relation("QuoteCreator", fields: [createdById], references: [id])
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  settlements     Settlement[]
+
+  @@index([organizationId, status, createdAt])
+}
+
+model Settlement {
+  id                String             @id @default(cuid())
+  publicId          String             @unique
+  organizationId    String
+  quoteId           String?
+  createdById       String
+  reference         String
+  corridor          Corridor
+  sourceCurrency    String
+  targetCurrency    String
+  sourceAmount      Decimal            @db.Decimal(20, 2)
+  targetAmount      Decimal            @db.Decimal(20, 6)
+  feeAmount         Decimal            @default(0) @db.Decimal(20, 2)
+  status            SettlementStatus   @default(REQUESTED)
+  sourceAccount     String
+  targetAccount     String
+  failureReason     String?
+  approvedAt        DateTime?
+  executedAt        DateTime?
+  settledAt         DateTime?
+  reconciledAt      DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  createdBy         User               @relation("SettlementCreator", fields: [createdById], references: [id])
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  quote             Quote?             @relation(fields: [quoteId], references: [id])
+  events            SettlementEvent[]
+  reconciliation    ReconciliationRecord[]
+
+  @@unique([organizationId, reference])
+  @@index([organizationId, status, createdAt])
+}
+
+model SettlementEvent {
+  id           String           @id @default(cuid())
+  settlementId String
+  fromStatus   SettlementStatus?
+  toStatus     SettlementStatus
+  note         String?
+  actorId      String?
+  createdAt    DateTime         @default(now())
+  settlement   Settlement       @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  @@index([settlementId, createdAt])
+}
+
+model ReconciliationRecord {
+  id              String               @id @default(cuid())
+  organizationId  String
+  settlementId    String?
+  externalRef     String
+  source          String
+  amount          Decimal              @db.Decimal(20, 2)
+  currency        String
+  valueDate       DateTime
+  status          ReconciliationStatus @default(OPEN)
+  exceptionReason String?
+  rawPayload      Json?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  settlement      Settlement?          @relation(fields: [settlementId], references: [id])
+
+  @@index([organizationId, status, valueDate])
+}
+
+model AuditLog {
+  id             String         @id @default(cuid())
+  organizationId String?
+  userId         String?
+  actorType      AuditActorType @default(USER)
+  action         String
+  resourceType   String
+  resourceId     String?
+  before         Json?
+  after          Json?
+  ipAddress      String?
+  requestId      String?
+  createdAt      DateTime       @default(now())
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([resourceType, resourceId])
+}

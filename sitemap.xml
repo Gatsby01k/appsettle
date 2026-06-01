@@ -1,19 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://inrsettle.com/</loc></url>
-  <url><loc>https://inrsettle.com/infrastructure.html</loc></url>
-  <url><loc>https://inrsettle.com/api.html</loc></url>
-  <url><loc>https://inrsettle.com/use-cases.html</loc></url>
-  <url><loc>https://inrsettle.com/security.html</loc></url>
-  <url><loc>https://inrsettle.com/compliance.html</loc></url>
-  <url><loc>https://inrsettle.com/docs/</loc></url>
-  <url><loc>https://inrsettle.com/docs/api.html</loc></url>
-  <url><loc>https://inrsettle.com/docs/integration.html</loc></url>
-  <url><loc>https://inrsettle.com/docs/webhooks.html</loc></url>
-  <url><loc>https://inrsettle.com/docs/reconciliation.html</loc></url>
-  <url><loc>https://inrsettle.com/contact.html</loc></url>
-  <url><loc>https://inrsettle.com/risk.html</loc></url>
-  <url><loc>https://inrsettle.com/legal/privacy.html</loc></url>
-  <url><loc>https://inrsettle.com/legal/terms.html</loc></url>
-  <url><loc>https://inrsettle.com/inr-settlement-india.html</loc></url>
+  <url><loc>https://inrsettle.com/</loc><lastmod>2026-06-01</lastmod><priority>1.0</priority></url>
+  <url><loc>https://inrsettle.com/infrastructure.html</loc><lastmod>2026-06-01</lastmod><priority>0.9</priority></url>
+  <url><loc>https://inrsettle.com/api.html</loc><lastmod>2026-06-01</lastmod><priority>0.9</priority></url>
+  <url><loc>https://inrsettle.com/use-cases.html</loc><lastmod>2026-06-01</lastmod><priority>0.8</priority></url>
+  <url><loc>https://inrsettle.com/security.html</loc><lastmod>2026-06-01</lastmod><priority>0.8</priority></url>
+  <url><loc>https://inrsettle.com/compliance.html</loc><lastmod>2026-06-01</lastmod><priority>0.8</priority></url>
+  <url><loc>https://inrsettle.com/docs/index.html</loc><lastmod>2026-06-01</lastmod><priority>0.7</priority></url>
+  <url><loc>https://inrsettle.com/docs/api.html</loc><lastmod>2026-06-01</lastmod><priority>0.7</priority></url>
+  <url><loc>https://inrsettle.com/docs/integration.html</loc><lastmod>2026-06-01</lastmod><priority>0.7</priority></url>
+  <url><loc>https://inrsettle.com/docs/webhooks.html</loc><lastmod>2026-06-01</lastmod><priority>0.7</priority></url>
+  <url><loc>https://inrsettle.com/docs/reconciliation.html</loc><lastmod>2026-06-01</lastmod><priority>0.7</priority></url>
+  <url><loc>https://inrsettle.com/contact.html</loc><lastmod>2026-06-01</lastmod><priority>0.9</priority></url>
+  <url><loc>https://inrsettle.com/risk.html</loc><lastmod>2026-06-01</lastmod><priority>0.6</priority></url>
+  <url><loc>https://inrsettle.com/legal/privacy.html</loc><lastmod>2026-06-01</lastmod><priority>0.5</priority></url>
+  <url><loc>https://inrsettle.com/legal/terms.html</loc><lastmod>2026-06-01</lastmod><priority>0.5</priority></url>
+  <url><loc>https://inrsettle.com/legal/compliance.html</loc><lastmod>2026-06-01</lastmod><priority>0.5</priority></url>
+  <url><loc>https://inrsettle.com/inr-settlement-india.html</loc><lastmod>2026-06-01</lastmod><priority>0.8</priority></url>
 </urlset>

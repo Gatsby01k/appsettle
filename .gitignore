@@ -6,3 +6,7 @@ node_modules/
 dist/
 build/
 .netlify/
+.next/
+coverage/
+*.tsbuildinfo
+prisma/dev.db
