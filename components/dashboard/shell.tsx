@@ -5,7 +5,7 @@ import { clearSession } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 
 const nav = [
-  { href: "/", label: "Overview" },
+  { href: "/dashboard", label: "Overview" },
   { href: "/quotes", label: "Quotes" },
   { href: "/settlements", label: "Settlements" },
   { href: "/reconciliation", label: "Reconciliation" },

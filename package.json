@@ -13,8 +13,8 @@
     "prisma:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@prisma/client": "latest",
     "@prisma/adapter-pg": "latest",
+    "@prisma/client": "latest",
     "@radix-ui/react-slot": "latest",
     "bcryptjs": "latest",
     "class-variance-authority": "latest",
@@ -29,7 +29,7 @@
     "zod": "latest"
   },
   "devDependencies": {
-    "@netlify/plugin-nextjs": "latest",
+    "@tailwindcss/postcss": "latest",
     "@types/bcryptjs": "latest",
     "@types/node": "latest",
     "@types/pg": "latest",
@@ -40,7 +40,6 @@
     "eslint-config-next": "latest",
     "postcss": "latest",
     "prisma": "latest",
-    "@tailwindcss/postcss": "latest",
     "tailwindcss": "latest",
     "tsx": "latest",
     "typescript": "latest"

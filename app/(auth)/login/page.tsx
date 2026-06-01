@@ -32,12 +32,12 @@ async function login(formData: FormData) {
     organizationId: membership.organizationId,
     userId: user.id,
   });
-  redirect("/");
+  redirect("/dashboard");
 }
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const session = await getSession();
-  if (session) redirect("/");
+  if (session) redirect("/dashboard");
   const params = await searchParams;
 
   return (
