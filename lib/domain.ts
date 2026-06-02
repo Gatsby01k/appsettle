@@ -53,7 +53,7 @@ export async function createQuote(input: unknown, userId: string, organizationId
 
 export async function createSettlement(input: unknown, userId: string, organizationId: string) {
   const data = settlementSchema.parse(input);
-  const quote = await prisma.quote.findFirstOrThrow({
+  const quote = await prisma.quote.findFirst({
     where: {
       id: data.quoteId,
       organizationId,
@@ -61,6 +61,10 @@ export async function createSettlement(input: unknown, userId: string, organizat
       expiresAt: { gt: new Date() },
     },
   });
+
+  if (!quote) {
+    throw new Error("Selected quote is unavailable, expired, or does not belong to this organization.");
+  }
 
   const settings = await prisma.organizationSettings.findUniqueOrThrow({ where: { organizationId } });
   const requiresApproval = quote.sourceAmount.greaterThanOrEqualTo(settings.approvalThreshold);

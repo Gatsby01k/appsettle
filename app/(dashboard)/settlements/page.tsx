@@ -15,12 +15,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 async function submitSettlement(formData: FormData) {
   "use server";
   const { user, organization } = await requireSession();
-  await createSettlement({
-    quoteId: formData.get("quoteId"),
-    reference: formData.get("reference"),
-    sourceAccount: formData.get("sourceAccount"),
-    targetAccount: formData.get("targetAccount"),
-  }, user.id, organization.id);
+  try {
+    await createSettlement({
+      quoteId: String(formData.get("quoteId") ?? ""),
+      reference: String(formData.get("reference") ?? ""),
+      sourceAccount: String(formData.get("sourceAccount") ?? ""),
+      targetAccount: String(formData.get("targetAccount") ?? ""),
+    }, user.id, organization.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to create settlement.";
+    redirect(`/settlements?error=${encodeURIComponent(message)}`);
+  }
   redirect("/settlements");
 }
 
@@ -38,10 +43,11 @@ async function transition(formData: FormData) {
   redirect("/settlements");
 }
 
-export default async function SettlementsPage() {
+export default async function SettlementsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { organization, membership } = await requireSession();
+  const params = await searchParams;
   const [quotes, settlements] = await Promise.all([
-    prisma.quote.findMany({ where: { organizationId: organization.id, status: "ACTIVE" }, orderBy: { createdAt: "desc" } }),
+    prisma.quote.findMany({ where: { organizationId: organization.id, status: "ACTIVE", expiresAt: { gt: new Date() } }, orderBy: { createdAt: "desc" } }),
     prisma.settlement.findMany({ where: { organizationId: organization.id }, orderBy: { createdAt: "desc" }, take: 30 }),
   ]);
 
@@ -51,6 +57,11 @@ export default async function SettlementsPage() {
         <p className="text-sm font-semibold text-emerald-700">Settlement Operations</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">Create, approve, and track settlements</h1>
       </div>
+      {params.error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+          {params.error}
+        </div>
+      ) : null}
       <div className="grid gap-6 xl:grid-cols-[.8fr_1.2fr]">
         <Card>
           <CardHeader><CardTitle>New settlement</CardTitle></CardHeader>
@@ -66,6 +77,9 @@ export default async function SettlementsPage() {
                     </option>
                   ))}
                 </select>
+                {quotes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No active unexpired quotes are available. Create a fresh quote first.</p>
+                ) : null}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="reference">Reference</Label>
