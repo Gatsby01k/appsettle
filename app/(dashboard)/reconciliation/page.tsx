@@ -10,7 +10,13 @@ import {
   rejectedSettlementIdsOf,
 } from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
-import { computeConfidence, matchReasonFor, matchTypeFor, MATCH_LABEL } from "@/lib/reconciliation";
+import {
+  SUGGESTED_MIN_CONFIDENCE,
+  computeConfidence,
+  matchReasonFor,
+  matchTypeFor,
+  MATCH_LABEL,
+} from "@/lib/reconciliation";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
@@ -128,7 +134,7 @@ export default async function ReconciliationPage({
     if (record.settlement || record.status === "EXCEPTION") return null;
     const best = bestSettlementMatch(record, settledCandidates, {
       excludeSettlementIds: new Set(rejectedSettlementIdsOf(record.rawPayload)),
-      minConfidence: 90,
+      minConfidence: SUGGESTED_MIN_CONFIDENCE,
     });
     if (!best) return null;
     return {
@@ -233,7 +239,7 @@ export default async function ReconciliationPage({
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Auto-matched" value={matchedCount} hint="Linked & reconciled" tone="success" />
+        <MetricCard label="Matched" value={matchedCount} hint="Linked & reconciled" tone="success" />
         <MetricCard
           label="Manual review"
           value={manualReview}

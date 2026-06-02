@@ -3,7 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { publicSettlementId } from "@/lib/utils";
 import { writeAuditLog } from "@/lib/audit";
 import { UserFacingError } from "@/lib/errors";
-import { computeConfidence, matchReasonFor } from "@/lib/reconciliation";
+import {
+  AUTO_MATCH_MIN_CONFIDENCE,
+  SUGGESTED_MIN_CONFIDENCE,
+  computeConfidence,
+  matchReasonFor,
+} from "@/lib/reconciliation";
 import { quoteSchema, reconciliationSchema, settlementSchema, settingsSchema } from "@/lib/validators";
 
 const RATE_BY_CORRIDOR = {
@@ -338,7 +343,7 @@ export function bestSettlementMatch<T extends SettlementCandidate>(
   candidates: T[],
   options: { excludeSettlementIds?: Set<string>; usedSettlementIds?: Set<string>; minConfidence?: number } = {},
 ): { settlement: T; confidence: number } | null {
-  const min = options.minConfidence ?? 90;
+  const min = options.minConfidence ?? SUGGESTED_MIN_CONFIDENCE;
   let best: { settlement: T; confidence: number } | null = null;
 
   for (const settlement of candidates) {
@@ -390,7 +395,7 @@ export async function autoMatchReconciliation(userId: string, organizationId: st
     const best = bestSettlementMatch(record, candidates, {
       excludeSettlementIds: new Set(rejectedSettlementIdsOf(record.rawPayload)),
       usedSettlementIds: used,
-      minConfidence: 100,
+      minConfidence: AUTO_MATCH_MIN_CONFIDENCE,
     });
 
     if (!best) continue;
@@ -548,7 +553,7 @@ export async function rejectReconciliationSuggestion(
   });
 
   await writeAuditLog({
-    action: "reconciliation.reject_suggestion",
+    action: "reconciliation.reject_match",
     resourceType: "reconciliation_record",
     resourceId: record.id,
     organizationId,

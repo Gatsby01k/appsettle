@@ -1,7 +1,12 @@
 // Pure reconciliation matching helpers (no framework/Prisma coupling) so they can
 // run in the auto-match engine (server domain) and in page render for display.
 
-export type MatchType = "AUTO_MATCHED" | "SUGGESTED" | "MANUAL_REVIEW" | "EXCEPTION";
+export type MatchType = "AUTO_MATCHED" | "MATCHED" | "SUGGESTED" | "MANUAL_REVIEW" | "EXCEPTION";
+
+/** Confidence at/above which a candidate may be surfaced as a SUGGESTED match (operator confirm/reject). */
+export const SUGGESTED_MIN_CONFIDENCE = 80;
+/** Confidence required for the engine to auto-match and reconcile without operator action. */
+export const AUTO_MATCH_MIN_CONFIDENCE = 100;
 
 export type SettlementLegs = {
   sourceCurrency: string;
@@ -37,10 +42,26 @@ export function computeConfidence(
   return sameDay ? 100 : 90;
 }
 
+/**
+ * Derives the display/lifecycle match type from the record's *persisted* state.
+ *
+ * The match type is driven by the real status + settlement linkage, never by a
+ * recomputed score alone. This guarantees a linked record is shown as matched
+ * (AUTO_MATCHED at 100% or MATCHED otherwise) and is NEVER shown as "Suggested".
+ * SUGGESTED is reserved for unlinked records that have a strong candidate awaiting
+ * an operator Confirm/Reject decision.
+ */
 export function matchTypeFor(status: string, confidence: number, hasSettlement: boolean): MatchType {
   if (status === "EXCEPTION") return "EXCEPTION";
-  if (hasSettlement && confidence >= 100) return "AUTO_MATCHED";
-  if (hasSettlement && confidence >= 90) return "SUGGESTED";
+
+  // A record linked to a settlement is matched/reconciled, not a pending suggestion.
+  if (hasSettlement) {
+    return confidence >= AUTO_MATCH_MIN_CONFIDENCE ? "AUTO_MATCHED" : "MATCHED";
+  }
+
+  // Unlinked: a strong candidate is a suggestion awaiting Confirm/Reject; anything
+  // weaker is manual review. Unlinked records are never shown as matched.
+  if (confidence >= SUGGESTED_MIN_CONFIDENCE) return "SUGGESTED";
   return "MANUAL_REVIEW";
 }
 
@@ -60,6 +81,7 @@ export function matchReasonFor(confidence: number, currency: string): string {
 
 export const MATCH_LABEL: Record<MatchType, string> = {
   AUTO_MATCHED: "Auto-matched",
+  MATCHED: "Matched",
   SUGGESTED: "Suggested match",
   MANUAL_REVIEW: "Manual review",
   EXCEPTION: "Exception",
@@ -67,6 +89,7 @@ export const MATCH_LABEL: Record<MatchType, string> = {
 
 export const MATCH_TONE: Record<MatchType, "success" | "info" | "warning" | "danger"> = {
   AUTO_MATCHED: "success",
+  MATCHED: "success",
   SUGGESTED: "info",
   MANUAL_REVIEW: "warning",
   EXCEPTION: "danger",

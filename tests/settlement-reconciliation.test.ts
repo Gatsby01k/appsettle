@@ -92,6 +92,12 @@ const mock = vi.hoisted(() => {
           return settlement.id === where.id && settlement.organizationId === where.organizationId;
         }) ?? null;
       }),
+      findMany: vi.fn(async ({ where }) => {
+        return store.settlements.filter((settlement) => {
+          return settlement.organizationId === where.organizationId &&
+            (!where.status || settlement.status === where.status);
+        });
+      }),
       update: vi.fn(async ({ where, data }) => {
         const settlement = store.settlements.find((item) => item.id === where.id);
         if (!settlement) throw new Error("Settlement not found");
@@ -109,14 +115,31 @@ const mock = vi.hoisted(() => {
     reconciliationRecord: {
       findFirst: vi.fn(async ({ where }) => {
         return store.reconciliationRecords.find((record) => {
+          if (where.id) {
+            return record.id === where.id && record.organizationId === where.organizationId;
+          }
           return record.organizationId === where.organizationId &&
             record.source === where.source &&
             record.externalRef === where.externalRef;
         }) ?? null;
       }),
+      findMany: vi.fn(async ({ where }) => {
+        const statuses: string[] | undefined = where.status?.in;
+        return store.reconciliationRecords.filter((record) => {
+          return record.organizationId === where.organizationId &&
+            (where.settlementId === undefined || record.settlementId === where.settlementId) &&
+            (!statuses || statuses.includes(record.status as string));
+        });
+      }),
       create: vi.fn(async ({ data }) => {
         const record = { id: nextId("recon"), createdAt: new Date(), updatedAt: new Date(), ...data };
         store.reconciliationRecords.push(record);
+        return record;
+      }),
+      update: vi.fn(async ({ where, data }) => {
+        const record = store.reconciliationRecords.find((item) => item.id === where.id);
+        if (!record) throw new Error("Reconciliation record not found");
+        Object.assign(record, data);
         return record;
       }),
     },
@@ -244,5 +267,131 @@ describe("settlement and reconciliation workflow", () => {
       status: ReconciliationStatus.MATCHED,
       exceptionReason: "Contradiction",
     }, "user_1", "org_1")).rejects.toThrow("Exception reason can only be used when status is EXCEPTION.");
+  });
+
+  function seedSettledSettlement(overrides: Partial<MockSettlement> & { settledAt: Date }): MockSettlement {
+    const settlement: MockSettlement = {
+      id: `settlement_${mock.store.settlements.length + 1}`,
+      organizationId: "org_1",
+      publicId: `SET-${mock.store.settlements.length + 1}`,
+      reference: `ref_${mock.store.settlements.length + 1}`,
+      status: SettlementStatus.SETTLED,
+      sourceCurrency: "INR",
+      targetCurrency: "USDT",
+      sourceAmount: 2500000,
+      targetAmount: 29900,
+      createdAt: new Date("2026-05-01T00:00:00Z"),
+      ...overrides,
+    };
+    mock.store.settlements.push(settlement);
+    return settlement;
+  }
+
+  function seedOpenRecord(overrides: Partial<MockRecord> & { valueDate: Date }): MockRecord {
+    const record: MockRecord = {
+      id: `recon_${mock.store.reconciliationRecords.length + 1}`,
+      organizationId: "org_1",
+      source: "bank_statement",
+      externalRef: `bank_ref_${mock.store.reconciliationRecords.length + 1}`,
+      amount: 2500000,
+      currency: "INR",
+      status: ReconciliationStatus.OPEN,
+      settlementId: null,
+      rawPayload: null,
+      ...overrides,
+    };
+    mock.store.reconciliationRecords.push(record);
+    return record;
+  }
+
+  it("auto-matches only exact (100%) matches and reconciles their settlements", async () => {
+    const { autoMatchReconciliation } = await import("@/lib/domain");
+    const valueDate = new Date("2026-06-02T00:00:00Z");
+
+    const exactSettlement = seedSettledSettlement({ settledAt: valueDate });
+    seedSettledSettlement({ settledAt: new Date("2026-05-20T00:00:00Z") });
+
+    const exactRecord = seedOpenRecord({ valueDate });
+    const suggestedRecord = seedOpenRecord({ valueDate, amount: 2500000 });
+    // Force the second record to only ever be a 90% (value-date-differs) candidate by
+    // leaving the only same-day settlement consumed by the exact record.
+
+    const result = await autoMatchReconciliation("user_1", "org_1");
+
+    expect(result.matched).toBe(1);
+    expect(exactRecord.status).toBe(ReconciliationStatus.MATCHED);
+    expect(exactRecord.settlementId).toBe(exactSettlement.id);
+    expect(exactSettlement.status).toBe(SettlementStatus.RECONCILED);
+
+    // The non-exact record is left for operator review — never auto-matched.
+    expect(suggestedRecord.status).toBe(ReconciliationStatus.OPEN);
+    expect(suggestedRecord.settlementId).toBeNull();
+
+    const autoMatchLogs = mock.store.auditLogs.filter((log) => log.action === "reconciliation.auto_match");
+    expect(autoMatchLogs).toHaveLength(1);
+    const reconcileTransition = mock.store.auditLogs.find(
+      (log) => log.action === "settlement.transition",
+    );
+    expect(reconcileTransition).toBeTruthy();
+  });
+
+  it("confirms a suggested match: links record, reconciles settlement, writes audit", async () => {
+    const { confirmReconciliationMatch } = await import("@/lib/domain");
+    // 90% candidate: amount + currency match but value date differs.
+    const settlement = seedSettledSettlement({ settledAt: new Date("2026-05-20T00:00:00Z") });
+    const record = seedOpenRecord({ valueDate: new Date("2026-06-02T00:00:00Z") });
+
+    const result = await confirmReconciliationMatch(record.id, settlement.id, "user_1", "org_1");
+
+    expect(result.confidence).toBe(90);
+    expect(record.status).toBe(ReconciliationStatus.MATCHED);
+    expect(record.settlementId).toBe(settlement.id);
+    expect(settlement.status).toBe(SettlementStatus.RECONCILED);
+    expect(mock.store.auditLogs.some((log) => log.action === "reconciliation.confirm_match")).toBe(true);
+    expect(
+      mock.store.auditLogs.some(
+        (log) =>
+          log.action === "settlement.transition" &&
+          (log.after as { toStatus?: string })?.toStatus === SettlementStatus.RECONCILED,
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a suggested match: keeps record in manual review and remembers the rejection", async () => {
+    const { rejectReconciliationSuggestion } = await import("@/lib/domain");
+    const settlement = seedSettledSettlement({ settledAt: new Date("2026-05-20T00:00:00Z") });
+    const record = seedOpenRecord({ valueDate: new Date("2026-06-02T00:00:00Z") });
+
+    await rejectReconciliationSuggestion(record.id, settlement.id, "user_1", "org_1");
+
+    expect(record.status).toBe(ReconciliationStatus.UNMATCHED);
+    expect(record.settlementId).toBeNull();
+    expect((record.rawPayload as { _rejectedSettlementIds?: string[] })._rejectedSettlementIds).toContain(
+      settlement.id,
+    );
+    expect(mock.store.auditLogs.some((log) => log.action === "reconciliation.reject_match")).toBe(true);
+  });
+});
+
+describe("matchTypeFor display lifecycle", () => {
+  it("never shows a linked/matched record as a suggestion", async () => {
+    const { matchTypeFor } = await import("@/lib/reconciliation");
+    // Exact linked match -> auto-matched (green).
+    expect(matchTypeFor("MATCHED", 100, true)).toBe("AUTO_MATCHED");
+    // Operator-confirmed (sub-100) linked match -> MATCHED, NOT SUGGESTED.
+    expect(matchTypeFor("MATCHED", 90, true)).toBe("MATCHED");
+    expect(matchTypeFor("MATCHED", 90, true)).not.toBe("SUGGESTED");
+  });
+
+  it("classifies unlinked records by candidate strength", async () => {
+    const { matchTypeFor } = await import("@/lib/reconciliation");
+    expect(matchTypeFor("OPEN", 90, false)).toBe("SUGGESTED");
+    expect(matchTypeFor("UNMATCHED", 0, false)).toBe("MANUAL_REVIEW");
+  });
+
+  it("always reports EXCEPTION regardless of score or linkage", async () => {
+    const { matchTypeFor } = await import("@/lib/reconciliation");
+    expect(matchTypeFor("EXCEPTION", 100, true)).toBe("EXCEPTION");
+    expect(matchTypeFor("EXCEPTION", 0, false)).toBe("EXCEPTION");
   });
 });

@@ -139,11 +139,11 @@ export function ReconciliationWorkspace({ records, confirmAction, rejectAction }
                     {selected.settlement.publicId} · {selected.settlement.reference}
                   </span>
                 </div>
-                {selected.confidence >= 100 ? (
-                  <p className="mt-3 text-xs text-teal-700">
-                    Auto-reconciled at 100% confidence — no operator action required.
-                  </p>
-                ) : null}
+                <p className="mt-3 text-xs text-teal-700">
+                  {selected.confidence >= 100
+                    ? "Auto-reconciled at 100% confidence — no operator action required."
+                    : "Matched and reconciled after operator confirmation."}
+                </p>
               </>
             ) : selected.suggestion ? (
               <div className="mt-3 space-y-3">
@@ -161,7 +161,7 @@ export function ReconciliationWorkspace({ records, confirmAction, rejectAction }
                     <input type="hidden" name="settlementId" value={selected.suggestion.settlementId} />
                     <SubmitButton variant="primary" size="sm" pendingText="Confirming...">
                       <Check className="h-3.5 w-3.5" />
-                      Confirm match
+                      Confirm Match
                     </SubmitButton>
                   </form>
                   <form action={rejectAction}>
@@ -169,7 +169,7 @@ export function ReconciliationWorkspace({ records, confirmAction, rejectAction }
                     <input type="hidden" name="settlementId" value={selected.suggestion.settlementId} />
                     <SubmitButton variant="outline" size="sm" pendingText="Rejecting...">
                       <X className="h-3.5 w-3.5" />
-                      Reject suggestion
+                      Reject Match
                     </SubmitButton>
                   </form>
                 </div>
