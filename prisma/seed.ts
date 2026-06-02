@@ -1,9 +1,9 @@
 import { OrganizationStatus, Role } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { hashPassword } from "../lib/auth";
+import bcrypt from "bcryptjs";
 
 async function main() {
-  const passwordHash = await hashPassword("ChangeMe123!");
+  const passwordHash = await bcrypt.hash("ChangeMe123!", 12);
 
   const user = await prisma.user.upsert({
     where: { email: "ops@inrsettle.com" },
