@@ -12,16 +12,11 @@ const RATE_BY_CORRIDOR = {
 
 function assertValidSettlementTransition(from: SettlementStatus, to: SettlementStatus) {
   const allowed: Record<SettlementStatus, SettlementStatus[]> = {
-    [SettlementStatus.REQUESTED]: [SettlementStatus.APPROVED],
-    [SettlementStatus.QUOTED]: [SettlementStatus.APPROVED],
-    [SettlementStatus.PENDING_APPROVAL]: [SettlementStatus.APPROVED],
+    [SettlementStatus.CREATED]: [SettlementStatus.APPROVED],
     [SettlementStatus.APPROVED]: [SettlementStatus.EXECUTING],
     [SettlementStatus.EXECUTING]: [SettlementStatus.SETTLED],
-    [SettlementStatus.SETTLED]: [],
+    [SettlementStatus.SETTLED]: [SettlementStatus.RECONCILED],
     [SettlementStatus.RECONCILED]: [],
-    [SettlementStatus.FAILED]: [],
-    [SettlementStatus.CANCELLED]: [],
-    [SettlementStatus.ON_HOLD]: [],
   };
 
   if (!allowed[from].includes(to)) {
@@ -86,10 +81,6 @@ export async function createSettlement(input: unknown, userId: string, organizat
     throw new UserFacingError("Selected quote is unavailable, expired, or does not belong to this organization.");
   }
 
-  const settings = await prisma.organizationSettings.findUniqueOrThrow({ where: { organizationId } });
-  const requiresApproval = quote.sourceAmount.greaterThanOrEqualTo(settings.approvalThreshold);
-  const status = requiresApproval ? SettlementStatus.PENDING_APPROVAL : SettlementStatus.APPROVED;
-
   const settlement = await prisma.$transaction(async (tx) => {
     const created = await tx.settlement.create({
       data: {
@@ -106,7 +97,7 @@ export async function createSettlement(input: unknown, userId: string, organizat
         feeAmount: quote.feeAmount,
         sourceAccount: data.sourceAccount,
         targetAccount: data.targetAccount,
-        status,
+        status: SettlementStatus.CREATED,
       },
     });
 
@@ -118,9 +109,9 @@ export async function createSettlement(input: unknown, userId: string, organizat
     await tx.settlementEvent.create({
       data: {
         settlementId: created.id,
-        toStatus: status,
+        toStatus: SettlementStatus.CREATED,
         actorId: userId,
-        note: requiresApproval ? "Settlement requires checker approval." : "Auto-approved under threshold.",
+        note: "Settlement created from accepted quote.",
       },
     });
 
@@ -145,6 +136,7 @@ export async function transitionSettlement(
   userId: string,
   organizationId: string,
   note?: string,
+  options: { allowReconcile?: boolean } = {},
 ) {
   const current = await prisma.settlement.findFirst({
     where: { id: settlementId, organizationId },
@@ -155,6 +147,10 @@ export async function transitionSettlement(
   }
 
   assertValidSettlementTransition(current.status, status);
+
+  if (status === SettlementStatus.RECONCILED && !options.allowReconcile) {
+    throw new UserFacingError("Settlements can only be reconciled by a matched reconciliation record.");
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
     const next = await tx.settlement.update({
@@ -220,6 +216,26 @@ export async function createReconciliationRecord(input: unknown, userId: string,
     throw new UserFacingError("Selected settlement was not found for this organization.");
   }
 
+  if (data.status === "MATCHED" && !matchedSettlement) {
+    throw new UserFacingError("A MATCHED reconciliation record must be linked to a settlement.");
+  }
+
+  if (data.status === "MATCHED" && data.exceptionReason) {
+    throw new UserFacingError("A MATCHED reconciliation record cannot include an exception reason.");
+  }
+
+  if (data.status === "EXCEPTION" && matchedSettlement) {
+    throw new UserFacingError("An EXCEPTION reconciliation record cannot be linked to a settlement.");
+  }
+
+  if (data.status === "UNMATCHED" && matchedSettlement) {
+    throw new UserFacingError("An UNMATCHED reconciliation record cannot be linked to a settlement.");
+  }
+
+  if (data.status === "MATCHED" && matchedSettlement?.status !== SettlementStatus.SETTLED) {
+    throw new UserFacingError("Only SETTLED settlements can be matched for reconciliation.");
+  }
+
   const existing = await prisma.reconciliationRecord.findFirst({
     where: {
       organizationId,
@@ -248,7 +264,14 @@ export async function createReconciliationRecord(input: unknown, userId: string,
   });
 
   if (record.settlementId && record.status === ReconciliationStatus.MATCHED) {
-    await transitionSettlement(record.settlementId, SettlementStatus.RECONCILED, userId, organizationId, "Matched by reconciliation.");
+    await transitionSettlement(
+      record.settlementId,
+      SettlementStatus.RECONCILED,
+      userId,
+      organizationId,
+      "Matched by reconciliation.",
+      { allowReconcile: true },
+    );
   }
 
   await writeAuditLog({

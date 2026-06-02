@@ -30,6 +30,38 @@ export const reconciliationSchema = z.object({
       message: "Exception reason is required when status is EXCEPTION.",
     });
   }
+
+  if (data.status !== "EXCEPTION" && data.exceptionReason?.trim()) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["exceptionReason"],
+      message: "Exception reason can only be used when status is EXCEPTION.",
+    });
+  }
+
+  if (data.status === "MATCHED" && !data.settlementId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["settlementId"],
+      message: "A MATCHED reconciliation record must be linked to a settlement.",
+    });
+  }
+
+  if (data.status === "EXCEPTION" && data.settlementId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["settlementId"],
+      message: "An EXCEPTION reconciliation record cannot be linked to a settlement.",
+    });
+  }
+
+  if (data.status === "UNMATCHED" && data.settlementId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["settlementId"],
+      message: "An UNMATCHED reconciliation record cannot be linked to a settlement.",
+    });
+  }
 });
 
 export const settingsSchema = z.object({

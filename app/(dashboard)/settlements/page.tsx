@@ -23,18 +23,14 @@ function successMessage(value?: string) {
 
 function hasWorkflowAction(status: SettlementStatus) {
   return new Set<SettlementStatus>([
-    SettlementStatus.REQUESTED,
-    SettlementStatus.PENDING_APPROVAL,
+    SettlementStatus.CREATED,
     SettlementStatus.APPROVED,
     SettlementStatus.EXECUTING,
   ]).has(status);
 }
 
 function canApproveStatus(status: SettlementStatus) {
-  return new Set<SettlementStatus>([
-    SettlementStatus.REQUESTED,
-    SettlementStatus.PENDING_APPROVAL,
-  ]).has(status);
+  return status === SettlementStatus.CREATED;
 }
 
 async function submitSettlement(formData: FormData) {
@@ -147,7 +143,7 @@ export default async function SettlementsPage({ searchParams }: { searchParams: 
                   <TableRow key={settlement.id}>
                     <TableCell className="font-medium">{settlement.publicId}<br /><span className="text-xs text-muted-foreground">{settlement.reference}</span></TableCell>
                     <TableCell>{formatCurrency(String(settlement.sourceAmount), settlement.sourceCurrency)}</TableCell>
-                    <TableCell><Badge tone={settlement.status === "FAILED" ? "danger" : settlement.status === "RECONCILED" ? "success" : "warning"}>{settlement.status.replaceAll("_", " ")}</Badge></TableCell>
+                    <TableCell><Badge tone={settlement.status === SettlementStatus.RECONCILED || settlement.status === SettlementStatus.SETTLED ? "success" : "warning"}>{settlement.status}</Badge></TableCell>
                     <TableCell>
                       {canApproveSettlement(membership.role) ? (
                         <form action={transition} className="flex flex-wrap gap-2">
