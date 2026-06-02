@@ -70,13 +70,36 @@ function rewriteMarketingLinks(html: string) {
   return rewritten;
 }
 
+function addConsoleNavigation(html: string) {
+  return html
+    .replace(
+      /<div class="nav-actions">/,
+      '<div class="nav-actions"><a class="btn" href="/login">Sign in</a>',
+    )
+    .replace(
+      /(<div class="mobile-panel" id="mobile-navigation" data-mobile>[\s\S]*?<a href="\/contact">Contact<\/a>)/,
+      '$1<a href="/login">Sign in</a>',
+    );
+}
+
+function addHomepageConsoleCtas(html: string, fileName: string) {
+  if (fileName !== "index.html") return html;
+
+  return html.replace(
+    /<div class="hero-ctas">[\s\S]*?<\/div><div class="hero-proof"/,
+    '<div class="hero-ctas"><a class="btn primary" href="/login">Launch console</a><a class="btn" href="/contact">Contact sales</a></div><div class="hero-proof"',
+  );
+}
+
 function bodyHtml(fileName: string) {
   const html = readStaticFile(fileName);
   const body = matchContent(html, /<body[^>]*>([\s\S]*?)<\/body>/i);
 
-  return rewriteMarketingLinks(body)
+  const rewritten = rewriteMarketingLinks(body)
     .replace(/<script[^>]+src=["']\/analytics\.js["'][^>]*><\/script>/gi, "")
     .replace(/<script[^>]+src=["']\/script\.js["'][^>]*><\/script>/gi, "");
+
+  return addHomepageConsoleCtas(addConsoleNavigation(rewritten), fileName);
 }
 
 export function marketingMetadata(fileName: string, routePath: string): Metadata {
