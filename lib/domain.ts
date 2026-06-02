@@ -8,6 +8,7 @@ import {
   SUGGESTED_MIN_CONFIDENCE,
   computeConfidence,
   matchReasonFor,
+  type MatchOrigin,
 } from "@/lib/reconciliation";
 import { quoteSchema, reconciliationSchema, settlementSchema, settingsSchema } from "@/lib/validators";
 
@@ -259,6 +260,13 @@ export async function createReconciliationRecord(input: unknown, userId: string,
     throw new UserFacingError("A reconciliation record with this external reference already exists for this source.");
   }
 
+  // A manual match (operator picks a settlement at create time) is an explicit,
+  // operator-driven reconciliation — tag its origin so the UI never labels it "Auto".
+  const isManualMatch = data.status === "MATCHED" && Boolean(matchedSettlement);
+  const rawPayload: Prisma.InputJsonValue = isManualMatch
+    ? ({ ...data, _matchOrigin: "MANUAL" } as Prisma.InputJsonValue)
+    : (data as Prisma.InputJsonValue);
+
   const record = await prisma.reconciliationRecord.create({
     data: {
       organizationId,
@@ -270,7 +278,7 @@ export async function createReconciliationRecord(input: unknown, userId: string,
       valueDate: new Date(data.valueDate),
       status: data.status as ReconciliationStatus,
       exceptionReason: data.exceptionReason,
-      rawPayload: data,
+      rawPayload,
     },
   });
 
@@ -334,6 +342,21 @@ export function rejectedSettlementIdsOf(rawPayload: Prisma.JsonValue | null | un
   return [];
 }
 
+/** How a linked record was matched (stored in rawPayload): "AUTO" by the engine, "MANUAL" by an operator. */
+export function matchOriginOf(rawPayload: Prisma.JsonValue | null | undefined): MatchOrigin | null {
+  if (rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)) {
+    const value = (rawPayload as Record<string, unknown>)._matchOrigin;
+    if (value === "AUTO" || value === "MANUAL") return value;
+  }
+  return null;
+}
+
+function baseRawPayload(rawPayload: Prisma.JsonValue | null | undefined): Record<string, unknown> {
+  return rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+    ? (rawPayload as Record<string, unknown>)
+    : {};
+}
+
 /**
  * Finds the highest-confidence settlement candidate for a record using
  * amount + currency + value date. Returns null when nothing meets `minConfidence`.
@@ -392,26 +415,44 @@ export async function autoMatchReconciliation(userId: string, organizationId: st
   let matched = 0;
 
   for (const record of open) {
-    const best = bestSettlementMatch(record, candidates, {
-      excludeSettlementIds: new Set(rejectedSettlementIdsOf(record.rawPayload)),
-      usedSettlementIds: used,
-      minConfidence: AUTO_MATCH_MIN_CONFIDENCE,
+    const rejected = new Set(rejectedSettlementIdsOf(record.rawPayload));
+
+    // Exact (100%) candidates: same amount + same currency + same value date, SETTLED,
+    // and neither previously rejected nor already consumed in this run.
+    const exactMatches = candidates.filter((settlement) => {
+      if (rejected.has(settlement.id) || used.has(settlement.id)) return false;
+      const confidence = computeConfidence(Number(record.amount), record.currency, record.valueDate, {
+        sourceCurrency: settlement.sourceCurrency,
+        targetCurrency: settlement.targetCurrency,
+        sourceAmount: Number(settlement.sourceAmount),
+        targetAmount: Number(settlement.targetAmount),
+        refDate: settlement.settledAt ?? settlement.createdAt,
+      });
+      return confidence >= AUTO_MATCH_MIN_CONFIDENCE;
     });
 
-    if (!best) continue;
+    // Only auto-reconcile when exactly one unambiguous 100% match exists. Zero (no
+    // match) or more than one (ambiguous) are left for operator review.
+    if (exactMatches.length !== 1) continue;
 
-    used.add(best.settlement.id);
+    const settlement = exactMatches[0];
+    used.add(settlement.id);
+
     await prisma.reconciliationRecord.update({
       where: { id: record.id },
-      data: { status: ReconciliationStatus.MATCHED, settlementId: best.settlement.id },
+      data: {
+        status: ReconciliationStatus.MATCHED,
+        settlementId: settlement.id,
+        rawPayload: { ...baseRawPayload(record.rawPayload), _matchOrigin: "AUTO" } as Prisma.InputJsonValue,
+      },
     });
 
     await transitionSettlement(
-      best.settlement.id,
+      settlement.id,
       SettlementStatus.RECONCILED,
       userId,
       organizationId,
-      `Auto-matched (${best.confidence}%) to ${record.externalRef}`,
+      `Auto-matched (100%) to ${record.externalRef}`,
       { allowReconcile: true },
     );
 
@@ -422,12 +463,12 @@ export async function autoMatchReconciliation(userId: string, organizationId: st
       organizationId,
       userId,
       after: {
-        confidence: best.confidence,
-        matchReason: matchReasonFor(best.confidence, record.currency),
+        confidence: AUTO_MATCH_MIN_CONFIDENCE,
+        matchReason: matchReasonFor(AUTO_MATCH_MIN_CONFIDENCE, record.currency),
         externalRef: record.externalRef,
-        settlementId: best.settlement.id,
-        settlementPublicId: best.settlement.publicId,
-        settlementReference: best.settlement.reference,
+        settlementId: settlement.id,
+        settlementPublicId: settlement.publicId,
+        settlementReference: settlement.reference,
       },
     });
 
@@ -484,7 +525,11 @@ export async function confirmReconciliationMatch(
 
   await prisma.reconciliationRecord.update({
     where: { id: record.id },
-    data: { status: ReconciliationStatus.MATCHED, settlementId: settlement.id },
+    data: {
+      status: ReconciliationStatus.MATCHED,
+      settlementId: settlement.id,
+      rawPayload: { ...baseRawPayload(record.rawPayload), _matchOrigin: "MANUAL" } as Prisma.InputJsonValue,
+    },
   });
 
   await transitionSettlement(
@@ -539,16 +584,14 @@ export async function rejectReconciliationSuggestion(
   const rejected = new Set(rejectedSettlementIdsOf(record.rawPayload));
   rejected.add(settlementId);
 
-  const basePayload =
-    record.rawPayload && typeof record.rawPayload === "object" && !Array.isArray(record.rawPayload)
-      ? (record.rawPayload as Record<string, unknown>)
-      : {};
-
   await prisma.reconciliationRecord.update({
     where: { id: record.id },
     data: {
       status: ReconciliationStatus.UNMATCHED,
-      rawPayload: { ...basePayload, _rejectedSettlementIds: Array.from(rejected) } as Prisma.InputJsonValue,
+      rawPayload: {
+        ...baseRawPayload(record.rawPayload),
+        _rejectedSettlementIds: Array.from(rejected),
+      } as Prisma.InputJsonValue,
     },
   });
 

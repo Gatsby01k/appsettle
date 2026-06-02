@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { ArrowRight, Check, X } from "lucide-react";
-import { StatusBadge } from "@/components/ops/status-badge";
 import { StatRow } from "@/components/ops/stat-row";
 import { EmptyState } from "@/components/ops/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +26,7 @@ export type ReconciliationRow = {
   status: string;
   matchType: MatchType;
   matchLabel: string;
+  matchReason: string | null;
   confidence: number;
   exceptionReason: string | null;
   valueDate: string;
@@ -112,7 +112,6 @@ export function ReconciliationWorkspace({ records, confirmAction, rejectAction }
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-base font-semibold text-slate-950">{selected.externalRef}</h3>
             <Badge tone={MATCH_TONE[selected.matchType]}>{selected.matchLabel}</Badge>
-            <StatusBadge status={selected.status} />
           </div>
           <div className="mt-4 rounded-lg border bg-slate-50/50 p-3">
             <StatRow label="Source" value={selected.source.replaceAll("_", " ")} />
@@ -128,6 +127,25 @@ export function ReconciliationWorkspace({ records, confirmAction, rejectAction }
               ) : null}
             </div>
 
+            <div className="mt-3 grid gap-0.5 rounded-lg border bg-slate-50/50 px-3 py-1">
+              <StatRow label="Match type" value={selected.matchLabel} />
+              {selected.settlement || selected.suggestion ? (
+                <StatRow label="Confidence" value={`${selected.confidence}%`} />
+              ) : null}
+              {selected.settlement ? (
+                <StatRow
+                  label="Matched settlement"
+                  value={`${selected.settlement.publicId} · ${selected.settlement.reference}`}
+                />
+              ) : selected.suggestion ? (
+                <StatRow
+                  label="Suggested settlement"
+                  value={`${selected.suggestion.publicId} · ${selected.suggestion.reference}`}
+                />
+              ) : null}
+              {selected.matchReason ? <StatRow label="Reason" value={selected.matchReason} /> : null}
+            </div>
+
             {selected.settlement ? (
               <>
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
@@ -140,21 +158,13 @@ export function ReconciliationWorkspace({ records, confirmAction, rejectAction }
                   </span>
                 </div>
                 <p className="mt-3 text-xs text-teal-700">
-                  {selected.confidence >= 100
+                  {selected.matchType === "AUTO_MATCHED"
                     ? "Auto-reconciled at 100% confidence — no operator action required."
-                    : "Matched and reconciled after operator confirmation."}
+                    : "Manually reconciled by an operator — record linked and settlement reconciled."}
                 </p>
               </>
             ) : selected.suggestion ? (
               <div className="mt-3 space-y-3">
-                <div className="grid gap-0.5 rounded-lg border bg-slate-50/50 px-3 py-1">
-                  <StatRow
-                    label="Suggested match"
-                    value={`${selected.suggestion.publicId} · ${selected.suggestion.reference}`}
-                  />
-                  <StatRow label="Confidence" value={`${selected.suggestion.confidence}%`} />
-                  <StatRow label="Match reason" value={selected.suggestion.reason} />
-                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <form action={confirmAction}>
                     <input type="hidden" name="recordId" value={selected.id} />

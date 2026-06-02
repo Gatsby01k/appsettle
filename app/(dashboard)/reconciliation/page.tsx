@@ -6,6 +6,7 @@ import {
   bestSettlementMatch,
   confirmReconciliationMatch,
   createReconciliationRecord,
+  matchOriginOf,
   rejectReconciliationSuggestion,
   rejectedSettlementIdsOf,
 } from "@/lib/domain";
@@ -23,17 +24,25 @@ import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { FlashMessage } from "@/components/ops/flash-message";
 import { FilterBar } from "@/components/ops/filter-bar";
-import { FormSelect } from "@/components/ops/form-select";
+import { AddRecordForm } from "@/components/dashboard/add-record-form";
 import { ReconciliationWorkspace } from "@/components/dashboard/reconciliation-workspace";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 async function submitRecord(formData: FormData) {
   "use server";
   const { user, organization } = await requireSession();
   const settlementRaw = String(formData.get("settlementId") || "");
+  const exceptionReason = String(formData.get("exceptionReason") || "").trim() || undefined;
+  const hasManualSettlement = Boolean(settlementRaw) && settlementRaw !== "_none";
+
+  // Status is derived, never picked from a free dropdown: an exception reason flags
+  // an EXCEPTION; an explicitly selected settlement is a MANUAL match (reconciles);
+  // otherwise the record is simply captured as OPEN for the auto-match engine.
+  const status = exceptionReason ? "EXCEPTION" : hasManualSettlement ? "MATCHED" : "OPEN";
+  const settlementId = status === "MATCHED" ? settlementRaw : undefined;
+
+  let isManualMatch = false;
   try {
     await createReconciliationRecord(
       {
@@ -41,18 +50,19 @@ async function submitRecord(formData: FormData) {
         source: String(formData.get("source") ?? ""),
         amount: formData.get("amount"),
         currency: String(formData.get("currency") ?? ""),
-        settlementId: settlementRaw && settlementRaw !== "_none" ? settlementRaw : undefined,
+        settlementId,
         valueDate: String(formData.get("valueDate") ?? ""),
-        status: String(formData.get("status") ?? ""),
-        exceptionReason: String(formData.get("exceptionReason") || "") || undefined,
+        status,
+        exceptionReason,
       },
       user.id,
       organization.id,
     );
+    isManualMatch = status === "MATCHED";
   } catch (error) {
     redirect(`/reconciliation?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
   }
-  redirect("/reconciliation?success=created");
+  redirect(`/reconciliation?success=${isManualMatch ? "manual" : "created"}`);
 }
 
 async function runAutoMatch() {
@@ -98,18 +108,12 @@ export default async function ReconciliationPage({
 }: {
   searchParams: Promise<{ error?: string; success?: string; q?: string; status?: string; matched?: string; scanned?: string }>;
 }) {
-  const { user, organization } = await requireSession();
+  const { organization } = await requireSession();
   const params = await searchParams;
 
-  // Reconcile exact (100%) matches automatically on load so operators never have
-  // to action a settlement candidate that aligns perfectly. Lower-confidence
-  // candidates are left for review. Wrapped so a transient failure never blocks render.
-  let autoReconciled = 0;
-  try {
-    autoReconciled = (await autoMatchReconciliation(user.id, organization.id)).matched;
-  } catch {
-    autoReconciled = 0;
-  }
+  // Auto-match is an explicit operator action (the "Run auto-match" button), never a
+  // side effect of opening the page or saving a record. Saving an external record
+  // leaves it OPEN until the engine or an operator reconciles it.
 
   const [records, settlements, settledCandidates] = await Promise.all([
     prisma.reconciliationRecord.findMany({
@@ -178,8 +182,12 @@ export default async function ReconciliationPage({
 
   const workspaceRows = filteredRecords.map((record) => {
     const confidence = confidenceFor(record);
-    const matchType = matchTypeFor(record.status, confidence, Boolean(record.settlement));
+    const origin = matchOriginOf(record.rawPayload);
+    const matchType = matchTypeFor(record.status, confidence, Boolean(record.settlement), origin);
     const suggestion = suggestionFor(record);
+    const matchReason = record.settlement
+      ? matchReasonFor(confidence, record.currency)
+      : suggestion?.reason ?? null;
     return {
       id: record.id,
       externalRef: record.externalRef,
@@ -189,6 +197,7 @@ export default async function ReconciliationPage({
       status: record.status,
       matchType,
       matchLabel: MATCH_LABEL[matchType],
+      matchReason,
       confidence,
       exceptionReason: record.exceptionReason,
       valueDate: record.valueDate.toLocaleDateString(),
@@ -211,18 +220,16 @@ export default async function ReconciliationPage({
     <div className="space-y-6">
       <PageHeader
         title="Reconciliation"
-        description="Auto-match external records to settlements, review suggestions, and resolve exceptions."
-        actions={
-          <form action={runAutoMatch}>
-            <SubmitButton variant="primary" size="sm" pendingText="Matching...">
-              Run auto-match
-            </SubmitButton>
-          </form>
-        }
+        description="Capture external records, run the auto-match engine, review suggestions, and resolve exceptions."
       />
 
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
-      {params.success === "created" ? <FlashMessage message="Reconciliation record saved." /> : null}
+      {params.success === "created" ? (
+        <FlashMessage message="External record saved as OPEN — run auto-match to reconcile it." />
+      ) : null}
+      {params.success === "manual" ? (
+        <FlashMessage message="Manual match confirmed — record linked and settlement reconciled." />
+      ) : null}
       {params.success === "confirmed" ? (
         <FlashMessage message="Match confirmed — settlement reconciled." />
       ) : null}
@@ -233,9 +240,6 @@ export default async function ReconciliationPage({
         <FlashMessage
           message={`Auto-match complete — ${params.matched ?? 0} of ${params.scanned ?? 0} open records matched and reconciled.`}
         />
-      ) : null}
-      {autoReconciled > 0 && params.success !== "automatch" ? (
-        <FlashMessage message={`${autoReconciled} exact match${autoReconciled === 1 ? "" : "es"} auto-reconciled on load.`} />
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -250,87 +254,40 @@ export default async function ReconciliationPage({
         <MetricCard label="Match rate" value={`${matchRate}%`} hint="Reconciled records" tone="info" />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Add record</CardTitle>
-          <CardDescription>MATCHED requires a settlement. EXCEPTION requires a reason and cannot link a settlement.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form action={submitRecord} className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <div className="grid gap-1.5">
-              <Label htmlFor="externalRef">External reference</Label>
-              <Input id="externalRef" name="externalRef" required />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="amount">Amount</Label>
-              <Input id="amount" name="amount" type="number" min="1" step="0.01" required />
-            </div>
-            <div className="grid gap-1.5">
-              <Label>Currency</Label>
-              <FormSelect
-                name="currency"
-                defaultValue="INR"
-                options={[
-                  { value: "INR", label: "INR" },
-                  { value: "USDT", label: "USDT" },
-                ]}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label>Source</Label>
-              <FormSelect
-                name="source"
-                defaultValue="bank_statement"
-                options={[
-                  { value: "bank_statement", label: "Bank statement" },
-                  { value: "chain_tx", label: "Chain transaction" },
-                  { value: "psp_report", label: "PSP report" },
-                  { value: "manual", label: "Manual" },
-                ]}
-              />
-            </div>
-            <div className="grid gap-1.5 lg:col-span-2">
-              <Label>Settlement match</Label>
-              <FormSelect
-                name="settlementId"
-                defaultValue="_none"
-                options={[
-                  { value: "_none", label: "Unmatched" },
-                  ...settlements.map((s) => ({ value: s.id, label: `${s.publicId} · ${s.reference}` })),
-                ]}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="valueDate">Value date</Label>
-              <Input id="valueDate" name="valueDate" type="date" required />
-            </div>
-            <div className="grid gap-1.5">
-              <Label>Status</Label>
-              <FormSelect
-                name="status"
-                defaultValue="OPEN"
-                options={[
-                  { value: "OPEN", label: "Open" },
-                  { value: "MATCHED", label: "Matched" },
-                  { value: "PARTIALLY_MATCHED", label: "Partially matched" },
-                  { value: "UNMATCHED", label: "Unmatched" },
-                  { value: "EXCEPTION", label: "Exception" },
-                  { value: "RESOLVED", label: "Resolved" },
-                ]}
-              />
-            </div>
-            <div className="grid gap-1.5 lg:col-span-2">
-              <Label htmlFor="exceptionReason">Exception reason</Label>
-              <Input id="exceptionReason" name="exceptionReason" placeholder="Required for EXCEPTION status" />
-            </div>
-            <div className="flex items-end lg:col-span-4">
-              <SubmitButton type="submit" variant="primary" pendingText="Saving...">
-                Save record
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Add external record</CardTitle>
+            <CardDescription>
+              Capture a bank, chain, or PSP record. It is saved as OPEN — reconcile it with the auto-match engine or an
+              optional manual match.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AddRecordForm
+              action={submitRecord}
+              settlements={settlements.map((s) => ({ value: s.id, label: `${s.publicId} · ${s.reference}` }))}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Auto-match engine</CardTitle>
+            <CardDescription>
+              Scans every OPEN/UNMATCHED record and reconciles only exact 100% matches against SETTLED settlements
+              (same amount, currency, and value date). 80–99% candidates become suggestions for review.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form action={runAutoMatch}>
+              <SubmitButton variant="primary" pendingText="Matching...">
+                Run auto-match
               </SubmitButton>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
 
       <Suspense fallback={null}>
         <FilterBar

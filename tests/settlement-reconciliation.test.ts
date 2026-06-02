@@ -322,6 +322,7 @@ describe("settlement and reconciliation workflow", () => {
     expect(exactRecord.status).toBe(ReconciliationStatus.MATCHED);
     expect(exactRecord.settlementId).toBe(exactSettlement.id);
     expect(exactSettlement.status).toBe(SettlementStatus.RECONCILED);
+    expect((exactRecord.rawPayload as { _matchOrigin?: string })._matchOrigin).toBe("AUTO");
 
     // The non-exact record is left for operator review — never auto-matched.
     expect(suggestedRecord.status).toBe(ReconciliationStatus.OPEN);
@@ -371,16 +372,91 @@ describe("settlement and reconciliation workflow", () => {
     );
     expect(mock.store.auditLogs.some((log) => log.action === "reconciliation.reject_match")).toBe(true);
   });
+
+  it("saving an external record does not reconcile by default", async () => {
+    const { createReconciliationRecord } = await import("@/lib/domain");
+    // A SETTLED settlement that would match perfectly exists...
+    const settlement = seedSettledSettlement({ settledAt: new Date("2026-06-02T00:00:00Z") });
+
+    // ...but simply adding the external record (no settlement selected) must NOT link or reconcile it.
+    const record = await createReconciliationRecord({
+      externalRef: "bank_ref_open_1",
+      source: "bank_statement",
+      amount: 2500000,
+      currency: "INR",
+      valueDate: "2026-06-02",
+      status: "OPEN",
+    }, "user_1", "org_1");
+
+    expect(record.status).toBe(ReconciliationStatus.OPEN);
+    expect(record.settlementId).toBeNull();
+    expect(settlement.status).toBe(SettlementStatus.SETTLED);
+    expect(mock.store.auditLogs.some((log) => log.action === "settlement.transition")).toBe(false);
+    expect((record.rawPayload as { _matchOrigin?: string })._matchOrigin).toBeUndefined();
+  });
+
+  it("a 90% suggested match is not auto-reconciled until explicitly confirmed", async () => {
+    const { autoMatchReconciliation, confirmReconciliationMatch } = await import("@/lib/domain");
+    // Amount + currency match, value date differs -> 90% suggestion, never auto-matched.
+    const settlement = seedSettledSettlement({ settledAt: new Date("2026-05-20T00:00:00Z") });
+    const record = seedOpenRecord({ valueDate: new Date("2026-06-02T00:00:00Z") });
+
+    const result = await autoMatchReconciliation("user_1", "org_1");
+    expect(result.matched).toBe(0);
+    expect(record.status).toBe(ReconciliationStatus.OPEN);
+    expect(record.settlementId).toBeNull();
+    expect(settlement.status).toBe(SettlementStatus.SETTLED);
+
+    // Only an explicit confirmation reconciles it.
+    await confirmReconciliationMatch(record.id, settlement.id, "user_1", "org_1");
+    expect(record.status).toBe(ReconciliationStatus.MATCHED);
+    expect(record.settlementId).toBe(settlement.id);
+    expect(settlement.status).toBe(SettlementStatus.RECONCILED);
+    expect((record.rawPayload as { _matchOrigin?: string })._matchOrigin).toBe("MANUAL");
+  });
+
+  it("a manual match reconciles only when a settlement is explicitly selected", async () => {
+    const { createReconciliationRecord } = await import("@/lib/domain");
+    const settlement = seedSettledSettlement({ settledAt: new Date("2026-06-02T00:00:00Z") });
+
+    const record = await createReconciliationRecord({
+      externalRef: "bank_ref_manual_1",
+      source: "bank_statement",
+      amount: 2500000,
+      currency: "INR",
+      settlementId: settlement.id,
+      valueDate: "2026-06-02",
+      status: "MATCHED",
+    }, "user_1", "org_1");
+
+    expect(record.status).toBe(ReconciliationStatus.MATCHED);
+    expect(record.settlementId).toBe(settlement.id);
+    expect(settlement.status).toBe(SettlementStatus.RECONCILED);
+    expect((record.rawPayload as { _matchOrigin?: string })._matchOrigin).toBe("MANUAL");
+    expect(
+      mock.store.auditLogs.some(
+        (log) =>
+          log.action === "settlement.transition" &&
+          (log.after as { toStatus?: string })?.toStatus === SettlementStatus.RECONCILED,
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("matchTypeFor display lifecycle", () => {
   it("never shows a linked/matched record as a suggestion", async () => {
     const { matchTypeFor } = await import("@/lib/reconciliation");
-    // Exact linked match -> auto-matched (green).
+    // Legacy/unknown origin falls back to confidence.
     expect(matchTypeFor("MATCHED", 100, true)).toBe("AUTO_MATCHED");
-    // Operator-confirmed (sub-100) linked match -> MATCHED, NOT SUGGESTED.
-    expect(matchTypeFor("MATCHED", 90, true)).toBe("MATCHED");
+    expect(matchTypeFor("MATCHED", 90, true)).toBe("MANUAL_MATCHED");
     expect(matchTypeFor("MATCHED", 90, true)).not.toBe("SUGGESTED");
+  });
+
+  it("uses the recorded match origin for linked records", async () => {
+    const { matchTypeFor } = await import("@/lib/reconciliation");
+    // Origin wins over confidence: a manual 100% link is still "Manual", an auto link is "Auto".
+    expect(matchTypeFor("MATCHED", 100, true, "MANUAL")).toBe("MANUAL_MATCHED");
+    expect(matchTypeFor("MATCHED", 90, true, "AUTO")).toBe("AUTO_MATCHED");
   });
 
   it("classifies unlinked records by candidate strength", async () => {
