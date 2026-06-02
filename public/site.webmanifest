@@ -1,0 +1,18 @@
+{
+  "name": "INRSettle",
+  "short_name": "INRSettle",
+  "description": "Stablecoin settlement infrastructure for India payment flows.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f9fb",
+  "theme_color": "#050816",
+  "icons": [
+    {
+      "src": "/assets/favicon.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

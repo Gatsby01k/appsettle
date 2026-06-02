@@ -5,6 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://inrsettle.com"),
   title: "INRSettle Console",
   description: "Stablecoin settlement operations platform for treasury and payment teams.",
 };

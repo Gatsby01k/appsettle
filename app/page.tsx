@@ -1,5 +1,7 @@
-import { redirect } from "next/navigation";
+import { marketingMetadata, StaticMarketingPage } from "@/components/marketing/static-marketing-page";
+
+export const metadata = marketingMetadata("index.html", "/");
 
 export default function HomePage() {
-  redirect("/login");
+  return <StaticMarketingPage fileName="index.html" />;
 }
