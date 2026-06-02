@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { publicSettlementId } from "@/lib/utils";
 import { writeAuditLog } from "@/lib/audit";
 import { UserFacingError } from "@/lib/errors";
-import { computeConfidence } from "@/lib/reconciliation";
+import { computeConfidence, matchReasonFor } from "@/lib/reconciliation";
 import { quoteSchema, reconciliationSchema, settlementSchema, settingsSchema } from "@/lib/validators";
 
 const RATE_BY_CORRIDOR = {
@@ -302,11 +302,70 @@ export async function createReconciliationRecord(input: unknown, userId: string,
   return record;
 }
 
+type SettlementCandidate = {
+  id: string;
+  publicId: string;
+  reference: string;
+  sourceCurrency: string;
+  targetCurrency: string;
+  sourceAmount: Prisma.Decimal;
+  targetAmount: Prisma.Decimal;
+  settledAt: Date | null;
+  createdAt: Date;
+};
+
+type RecordForMatch = {
+  amount: Prisma.Decimal;
+  currency: string;
+  valueDate: Date;
+};
+
+/** Settlement IDs an operator has explicitly rejected for a record (stored in rawPayload). */
+export function rejectedSettlementIdsOf(rawPayload: Prisma.JsonValue | null | undefined): string[] {
+  if (rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)) {
+    const value = (rawPayload as Record<string, unknown>)._rejectedSettlementIds;
+    if (Array.isArray(value)) return value.filter((id): id is string => typeof id === "string");
+  }
+  return [];
+}
+
 /**
- * Auto-reconciliation engine. Scans the open/unmatched queue and links each
- * record to a SETTLED settlement when amount + currency (and ideally value date)
- * align. Matches at >= 90% confidence are linked and the settlement is moved to
- * RECONCILED, with a reconciliation.auto_match audit event recording confidence.
+ * Finds the highest-confidence settlement candidate for a record using
+ * amount + currency + value date. Returns null when nothing meets `minConfidence`.
+ */
+export function bestSettlementMatch<T extends SettlementCandidate>(
+  record: RecordForMatch,
+  candidates: T[],
+  options: { excludeSettlementIds?: Set<string>; usedSettlementIds?: Set<string>; minConfidence?: number } = {},
+): { settlement: T; confidence: number } | null {
+  const min = options.minConfidence ?? 90;
+  let best: { settlement: T; confidence: number } | null = null;
+
+  for (const settlement of candidates) {
+    if (options.excludeSettlementIds?.has(settlement.id)) continue;
+    if (options.usedSettlementIds?.has(settlement.id)) continue;
+    const confidence = computeConfidence(Number(record.amount), record.currency, record.valueDate, {
+      sourceCurrency: settlement.sourceCurrency,
+      targetCurrency: settlement.targetCurrency,
+      sourceAmount: Number(settlement.sourceAmount),
+      targetAmount: Number(settlement.targetAmount),
+      refDate: settlement.settledAt ?? settlement.createdAt,
+    });
+    if (confidence >= min && (!best || confidence > best.confidence)) {
+      best = { settlement, confidence };
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Auto-reconciliation engine. Scans the open/unmatched queue and only auto-links
+ * records that match a SETTLED settlement at 100% confidence (amount + currency +
+ * value date). Exact matches are linked, marked MATCHED, the settlement transitions
+ * SETTLED -> RECONCILED, and a reconciliation.auto_match audit event is written —
+ * with no operator action required. Lower-confidence candidates are intentionally
+ * left for operator review (Confirm / Reject) and are not touched here.
  */
 export async function autoMatchReconciliation(userId: string, organizationId: string) {
   const open = await prisma.reconciliationRecord.findMany({
@@ -328,32 +387,22 @@ export async function autoMatchReconciliation(userId: string, organizationId: st
   let matched = 0;
 
   for (const record of open) {
-    let best: { id: string; reference: string; confidence: number } | null = null;
-
-    for (const settlement of candidates) {
-      if (used.has(settlement.id)) continue;
-      const confidence = computeConfidence(Number(record.amount), record.currency, record.valueDate, {
-        sourceCurrency: settlement.sourceCurrency,
-        targetCurrency: settlement.targetCurrency,
-        sourceAmount: Number(settlement.sourceAmount),
-        targetAmount: Number(settlement.targetAmount),
-        refDate: settlement.settledAt ?? settlement.createdAt,
-      });
-      if (confidence >= 90 && (!best || confidence > best.confidence)) {
-        best = { id: settlement.id, reference: settlement.reference, confidence };
-      }
-    }
+    const best = bestSettlementMatch(record, candidates, {
+      excludeSettlementIds: new Set(rejectedSettlementIdsOf(record.rawPayload)),
+      usedSettlementIds: used,
+      minConfidence: 100,
+    });
 
     if (!best) continue;
 
-    used.add(best.id);
+    used.add(best.settlement.id);
     await prisma.reconciliationRecord.update({
       where: { id: record.id },
-      data: { status: ReconciliationStatus.MATCHED, settlementId: best.id },
+      data: { status: ReconciliationStatus.MATCHED, settlementId: best.settlement.id },
     });
 
     await transitionSettlement(
-      best.id,
+      best.settlement.id,
       SettlementStatus.RECONCILED,
       userId,
       organizationId,
@@ -369,9 +418,11 @@ export async function autoMatchReconciliation(userId: string, organizationId: st
       userId,
       after: {
         confidence: best.confidence,
+        matchReason: matchReasonFor(best.confidence, record.currency),
         externalRef: record.externalRef,
-        settlementId: best.id,
-        settlementReference: best.reference,
+        settlementId: best.settlement.id,
+        settlementPublicId: best.settlement.publicId,
+        settlementReference: best.settlement.reference,
       },
     });
 
@@ -379,6 +430,137 @@ export async function autoMatchReconciliation(userId: string, organizationId: st
   }
 
   return { matched, scanned: open.length };
+}
+
+/**
+ * Operator confirms a suggested (sub-100%) match. Links the record to the
+ * settlement, marks it MATCHED, transitions the settlement to RECONCILED, and
+ * writes an audit trail capturing the confidence and reason at confirmation time.
+ */
+export async function confirmReconciliationMatch(
+  recordId: string,
+  settlementId: string,
+  userId: string,
+  organizationId: string,
+) {
+  const record = await prisma.reconciliationRecord.findFirst({
+    where: { id: recordId, organizationId },
+  });
+  if (!record) {
+    throw new UserFacingError("Reconciliation record was not found.");
+  }
+  if (record.settlementId) {
+    throw new UserFacingError("This record is already linked to a settlement.");
+  }
+  if (record.status === ReconciliationStatus.EXCEPTION) {
+    throw new UserFacingError("Exception records cannot be matched until the exception is resolved.");
+  }
+
+  const settlement = await prisma.settlement.findFirst({
+    where: { id: settlementId, organizationId },
+  });
+  if (!settlement) {
+    throw new UserFacingError("Suggested settlement was not found for this organization.");
+  }
+  if (settlement.status !== SettlementStatus.SETTLED) {
+    throw new UserFacingError("Only SETTLED settlements can be matched for reconciliation.");
+  }
+
+  const confidence = computeConfidence(Number(record.amount), record.currency, record.valueDate, {
+    sourceCurrency: settlement.sourceCurrency,
+    targetCurrency: settlement.targetCurrency,
+    sourceAmount: Number(settlement.sourceAmount),
+    targetAmount: Number(settlement.targetAmount),
+    refDate: settlement.settledAt ?? settlement.createdAt,
+  });
+  if (confidence <= 0) {
+    throw new UserFacingError("This settlement no longer matches the record's amount and currency.");
+  }
+
+  await prisma.reconciliationRecord.update({
+    where: { id: record.id },
+    data: { status: ReconciliationStatus.MATCHED, settlementId: settlement.id },
+  });
+
+  await transitionSettlement(
+    settlement.id,
+    SettlementStatus.RECONCILED,
+    userId,
+    organizationId,
+    `Operator-confirmed match (${confidence}%) to ${record.externalRef}`,
+    { allowReconcile: true },
+  );
+
+  await writeAuditLog({
+    action: "reconciliation.confirm_match",
+    resourceType: "reconciliation_record",
+    resourceId: record.id,
+    organizationId,
+    userId,
+    after: {
+      confidence,
+      matchReason: matchReasonFor(confidence, record.currency),
+      externalRef: record.externalRef,
+      settlementId: settlement.id,
+      settlementPublicId: settlement.publicId,
+      settlementReference: settlement.reference,
+    },
+  });
+
+  return { recordId: record.id, settlementId: settlement.id, confidence };
+}
+
+/**
+ * Operator rejects a suggested match. The record stays in manual review and the
+ * rejected settlement is remembered (in rawPayload) so auto-match and the
+ * suggestion panel never propose it again.
+ */
+export async function rejectReconciliationSuggestion(
+  recordId: string,
+  settlementId: string,
+  userId: string,
+  organizationId: string,
+) {
+  const record = await prisma.reconciliationRecord.findFirst({
+    where: { id: recordId, organizationId },
+  });
+  if (!record) {
+    throw new UserFacingError("Reconciliation record was not found.");
+  }
+  if (record.settlementId) {
+    throw new UserFacingError("This record is already linked and cannot reject a suggestion.");
+  }
+
+  const rejected = new Set(rejectedSettlementIdsOf(record.rawPayload));
+  rejected.add(settlementId);
+
+  const basePayload =
+    record.rawPayload && typeof record.rawPayload === "object" && !Array.isArray(record.rawPayload)
+      ? (record.rawPayload as Record<string, unknown>)
+      : {};
+
+  await prisma.reconciliationRecord.update({
+    where: { id: record.id },
+    data: {
+      status: ReconciliationStatus.UNMATCHED,
+      rawPayload: { ...basePayload, _rejectedSettlementIds: Array.from(rejected) } as Prisma.InputJsonValue,
+    },
+  });
+
+  await writeAuditLog({
+    action: "reconciliation.reject_suggestion",
+    resourceType: "reconciliation_record",
+    resourceId: record.id,
+    organizationId,
+    userId,
+    after: {
+      externalRef: record.externalRef,
+      rejectedSettlementId: settlementId,
+      rejectedSettlementIds: Array.from(rejected),
+    },
+  });
+
+  return { recordId: record.id, rejectedSettlementId: settlementId };
 }
 
 export async function updateSettings(input: unknown, userId: string, organizationId: string) {

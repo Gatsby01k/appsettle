@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SettlementStatus } from "@prisma/client";
 import { requireSession } from "@/lib/auth";
+import { autoMatchReconciliation } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 import { availableBalance } from "@/lib/treasury";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
@@ -32,10 +33,18 @@ function auditTone(action: string): "neutral" | "success" | "warning" | "danger"
 }
 
 export default async function DashboardPage() {
-  const { organization } = await requireSession();
+  const { user, organization } = await requireSession();
   const now = new Date();
   const startOfDay = new Date(now);
   startOfDay.setHours(0, 0, 0, 0);
+
+  // Auto-reconcile exact (100%) matches so Reconciled Today, Auto-Reconciled Rate,
+  // and Reconciled Volume reflect new exact matches immediately — no operator action.
+  try {
+    await autoMatchReconciliation(user.id, organization.id);
+  } catch {
+    // Non-fatal: dashboard still renders current state if matching fails transiently.
+  }
 
   const [
     settlements,

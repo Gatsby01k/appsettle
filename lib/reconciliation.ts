@@ -44,6 +44,20 @@ export function matchTypeFor(status: string, confidence: number, hasSettlement: 
   return "MANUAL_REVIEW";
 }
 
+/**
+ * Human-readable explanation of why a record matched (or partially matched) a
+ * settlement. Used both in the reconciliation detail panel and audit logs.
+ */
+export function matchReasonFor(confidence: number, currency: string): string {
+  if (confidence >= 100) {
+    return `Amount, ${currency} currency, and value date all match the settlement.`;
+  }
+  if (confidence >= 90) {
+    return `Amount and ${currency} currency match; value date differs.`;
+  }
+  return "No settlement with a matching amount and currency.";
+}
+
 export const MATCH_LABEL: Record<MatchType, string> = {
   AUTO_MATCHED: "Auto-matched",
   SUGGESTED: "Suggested match",

@@ -1,13 +1,22 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Check, X } from "lucide-react";
 import { StatusBadge } from "@/components/ops/status-badge";
 import { StatRow } from "@/components/ops/stat-row";
 import { EmptyState } from "@/components/ops/empty-state";
 import { Badge } from "@/components/ui/badge";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { MATCH_TONE, type MatchType } from "@/lib/reconciliation";
 import { cn } from "@/lib/utils";
+
+export type ReconciliationSuggestion = {
+  settlementId: string;
+  publicId: string;
+  reference: string;
+  confidence: number;
+  reason: string;
+};
 
 export type ReconciliationRow = {
   id: string;
@@ -22,6 +31,13 @@ export type ReconciliationRow = {
   exceptionReason: string | null;
   valueDate: string;
   settlement: { publicId: string; reference: string } | null;
+  suggestion: ReconciliationSuggestion | null;
+};
+
+type WorkspaceProps = {
+  records: ReconciliationRow[];
+  confirmAction: (formData: FormData) => Promise<void>;
+  rejectAction: (formData: FormData) => Promise<void>;
 };
 
 function ConfidenceBar({ confidence }: { confidence: number }) {
@@ -38,7 +54,7 @@ function ConfidenceBar({ confidence }: { confidence: number }) {
   );
 }
 
-export function ReconciliationWorkspace({ records }: { records: ReconciliationRow[] }) {
+export function ReconciliationWorkspace({ records, confirmAction, rejectAction }: WorkspaceProps) {
   const [selectedId, setSelectedId] = useState(records[0]?.id ?? "");
   const selected = useMemo(
     () => records.find((record) => record.id === selectedId) ?? records[0],
@@ -80,6 +96,11 @@ export function ReconciliationWorkspace({ records }: { records: ReconciliationRo
                   <p className="mt-1 truncate text-xs text-slate-500">
                     {record.source.replaceAll("_", " ")} · {record.amount}
                   </p>
+                  {record.suggestion ? (
+                    <p className="mt-1 truncate text-xs font-medium text-sky-700">
+                      Suggested {record.suggestion.publicId} · {record.suggestion.confidence}%
+                    </p>
+                  ) : null}
                 </button>
               </li>
             );
@@ -102,21 +123,65 @@ export function ReconciliationWorkspace({ records }: { records: ReconciliationRo
           <div className="mt-4 rounded-lg border p-4">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Match</p>
-              {selected.settlement ? <ConfidenceBar confidence={selected.confidence} /> : null}
+              {selected.settlement || selected.suggestion ? (
+                <ConfidenceBar confidence={selected.confidence} />
+              ) : null}
             </div>
+
             {selected.settlement ? (
-              <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-                <span className="rounded-md bg-slate-100 px-2 py-1 font-medium text-slate-700">
-                  {selected.externalRef}
-                </span>
-                <ArrowRight className="h-4 w-4 text-slate-400" />
-                <span className="rounded-md bg-teal-50 px-2 py-1 font-medium text-teal-700 ring-1 ring-teal-200/80">
-                  {selected.settlement.publicId} · {selected.settlement.reference}
-                </span>
+              <>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                  <span className="rounded-md bg-slate-100 px-2 py-1 font-medium text-slate-700">
+                    {selected.externalRef}
+                  </span>
+                  <ArrowRight className="h-4 w-4 text-slate-400" />
+                  <span className="rounded-md bg-teal-50 px-2 py-1 font-medium text-teal-700 ring-1 ring-teal-200/80">
+                    {selected.settlement.publicId} · {selected.settlement.reference}
+                  </span>
+                </div>
+                {selected.confidence >= 100 ? (
+                  <p className="mt-3 text-xs text-teal-700">
+                    Auto-reconciled at 100% confidence — no operator action required.
+                  </p>
+                ) : null}
+              </>
+            ) : selected.suggestion ? (
+              <div className="mt-3 space-y-3">
+                <div className="grid gap-0.5 rounded-lg border bg-slate-50/50 px-3 py-1">
+                  <StatRow
+                    label="Suggested match"
+                    value={`${selected.suggestion.publicId} · ${selected.suggestion.reference}`}
+                  />
+                  <StatRow label="Confidence" value={`${selected.suggestion.confidence}%`} />
+                  <StatRow label="Match reason" value={selected.suggestion.reason} />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <form action={confirmAction}>
+                    <input type="hidden" name="recordId" value={selected.id} />
+                    <input type="hidden" name="settlementId" value={selected.suggestion.settlementId} />
+                    <SubmitButton variant="primary" size="sm" pendingText="Confirming...">
+                      <Check className="h-3.5 w-3.5" />
+                      Confirm match
+                    </SubmitButton>
+                  </form>
+                  <form action={rejectAction}>
+                    <input type="hidden" name="recordId" value={selected.id} />
+                    <input type="hidden" name="settlementId" value={selected.suggestion.settlementId} />
+                    <SubmitButton variant="outline" size="sm" pendingText="Rejecting...">
+                      <X className="h-3.5 w-3.5" />
+                      Reject suggestion
+                    </SubmitButton>
+                  </form>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Confirming links this record and moves the settlement to RECONCILED. Rejecting keeps it in manual
+                  review and hides this suggestion.
+                </p>
               </div>
             ) : (
               <p className="mt-2 text-sm text-slate-500">
-                No settlement linked yet. Run auto-match to find a SETTLED settlement with the same amount and currency.
+                No settlement candidate found. Exact (100%) matches reconcile automatically; this record needs a manual
+                link or has no SETTLED settlement with the same amount and currency.
               </p>
             )}
           </div>

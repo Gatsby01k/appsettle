@@ -1,9 +1,16 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
-import { autoMatchReconciliation, createReconciliationRecord } from "@/lib/domain";
+import {
+  autoMatchReconciliation,
+  bestSettlementMatch,
+  confirmReconciliationMatch,
+  createReconciliationRecord,
+  rejectReconciliationSuggestion,
+  rejectedSettlementIdsOf,
+} from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
-import { computeConfidence, matchTypeFor, MATCH_LABEL } from "@/lib/reconciliation";
+import { computeConfidence, matchReasonFor, matchTypeFor, MATCH_LABEL } from "@/lib/reconciliation";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
@@ -54,15 +61,51 @@ async function runAutoMatch() {
   redirect(`/reconciliation?success=automatch&matched=${result.matched}&scanned=${result.scanned}`);
 }
 
+async function confirmMatch(formData: FormData) {
+  "use server";
+  const { user, organization } = await requireSession();
+  const recordId = String(formData.get("recordId") || "");
+  const settlementId = String(formData.get("settlementId") || "");
+  try {
+    await confirmReconciliationMatch(recordId, settlementId, user.id, organization.id);
+  } catch (error) {
+    redirect(`/reconciliation?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
+  }
+  redirect("/reconciliation?success=confirmed");
+}
+
+async function rejectSuggestion(formData: FormData) {
+  "use server";
+  const { user, organization } = await requireSession();
+  const recordId = String(formData.get("recordId") || "");
+  const settlementId = String(formData.get("settlementId") || "");
+  try {
+    await rejectReconciliationSuggestion(recordId, settlementId, user.id, organization.id);
+  } catch (error) {
+    redirect(`/reconciliation?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
+  }
+  redirect("/reconciliation?success=rejected");
+}
+
 export default async function ReconciliationPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string; success?: string; q?: string; status?: string; matched?: string; scanned?: string }>;
 }) {
-  const { organization } = await requireSession();
+  const { user, organization } = await requireSession();
   const params = await searchParams;
 
-  const [records, settlements] = await Promise.all([
+  // Reconcile exact (100%) matches automatically on load so operators never have
+  // to action a settlement candidate that aligns perfectly. Lower-confidence
+  // candidates are left for review. Wrapped so a transient failure never blocks render.
+  let autoReconciled = 0;
+  try {
+    autoReconciled = (await autoMatchReconciliation(user.id, organization.id)).matched;
+  } catch {
+    autoReconciled = 0;
+  }
+
+  const [records, settlements, settledCandidates] = await Promise.all([
     prisma.reconciliationRecord.findMany({
       where: { organizationId: organization.id },
       orderBy: { createdAt: "desc" },
@@ -74,18 +117,41 @@ export default async function ReconciliationPage({
       orderBy: { createdAt: "desc" },
       take: 50,
     }),
+    prisma.settlement.findMany({
+      where: { organizationId: organization.id, status: "SETTLED" },
+      orderBy: { settledAt: "desc" },
+    }),
   ]);
 
-  const confidenceFor = (record: (typeof records)[number]) =>
-    record.settlement
-      ? computeConfidence(Number(record.amount), record.currency, record.valueDate, {
-          sourceCurrency: record.settlement.sourceCurrency,
-          targetCurrency: record.settlement.targetCurrency,
-          sourceAmount: Number(record.settlement.sourceAmount),
-          targetAmount: Number(record.settlement.targetAmount),
-          refDate: record.settlement.settledAt ?? record.settlement.createdAt,
-        })
-      : 0;
+  // Best open settlement candidate for an unlinked record (excludes rejected ones).
+  const suggestionFor = (record: (typeof records)[number]) => {
+    if (record.settlement || record.status === "EXCEPTION") return null;
+    const best = bestSettlementMatch(record, settledCandidates, {
+      excludeSettlementIds: new Set(rejectedSettlementIdsOf(record.rawPayload)),
+      minConfidence: 90,
+    });
+    if (!best) return null;
+    return {
+      settlementId: best.settlement.id,
+      publicId: best.settlement.publicId,
+      reference: best.settlement.reference,
+      confidence: best.confidence,
+      reason: matchReasonFor(best.confidence, record.currency),
+    };
+  };
+
+  const confidenceFor = (record: (typeof records)[number]) => {
+    if (record.settlement) {
+      return computeConfidence(Number(record.amount), record.currency, record.valueDate, {
+        sourceCurrency: record.settlement.sourceCurrency,
+        targetCurrency: record.settlement.targetCurrency,
+        sourceAmount: Number(record.settlement.sourceAmount),
+        targetAmount: Number(record.settlement.targetAmount),
+        refDate: record.settlement.settledAt ?? record.settlement.createdAt,
+      });
+    }
+    return suggestionFor(record)?.confidence ?? 0;
+  };
 
   const query = params.q?.toLowerCase().trim() ?? "";
   const filteredRecords = records.filter((record) => {
@@ -98,23 +164,16 @@ export default async function ReconciliationPage({
     return matchesSearch && matchesStatus;
   });
 
-  const autoMatched = records.filter(
-    (r) => matchTypeFor(r.status, confidenceFor(r), Boolean(r.settlement)) === "AUTO_MATCHED",
-  ).length;
-  const suggested = records.filter(
-    (r) => matchTypeFor(r.status, confidenceFor(r), Boolean(r.settlement)) === "SUGGESTED",
-  ).length;
-  const manualReview = records.filter(
-    (r) => matchTypeFor(r.status, confidenceFor(r), Boolean(r.settlement)) === "MANUAL_REVIEW",
-  ).length;
+  const matchedCount = records.filter((r) => Boolean(r.settlement) && r.status === "MATCHED").length;
+  const manualReview = records.filter((r) => !r.settlement && r.status !== "EXCEPTION").length;
+  const suggestedCount = records.filter((r) => !r.settlement && r.status !== "EXCEPTION" && suggestionFor(r)).length;
   const exceptions = records.filter((r) => r.status === "EXCEPTION").length;
-  const matchRate = records.length
-    ? Math.round(((autoMatched + suggested) / records.length) * 100)
-    : 0;
+  const matchRate = records.length ? Math.round((matchedCount / records.length) * 100) : 0;
 
   const workspaceRows = filteredRecords.map((record) => {
     const confidence = confidenceFor(record);
     const matchType = matchTypeFor(record.status, confidence, Boolean(record.settlement));
+    const suggestion = suggestionFor(record);
     return {
       id: record.id,
       externalRef: record.externalRef,
@@ -129,6 +188,15 @@ export default async function ReconciliationPage({
       valueDate: record.valueDate.toLocaleDateString(),
       settlement: record.settlement
         ? { publicId: record.settlement.publicId, reference: record.settlement.reference }
+        : null,
+      suggestion: suggestion
+        ? {
+            settlementId: suggestion.settlementId,
+            publicId: suggestion.publicId,
+            reference: suggestion.reference,
+            confidence: suggestion.confidence,
+            reason: suggestion.reason,
+          }
         : null,
     };
   });
@@ -149,17 +217,31 @@ export default async function ReconciliationPage({
 
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {params.success === "created" ? <FlashMessage message="Reconciliation record saved." /> : null}
+      {params.success === "confirmed" ? (
+        <FlashMessage message="Match confirmed — settlement reconciled." />
+      ) : null}
+      {params.success === "rejected" ? (
+        <FlashMessage message="Suggestion rejected — record kept in manual review." />
+      ) : null}
       {params.success === "automatch" ? (
         <FlashMessage
           message={`Auto-match complete — ${params.matched ?? 0} of ${params.scanned ?? 0} open records matched and reconciled.`}
         />
       ) : null}
+      {autoReconciled > 0 && params.success !== "automatch" ? (
+        <FlashMessage message={`${autoReconciled} exact match${autoReconciled === 1 ? "" : "es"} auto-reconciled on load.`} />
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Auto-matched" value={autoMatched} hint="100% confidence" tone="success" />
-        <MetricCard label="Manual review" value={manualReview + suggested} hint="Needs operator" tone="warning" />
+        <MetricCard label="Auto-matched" value={matchedCount} hint="Linked & reconciled" tone="success" />
+        <MetricCard
+          label="Manual review"
+          value={manualReview}
+          hint={`${suggestedCount} with suggestions`}
+          tone={manualReview ? "warning" : "neutral"}
+        />
         <MetricCard label="Exceptions" value={exceptions} hint="Operations queue" tone={exceptions ? "danger" : "neutral"} />
-        <MetricCard label="Match rate" value={`${matchRate}%`} hint="Matched + suggested" tone="info" />
+        <MetricCard label="Match rate" value={`${matchRate}%`} hint="Reconciled records" tone="info" />
       </div>
 
       <Card>
@@ -251,7 +333,11 @@ export default async function ReconciliationPage({
         />
       </Suspense>
 
-      <ReconciliationWorkspace records={workspaceRows} />
+      <ReconciliationWorkspace
+        records={workspaceRows}
+        confirmAction={confirmMatch}
+        rejectAction={rejectSuggestion}
+      />
     </div>
   );
 }
