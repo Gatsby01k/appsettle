@@ -3,9 +3,11 @@ import { requireSession } from "@/lib/auth";
 import { updateSettings } from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
 import { canManageSettings } from "@/lib/permissions";
+import { MetricCard, PageHeader } from "@/components/dashboard/premium";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Reveal, RevealGroup } from "@/components/ui/reveal";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 async function saveSettings(formData: FormData) {
@@ -33,11 +35,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const disabled = !canManageSettings(membership.role);
 
   return (
-    <div className="space-y-8">
-      <div>
-        <p className="text-sm font-semibold text-emerald-700">Settings</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">Organization controls</h1>
-      </div>
+    <RevealGroup className="space-y-8">
+      <Reveal>
+        <PageHeader
+          eyebrow="Settings"
+          title="Enterprise treasury controls"
+          description="Configure approval thresholds, quote expiry, reconciliation routing, and integration endpoints for your organization."
+        />
+      </Reveal>
       {params.error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
           {params.error}
@@ -48,13 +53,26 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           Settings saved.
         </div>
       ) : null}
-      <Card className="max-w-2xl">
-        <CardHeader>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Reveal><MetricCard label="Approval threshold" value={String(settings?.approvalThreshold ?? 2500000)} helper="Maker-checker control" tone="emerald" /></Reveal>
+        <Reveal><MetricCard label="Quote TTL" value={`${settings?.quoteTtlSeconds ?? 900}s`} helper="Executable quote window" tone="slate" /></Reveal>
+        <Reveal><MetricCard label="Access" value={disabled ? "Read only" : "Admin"} helper="Current permission level" tone={disabled ? "amber" : "emerald"} /></Reveal>
+      </div>
+
+      <Reveal>
+      <Card className="max-w-4xl">
+        <CardHeader className="border-b border-slate-200/70">
           <CardTitle>Operational settings</CardTitle>
           <CardDescription>Configure maker-checker thresholds, quote expiry, webhooks, and reconciliation routing.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={saveSettings} className="grid gap-4">
+          {disabled ? (
+            <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">
+              Your role can view these controls but cannot update them.
+            </div>
+          ) : null}
+          <form action={saveSettings} className="grid gap-5 md:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="displayName">Display name</Label>
               <Input id="displayName" name="displayName" defaultValue={organization.displayName} disabled={disabled} required />
@@ -75,10 +93,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <Label htmlFor="webhookUrl">Webhook URL</Label>
               <Input id="webhookUrl" name="webhookUrl" type="url" defaultValue={settings?.webhookUrl ?? ""} disabled={disabled} />
             </div>
-            <SubmitButton type="submit" disabled={disabled} pendingText="Saving settings...">Save settings</SubmitButton>
+            <div className="md:col-span-2">
+              <SubmitButton type="submit" disabled={disabled} pendingText="Saving settings...">Save settings</SubmitButton>
+            </div>
           </form>
         </CardContent>
       </Card>
-    </div>
+      </Reveal>
+    </RevealGroup>
   );
 }

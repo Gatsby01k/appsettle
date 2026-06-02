@@ -2,16 +2,10 @@ import { SettlementStatus } from "@prisma/client";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-
-function statusTone(status: SettlementStatus) {
-  if (new Set<SettlementStatus>([SettlementStatus.SETTLED, SettlementStatus.RECONCILED, SettlementStatus.APPROVED]).has(status)) return "success";
-  if (new Set<SettlementStatus>([SettlementStatus.REQUESTED, SettlementStatus.EXECUTING]).has(status)) return "warning";
-  if (new Set<SettlementStatus>([SettlementStatus.FAILED, SettlementStatus.CANCELLED]).has(status)) return "danger";
-  return "neutral";
-}
+import { DetailDrawer } from "@/components/dashboard/detail-drawer";
+import { EmptyState, Lifecycle, MetricCard, PageHeader, PremiumStatusBadge } from "@/components/dashboard/premium";
+import { Reveal, RevealGroup } from "@/components/ui/reveal";
 
 export default async function DashboardPage() {
   const { organization } = await requireSession();
@@ -28,55 +22,94 @@ export default async function DashboardPage() {
 
   const volume = settlements.reduce((sum, settlement) => sum + Number(settlement.sourceAmount), 0);
   const pending = settlements.filter((settlement) => settlement.status === SettlementStatus.REQUESTED).length;
+  const activeSettlement = settlements[0];
 
   return (
-    <div className="space-y-8">
-      <div>
-        <p className="text-sm font-semibold text-emerald-700">Operations Overview</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">Settlement command center</h1>
-        <p className="mt-2 max-w-2xl text-muted-foreground">
-          Monitor quote activity, settlement lifecycle state, reconciliation exceptions, and audit events across your organization.
-        </p>
+    <RevealGroup className="space-y-8">
+      <Reveal>
+        <PageHeader
+          eyebrow="Operations overview"
+          title="Executive settlement command center"
+          description="A real-time view of treasury throughput, quote activity, reconciliation exceptions, and audit evidence across your INRSettle workspace."
+        />
+      </Reveal>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Reveal><MetricCard label="Settlement volume" value={formatCurrency(volume)} helper="Recent settlement queue value" tone="emerald" /></Reveal>
+        <Reveal><MetricCard label="Quote inventory" value={quotes} helper="Quotes created in this workspace" tone="slate" /></Reveal>
+        <Reveal><MetricCard label="Requested" value={pending} helper="Awaiting approval" tone="amber" /></Reveal>
+        <Reveal><MetricCard label="Recon exceptions" value={reconciliation} helper="Needs operations review" tone={reconciliation > 0 ? "rose" : "emerald"} /></Reveal>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card><CardHeader><CardTitle>Volume</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{formatCurrency(volume)}</CardContent></Card>
-        <Card><CardHeader><CardTitle>Open Quotes</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{quotes}</CardContent></Card>
-        <Card><CardHeader><CardTitle>Requested</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{pending}</CardContent></Card>
-        <Card><CardHeader><CardTitle>Recon Exceptions</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{reconciliation}</CardContent></Card>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1.4fr_.8fr]">
-        <Card>
-          <CardHeader><CardTitle>Recent settlements</CardTitle></CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader><TableRow><TableHead>ID</TableHead><TableHead>Reference</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {settlements.map((settlement) => (
-                  <TableRow key={settlement.id}>
-                    <TableCell className="font-medium">{settlement.publicId}</TableCell>
-                    <TableCell>{settlement.reference}</TableCell>
-                    <TableCell>{formatCurrency(String(settlement.sourceAmount), settlement.sourceCurrency)}</TableCell>
-                    <TableCell><Badge tone={statusTone(settlement.status)}>{settlement.status.replaceAll("_", " ")}</Badge></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Audit trail</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            {auditLogs.map((log) => (
-              <div key={log.id} className="rounded-xl border p-3">
-                <p className="text-sm font-semibold">{log.action}</p>
-                <p className="text-xs text-muted-foreground">{log.resourceType} · {log.createdAt.toLocaleString()}</p>
+      <Reveal>
+        <Card className="overflow-hidden">
+          <CardHeader className="flex flex-col gap-3 border-b border-slate-200/70 bg-gradient-to-r from-slate-950 to-slate-800 text-white md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle className="text-2xl tracking-[-0.03em]">Settlement lifecycle</CardTitle>
+              <p className="mt-2 text-sm text-slate-300">Latest settlement progression from request to reconciliation.</p>
+            </div>
+            {activeSettlement ? <PremiumStatusBadge status={activeSettlement.status} /> : null}
+          </CardHeader>
+          <CardContent className="p-6">
+            {activeSettlement ? (
+              <div className="space-y-5">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950">{activeSettlement.publicId} · {activeSettlement.reference}</p>
+                    <p className="text-sm text-slate-500">{formatCurrency(String(activeSettlement.sourceAmount), activeSettlement.sourceCurrency)} corridor settlement</p>
+                  </div>
+                  <DetailDrawer title={`${activeSettlement.publicId} details`}>
+                    <Lifecycle active={activeSettlement.status} />
+                    <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
+                      <div className="flex justify-between"><span className="text-slate-500">Reference</span><span className="font-medium">{activeSettlement.reference}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Amount</span><span className="font-medium">{formatCurrency(String(activeSettlement.sourceAmount), activeSettlement.sourceCurrency)}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Status</span><PremiumStatusBadge status={activeSettlement.status} /></div>
+                    </div>
+                  </DetailDrawer>
+                </div>
+                <Lifecycle active={activeSettlement.status} />
               </div>
-            ))}
+            ) : (
+              <EmptyState title="No settlement activity yet" description="Create a quote, convert it into a settlement, and lifecycle telemetry will appear here." />
+            )}
           </CardContent>
         </Card>
+      </Reveal>
+
+      <div className="grid gap-6 xl:grid-cols-[1.35fr_.75fr]">
+        <Reveal>
+          <Card>
+            <CardHeader><CardTitle>Recent settlements</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              {settlements.length ? settlements.map((settlement) => (
+                <div key={settlement.id} className="flex flex-col gap-4 rounded-2xl border border-slate-200/70 bg-white/80 p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <div className="flex items-center gap-3"><p className="font-semibold text-slate-950">{settlement.publicId}</p><PremiumStatusBadge status={settlement.status} /></div>
+                    <p className="mt-1 text-sm text-slate-500">{settlement.reference}</p>
+                  </div>
+                  <div className="text-left md:text-right">
+                    <p className="font-semibold text-slate-950">{formatCurrency(String(settlement.sourceAmount), settlement.sourceCurrency)}</p>
+                    <p className="text-xs text-slate-500">Treasury amount</p>
+                  </div>
+                </div>
+              )) : <EmptyState title="No settlements found" description="Settlement records will appear once your team creates them." />}
+            </CardContent>
+          </Card>
+        </Reveal>
+        <Reveal>
+          <Card>
+            <CardHeader><CardTitle>Audit trail</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              {auditLogs.length ? auditLogs.map((log) => (
+                <div key={log.id} className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4">
+                  <p className="text-sm font-semibold text-slate-950">{log.action}</p>
+                  <p className="mt-1 text-xs text-slate-500">{log.resourceType} · {log.createdAt.toLocaleString()}</p>
+                </div>
+              )) : <EmptyState title="No audit events" description="Operational events will be recorded here automatically." />}
+            </CardContent>
+          </Card>
+        </Reveal>
       </div>
-    </div>
+    </RevealGroup>
   );
 }

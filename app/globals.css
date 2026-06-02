@@ -26,12 +26,22 @@
 body {
   min-height: 100vh;
   background:
-    radial-gradient(900px 520px at 18% 18%, rgba(0, 199, 157, .12), transparent 60%),
-    radial-gradient(760px 540px at 92% 7%, rgba(242, 173, 35, .10), transparent 58%),
+    radial-gradient(900px 520px at 12% -10%, rgba(16, 185, 129, .15), transparent 62%),
+    radial-gradient(760px 540px at 96% 4%, rgba(245, 158, 11, .10), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,.72), rgba(248,250,252,.72)),
     hsl(var(--background));
   color: hsl(var(--foreground));
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
   background: rgba(0, 199, 157, .22);
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+details[open] summary {
+  pointer-events: none;
 }

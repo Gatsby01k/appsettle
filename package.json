@@ -20,6 +20,7 @@
     "bcryptjs": "latest",
     "class-variance-authority": "latest",
     "clsx": "latest",
+    "framer-motion": "^12.40.0",
     "jose": "latest",
     "lucide-react": "latest",
     "next": "latest",
