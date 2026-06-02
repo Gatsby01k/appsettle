@@ -25,6 +25,7 @@
     "pg": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "server-only": "^0.0.1",
     "tailwind-merge": "latest",
     "zod": "latest"
   },
