@@ -1,35 +1,46 @@
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { createReconciliationRecord } from "@/lib/domain";
+import { friendlyErrorMessage } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 async function submitRecord(formData: FormData) {
   "use server";
   const { user, organization } = await requireSession();
-  await createReconciliationRecord({
-    externalRef: formData.get("externalRef"),
-    source: formData.get("source"),
-    amount: formData.get("amount"),
-    currency: formData.get("currency"),
-    settlementId: formData.get("settlementId") || undefined,
-    valueDate: formData.get("valueDate"),
-    status: formData.get("status"),
-    exceptionReason: formData.get("exceptionReason") || undefined,
-  }, user.id, organization.id);
-  redirect("/reconciliation");
+  try {
+    await createReconciliationRecord({
+      externalRef: String(formData.get("externalRef") ?? ""),
+      source: String(formData.get("source") ?? ""),
+      amount: formData.get("amount"),
+      currency: String(formData.get("currency") ?? ""),
+      settlementId: String(formData.get("settlementId") || "") || undefined,
+      valueDate: String(formData.get("valueDate") ?? ""),
+      status: String(formData.get("status") ?? ""),
+      exceptionReason: String(formData.get("exceptionReason") || "") || undefined,
+    }, user.id, organization.id);
+  } catch (error) {
+    redirect(`/reconciliation?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
+  }
+  redirect("/reconciliation?success=created");
 }
 
-export default async function ReconciliationPage() {
+export default async function ReconciliationPage({ searchParams }: { searchParams: Promise<{ error?: string; success?: string }> }) {
   const { organization } = await requireSession();
+  const params = await searchParams;
   const [records, settlements] = await Promise.all([
-    prisma.reconciliationRecord.findMany({ where: { organizationId: organization.id }, orderBy: { createdAt: "desc" }, take: 30 }),
+    prisma.reconciliationRecord.findMany({
+      where: { organizationId: organization.id },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+      include: { settlement: true },
+    }),
     prisma.settlement.findMany({ where: { organizationId: organization.id }, orderBy: { createdAt: "desc" }, take: 50 }),
   ]);
 
@@ -39,6 +50,16 @@ export default async function ReconciliationPage() {
         <p className="text-sm font-semibold text-emerald-700">Reconciliation</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">Match external records to settlements</h1>
       </div>
+      {params.error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+          {params.error}
+        </div>
+      ) : null}
+      {params.success === "created" ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800">
+          Reconciliation record saved.
+        </div>
+      ) : null}
       <div className="grid gap-6 xl:grid-cols-[.8fr_1.2fr]">
         <Card>
           <CardHeader><CardTitle>Add reconciliation record</CardTitle></CardHeader>
@@ -73,8 +94,12 @@ export default async function ReconciliationPage() {
                   <option>OPEN</option><option>MATCHED</option><option>PARTIALLY_MATCHED</option><option>UNMATCHED</option><option>EXCEPTION</option><option>RESOLVED</option>
                 </select>
               </div>
-              <div className="grid gap-2"><Label htmlFor="exceptionReason">Exception reason</Label><Input id="exceptionReason" name="exceptionReason" /></div>
-              <Button type="submit">Save record</Button>
+              <div className="grid gap-2">
+                <Label htmlFor="exceptionReason">Exception reason</Label>
+                <Input id="exceptionReason" name="exceptionReason" />
+                <p className="text-sm text-muted-foreground">Required when status is EXCEPTION.</p>
+              </div>
+              <SubmitButton type="submit" pendingText="Saving record...">Save record</SubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -82,13 +107,30 @@ export default async function ReconciliationPage() {
           <CardHeader><CardTitle>Records</CardTitle></CardHeader>
           <CardContent>
             <Table>
-              <TableHeader><TableRow><TableHead>Reference</TableHead><TableHead>Amount</TableHead><TableHead>Source</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Reference</TableHead><TableHead>Amount</TableHead><TableHead>Source</TableHead><TableHead>Match</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
               <TableBody>
                 {records.map((record) => (
                   <TableRow key={record.id}>
-                    <TableCell className="font-medium">{record.externalRef}</TableCell>
+                    <TableCell className="font-medium">
+                      {record.externalRef}
+                      {record.status === "EXCEPTION" && record.exceptionReason ? (
+                        <div className="mt-1 text-xs text-red-700">Reason: {record.exceptionReason}</div>
+                      ) : null}
+                    </TableCell>
                     <TableCell>{formatCurrency(String(record.amount), record.currency)}</TableCell>
                     <TableCell>{record.source}</TableCell>
+                    <TableCell>
+                      {record.settlement ? (
+                        <div>
+                          <Badge tone="success">Matched</Badge>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {record.settlement.publicId} · {record.settlement.reference}
+                          </div>
+                        </div>
+                      ) : (
+                        <Badge tone="neutral">Unmatched</Badge>
+                      )}
+                    </TableCell>
                     <TableCell><Badge tone={record.status === "MATCHED" ? "success" : record.status === "EXCEPTION" ? "danger" : "warning"}>{record.status.replaceAll("_", " ")}</Badge></TableCell>
                   </TableRow>
                 ))}

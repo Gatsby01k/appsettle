@@ -22,6 +22,14 @@ export const reconciliationSchema = z.object({
   valueDate: z.string().min(10),
   status: z.enum(["OPEN", "MATCHED", "PARTIALLY_MATCHED", "UNMATCHED", "EXCEPTION", "RESOLVED"]),
   exceptionReason: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.status === "EXCEPTION" && !data.exceptionReason?.trim()) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["exceptionReason"],
+      message: "Exception reason is required when status is EXCEPTION.",
+    });
+  }
 });
 
 export const settingsSchema = z.object({

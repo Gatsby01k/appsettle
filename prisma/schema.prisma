@@ -211,6 +211,7 @@ model ReconciliationRecord {
   settlement      Settlement?          @relation(fields: [settlementId], references: [id])
 
   @@index([organizationId, status, valueDate])
+  @@unique([organizationId, source, externalRef])
 }
 
 model AuditLog {

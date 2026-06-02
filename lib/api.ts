@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { friendlyErrorMessage } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 
 export async function requireApiContext() {
@@ -30,6 +31,5 @@ export async function requireApiContext() {
 }
 
 export function jsonError(error: unknown) {
-  const message = error instanceof Error ? error.message : "Unexpected error";
-  return NextResponse.json({ error: message }, { status: 400 });
+  return NextResponse.json({ error: friendlyErrorMessage(error) }, { status: 400 });
 }

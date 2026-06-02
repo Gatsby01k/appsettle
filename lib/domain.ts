@@ -2,12 +2,32 @@ import { Prisma, QuoteStatus, ReconciliationStatus, SettlementStatus } from "@pr
 import { prisma } from "@/lib/prisma";
 import { publicSettlementId } from "@/lib/utils";
 import { writeAuditLog } from "@/lib/audit";
+import { UserFacingError } from "@/lib/errors";
 import { quoteSchema, reconciliationSchema, settlementSchema, settingsSchema } from "@/lib/validators";
 
 const RATE_BY_CORRIDOR = {
   INR_USDT: 83.5,
   USDT_INR: 83.15,
 } as const;
+
+function assertValidSettlementTransition(from: SettlementStatus, to: SettlementStatus) {
+  const allowed: Record<SettlementStatus, SettlementStatus[]> = {
+    [SettlementStatus.REQUESTED]: [SettlementStatus.APPROVED],
+    [SettlementStatus.QUOTED]: [SettlementStatus.APPROVED],
+    [SettlementStatus.PENDING_APPROVAL]: [SettlementStatus.APPROVED],
+    [SettlementStatus.APPROVED]: [SettlementStatus.EXECUTING],
+    [SettlementStatus.EXECUTING]: [SettlementStatus.SETTLED],
+    [SettlementStatus.SETTLED]: [],
+    [SettlementStatus.RECONCILED]: [],
+    [SettlementStatus.FAILED]: [],
+    [SettlementStatus.CANCELLED]: [],
+    [SettlementStatus.ON_HOLD]: [],
+  };
+
+  if (!allowed[from].includes(to)) {
+    throw new UserFacingError(`Cannot move settlement from ${from} to ${to}.`);
+  }
+}
 
 export async function createQuote(input: unknown, userId: string, organizationId: string) {
   const data = quoteSchema.parse(input);
@@ -63,7 +83,7 @@ export async function createSettlement(input: unknown, userId: string, organizat
   });
 
   if (!quote) {
-    throw new Error("Selected quote is unavailable, expired, or does not belong to this organization.");
+    throw new UserFacingError("Selected quote is unavailable, expired, or does not belong to this organization.");
   }
 
   const settings = await prisma.organizationSettings.findUniqueOrThrow({ where: { organizationId } });
@@ -126,9 +146,15 @@ export async function transitionSettlement(
   organizationId: string,
   note?: string,
 ) {
-  const current = await prisma.settlement.findFirstOrThrow({
+  const current = await prisma.settlement.findFirst({
     where: { id: settlementId, organizationId },
   });
+
+  if (!current) {
+    throw new UserFacingError("Settlement was not found.");
+  }
+
+  assertValidSettlementTransition(current.status, status);
 
   const updated = await prisma.$transaction(async (tx) => {
     const next = await tx.settlement.update({
@@ -161,8 +187,19 @@ export async function transitionSettlement(
     resourceId: settlementId,
     organizationId,
     userId,
-    before: current,
-    after: updated,
+    before: {
+      id: current.id,
+      publicId: current.publicId,
+      reference: current.reference,
+      status: current.status,
+    },
+    after: {
+      id: updated.id,
+      publicId: updated.publicId,
+      reference: updated.reference,
+      fromStatus: current.status,
+      toStatus: updated.status,
+    },
   });
 
   return updated;
@@ -170,10 +207,35 @@ export async function transitionSettlement(
 
 export async function createReconciliationRecord(input: unknown, userId: string, organizationId: string) {
   const data = reconciliationSchema.parse(input);
+  const matchedSettlement = data.settlementId
+    ? await prisma.settlement.findFirst({
+        where: {
+          id: data.settlementId,
+          organizationId,
+        },
+      })
+    : null;
+
+  if (data.settlementId && !matchedSettlement) {
+    throw new UserFacingError("Selected settlement was not found for this organization.");
+  }
+
+  const existing = await prisma.reconciliationRecord.findFirst({
+    where: {
+      organizationId,
+      source: data.source,
+      externalRef: data.externalRef,
+    },
+  });
+
+  if (existing) {
+    throw new UserFacingError("A reconciliation record with this external reference already exists for this source.");
+  }
+
   const record = await prisma.reconciliationRecord.create({
     data: {
       organizationId,
-      settlementId: data.settlementId || null,
+      settlementId: matchedSettlement?.id || null,
       externalRef: data.externalRef,
       source: data.source,
       amount: new Prisma.Decimal(data.amount),
@@ -195,7 +257,17 @@ export async function createReconciliationRecord(input: unknown, userId: string,
     resourceId: record.id,
     organizationId,
     userId,
-    after: record,
+    after: {
+      id: record.id,
+      status: record.status,
+      externalRef: record.externalRef,
+      source: record.source,
+      amount: record.amount.toString(),
+      currency: record.currency,
+      settlementId: record.settlementId,
+      settlementPublicId: matchedSettlement?.publicId,
+      settlementReference: matchedSettlement?.reference,
+    },
   });
 
   return record;

@@ -1,28 +1,34 @@
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { updateSettings } from "@/lib/domain";
+import { friendlyErrorMessage } from "@/lib/errors";
 import { canManageSettings } from "@/lib/permissions";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 async function saveSettings(formData: FormData) {
   "use server";
   const { user, organization, membership } = await requireSession();
   if (!canManageSettings(membership.role)) redirect("/settings");
-  await updateSettings({
-    displayName: formData.get("displayName"),
-    approvalThreshold: formData.get("approvalThreshold"),
-    quoteTtlSeconds: formData.get("quoteTtlSeconds"),
-    reconciliationEmail: formData.get("reconciliationEmail"),
-    webhookUrl: formData.get("webhookUrl"),
-  }, user.id, organization.id);
-  redirect("/settings");
+  try {
+    await updateSettings({
+      displayName: String(formData.get("displayName") ?? ""),
+      approvalThreshold: formData.get("approvalThreshold"),
+      quoteTtlSeconds: formData.get("quoteTtlSeconds"),
+      reconciliationEmail: String(formData.get("reconciliationEmail") ?? ""),
+      webhookUrl: String(formData.get("webhookUrl") ?? ""),
+    }, user.id, organization.id);
+  } catch (error) {
+    redirect(`/settings?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
+  }
+  redirect("/settings?success=saved");
 }
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; success?: string }> }) {
   const { organization, membership } = await requireSession();
+  const params = await searchParams;
   const settings = organization.settings;
   const disabled = !canManageSettings(membership.role);
 
@@ -32,6 +38,16 @@ export default async function SettingsPage() {
         <p className="text-sm font-semibold text-emerald-700">Settings</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">Organization controls</h1>
       </div>
+      {params.error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+          {params.error}
+        </div>
+      ) : null}
+      {params.success === "saved" ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800">
+          Settings saved.
+        </div>
+      ) : null}
       <Card className="max-w-2xl">
         <CardHeader>
           <CardTitle>Operational settings</CardTitle>
@@ -59,7 +75,7 @@ export default async function SettingsPage() {
               <Label htmlFor="webhookUrl">Webhook URL</Label>
               <Input id="webhookUrl" name="webhookUrl" type="url" defaultValue={settings?.webhookUrl ?? ""} disabled={disabled} />
             </div>
-            <Button type="submit" disabled={disabled}>Save settings</Button>
+            <SubmitButton type="submit" disabled={disabled} pendingText="Saving settings...">Save settings</SubmitButton>
           </form>
         </CardContent>
       </Card>

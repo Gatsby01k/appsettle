@@ -2,6 +2,7 @@ import { SettlementStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { createSettlement, transitionSettlement } from "@/lib/domain";
+import { friendlyErrorMessage } from "@/lib/errors";
 import { canApproveSettlement } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
@@ -22,9 +23,17 @@ function successMessage(value?: string) {
 
 function hasWorkflowAction(status: SettlementStatus) {
   return new Set<SettlementStatus>([
+    SettlementStatus.REQUESTED,
     SettlementStatus.PENDING_APPROVAL,
     SettlementStatus.APPROVED,
     SettlementStatus.EXECUTING,
+  ]).has(status);
+}
+
+function canApproveStatus(status: SettlementStatus) {
+  return new Set<SettlementStatus>([
+    SettlementStatus.REQUESTED,
+    SettlementStatus.PENDING_APPROVAL,
   ]).has(status);
 }
 
@@ -39,8 +48,7 @@ async function submitSettlement(formData: FormData) {
       targetAccount: String(formData.get("targetAccount") ?? ""),
     }, user.id, organization.id);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to create settlement.";
-    redirect(`/settlements?error=${encodeURIComponent(message)}`);
+    redirect(`/settlements?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
   }
   redirect("/settlements?success=created");
 }
@@ -50,13 +58,17 @@ async function transition(formData: FormData) {
   const { user, organization, membership } = await requireSession();
   if (!canApproveSettlement(membership.role)) redirect("/settlements");
   const status = String(formData.get("status")) as SettlementStatus;
-  await transitionSettlement(
-    String(formData.get("settlementId")),
-    status,
-    user.id,
-    organization.id,
-    "Updated from dashboard.",
-  );
+  try {
+    await transitionSettlement(
+      String(formData.get("settlementId")),
+      status,
+      user.id,
+      organization.id,
+      "Updated from dashboard.",
+    );
+  } catch (error) {
+    redirect(`/settlements?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
+  }
   redirect(`/settlements?success=${status.toLowerCase()}`);
 }
 
@@ -140,7 +152,7 @@ export default async function SettlementsPage({ searchParams }: { searchParams: 
                       {canApproveSettlement(membership.role) ? (
                         <form action={transition} className="flex flex-wrap gap-2">
                           <input type="hidden" name="settlementId" value={settlement.id} />
-                          {settlement.status === SettlementStatus.PENDING_APPROVAL ? (
+                          {canApproveStatus(settlement.status) ? (
                             <SubmitButton name="status" value="APPROVED" variant="outline" size="sm" pendingText="Approving...">
                               Approve
                             </SubmitButton>
