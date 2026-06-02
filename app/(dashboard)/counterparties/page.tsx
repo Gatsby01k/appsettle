@@ -1,9 +1,10 @@
 import { requireSession } from "@/lib/auth";
-import { COUNTERPARTIES } from "@/lib/treasury";
+import { COUNTERPARTIES, accountsForCounterparty } from "@/lib/treasury";
 import { formatCurrency } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
+import { CounterpartyDetailSheet } from "@/components/dashboard/counterparty-detail-sheet";
 import {
   DataGrid,
   DataGridBody,
@@ -12,6 +13,21 @@ import {
   DataGridTd,
   DataGridTh,
 } from "@/components/ops/data-grid";
+
+function recentSettlementsFor(volume: number, corridor: "INR_USDT" | "USDT_INR") {
+  if (volume <= 0) return [];
+  const currency = corridor === "INR_USDT" ? "INR" : "USDT";
+  return [
+    { fraction: 0.18, status: "RECONCILED", when: "2 days ago" },
+    { fraction: 0.11, status: "SETTLED", when: "5 days ago" },
+    { fraction: 0.07, status: "RECONCILED", when: "1 week ago" },
+  ].map((row, index) => ({
+    reference: `psp_batch_${1840 - index}`,
+    amount: formatCurrency(Math.round(volume * row.fraction), currency),
+    status: row.status,
+    when: row.when,
+  }));
+}
 
 export default async function CounterpartiesPage() {
   await requireSession();
@@ -43,6 +59,7 @@ export default async function CounterpartiesPage() {
             <DataGridTh>Country</DataGridTh>
             <DataGridTh>Settled volume</DataGridTh>
             <DataGridTh>Status</DataGridTh>
+            <DataGridTh className="text-right">Detail</DataGridTh>
           </DataGridHead>
           <DataGridBody>
             {COUNTERPARTIES.map((cp) => (
@@ -57,6 +74,25 @@ export default async function CounterpartiesPage() {
                 <DataGridTd className="tabular-nums">{formatCurrency(cp.settledVolume)}</DataGridTd>
                 <DataGridTd>
                   <StatusBadge status={cp.status} />
+                </DataGridTd>
+                <DataGridTd className="text-right">
+                  <CounterpartyDetailSheet
+                    counterparty={{
+                      name: cp.name,
+                      type: cp.type,
+                      country: cp.country,
+                      corridor: cp.corridor.replace("_", " → "),
+                      status: cp.status,
+                      settledVolume: formatCurrency(cp.settledVolume),
+                      notes: cp.notes,
+                      linkedAccounts: accountsForCounterparty(cp).map((account) => ({
+                        name: account.name,
+                        currency: account.currency,
+                        balance: formatCurrency(account.balance, account.currency),
+                      })),
+                      recentSettlements: recentSettlementsFor(cp.settledVolume, cp.corridor),
+                    }}
+                  />
                 </DataGridTd>
               </DataGridRow>
             ))}

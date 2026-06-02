@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { publicSettlementId } from "@/lib/utils";
 import { writeAuditLog } from "@/lib/audit";
 import { UserFacingError } from "@/lib/errors";
+import { computeConfidence } from "@/lib/reconciliation";
 import { quoteSchema, reconciliationSchema, settlementSchema, settingsSchema } from "@/lib/validators";
 
 const RATE_BY_CORRIDOR = {
@@ -299,6 +300,85 @@ export async function createReconciliationRecord(input: unknown, userId: string,
   });
 
   return record;
+}
+
+/**
+ * Auto-reconciliation engine. Scans the open/unmatched queue and links each
+ * record to a SETTLED settlement when amount + currency (and ideally value date)
+ * align. Matches at >= 90% confidence are linked and the settlement is moved to
+ * RECONCILED, with a reconciliation.auto_match audit event recording confidence.
+ */
+export async function autoMatchReconciliation(userId: string, organizationId: string) {
+  const open = await prisma.reconciliationRecord.findMany({
+    where: {
+      organizationId,
+      settlementId: null,
+      status: { in: [ReconciliationStatus.OPEN, ReconciliationStatus.UNMATCHED] },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (open.length === 0) return { matched: 0, scanned: 0 };
+
+  const candidates = await prisma.settlement.findMany({
+    where: { organizationId, status: SettlementStatus.SETTLED },
+  });
+
+  const used = new Set<string>();
+  let matched = 0;
+
+  for (const record of open) {
+    let best: { id: string; reference: string; confidence: number } | null = null;
+
+    for (const settlement of candidates) {
+      if (used.has(settlement.id)) continue;
+      const confidence = computeConfidence(Number(record.amount), record.currency, record.valueDate, {
+        sourceCurrency: settlement.sourceCurrency,
+        targetCurrency: settlement.targetCurrency,
+        sourceAmount: Number(settlement.sourceAmount),
+        targetAmount: Number(settlement.targetAmount),
+        refDate: settlement.settledAt ?? settlement.createdAt,
+      });
+      if (confidence >= 90 && (!best || confidence > best.confidence)) {
+        best = { id: settlement.id, reference: settlement.reference, confidence };
+      }
+    }
+
+    if (!best) continue;
+
+    used.add(best.id);
+    await prisma.reconciliationRecord.update({
+      where: { id: record.id },
+      data: { status: ReconciliationStatus.MATCHED, settlementId: best.id },
+    });
+
+    await transitionSettlement(
+      best.id,
+      SettlementStatus.RECONCILED,
+      userId,
+      organizationId,
+      `Auto-matched (${best.confidence}%) to ${record.externalRef}`,
+      { allowReconcile: true },
+    );
+
+    await writeAuditLog({
+      action: "reconciliation.auto_match",
+      resourceType: "reconciliation_record",
+      resourceId: record.id,
+      organizationId,
+      userId,
+      after: {
+        confidence: best.confidence,
+        externalRef: record.externalRef,
+        settlementId: best.id,
+        settlementReference: best.reference,
+      },
+    });
+
+    matched += 1;
+  }
+
+  return { matched, scanned: open.length };
 }
 
 export async function updateSettings(input: unknown, userId: string, organizationId: string) {

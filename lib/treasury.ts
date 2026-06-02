@@ -16,6 +16,7 @@ export type Counterparty = {
   corridor: "INR_USDT" | "USDT_INR";
   settledVolume: number;
   notes: string;
+  accountIds: string[];
 };
 
 export type AccountType = "Operating" | "Settlement" | "Treasury wallet" | "Merchant pool" | "Reserve";
@@ -40,6 +41,7 @@ export const COUNTERPARTIES: Counterparty[] = [
     corridor: "USDT_INR",
     settledVolume: 184_500_000,
     notes: "Primary INR liquidity venue for USDT off-ramp settlements.",
+    accountIds: ["acc_usdt_treasury", "acc_inr_settlement"],
   },
   {
     id: "cp_transactbridge",
@@ -50,6 +52,7 @@ export const COUNTERPARTIES: Counterparty[] = [
     corridor: "INR_USDT",
     settledVolume: 96_200_000,
     notes: "Cross-border PSP routing merchant collections into USDT.",
+    accountIds: ["acc_inr_operating", "acc_usdt_treasury"],
   },
   {
     id: "cp_razorpayx",
@@ -60,6 +63,7 @@ export const COUNTERPARTIES: Counterparty[] = [
     corridor: "INR_USDT",
     settledVolume: 142_750_000,
     notes: "Nodal banking rail for INR payouts and operating float.",
+    accountIds: ["acc_inr_operating", "acc_inr_settlement", "acc_merchant_pool"],
   },
   {
     id: "cp_internal_treasury",
@@ -70,6 +74,7 @@ export const COUNTERPARTIES: Counterparty[] = [
     corridor: "INR_USDT",
     settledVolume: 58_900_000,
     notes: "Internal book transfers between operating and settlement pools.",
+    accountIds: ["acc_inr_operating", "acc_usdc_reserve"],
   },
   {
     id: "cp_nodal_partner",
@@ -80,6 +85,7 @@ export const COUNTERPARTIES: Counterparty[] = [
     corridor: "INR_USDT",
     settledVolume: 0,
     notes: "Secondary nodal partner in onboarding / KYB review.",
+    accountIds: [],
   },
 ];
 
@@ -147,6 +153,14 @@ export function defaultAccountsForCorridor(corridor: "INR_USDT" | "USDT_INR") {
 
 export function counterpartyForCorridor(corridor: "INR_USDT" | "USDT_INR") {
   return COUNTERPARTIES.find((cp) => cp.corridor === corridor && cp.status === "ACTIVE") ?? COUNTERPARTIES[0];
+}
+
+export function accountsForCounterparty(counterparty: Counterparty) {
+  return ACCOUNTS.filter((account) => counterparty.accountIds.includes(account.id));
+}
+
+export function counterpartiesForAccount(account: TreasuryAccount) {
+  return COUNTERPARTIES.filter((cp) => cp.accountIds.includes(account.id));
 }
 
 // --- Access control role model -------------------------------------------------

@@ -48,6 +48,9 @@ export default async function DashboardPage() {
     pendingVolume,
     settledVolume,
     reconciledVolume,
+    settlementsByStatus,
+    settledForAvg,
+    latestExceptions,
   ] = await Promise.all([
     prisma.settlement.findMany({
       where: { organizationId: organization.id },
@@ -87,6 +90,22 @@ export default async function DashboardPage() {
       _sum: { sourceAmount: true },
       where: { organizationId: organization.id, status: SettlementStatus.RECONCILED },
     }),
+    prisma.settlement.groupBy({
+      by: ["status"],
+      where: { organizationId: organization.id },
+      _count: { _all: true },
+    }),
+    prisma.settlement.findMany({
+      where: { organizationId: organization.id, settledAt: { not: null } },
+      select: { createdAt: true, settledAt: true },
+      orderBy: { settledAt: "desc" },
+      take: 50,
+    }),
+    prisma.reconciliationRecord.findMany({
+      where: { organizationId: organization.id, status: "EXCEPTION" },
+      orderBy: { createdAt: "desc" },
+      take: 3,
+    }),
   ]);
 
   const availableInr = availableBalance("INR");
@@ -94,6 +113,34 @@ export default async function DashboardPage() {
   const pendingVolumeValue = Number(pendingVolume._sum.sourceAmount ?? 0);
   const settledVolumeValue = Number(settledVolume._sum.sourceAmount ?? 0);
   const reconciledVolumeValue = Number(reconciledVolume._sum.sourceAmount ?? 0);
+
+  const statusCount = (status: SettlementStatus) =>
+    settlementsByStatus.find((row) => row.status === status)?._count._all ?? 0;
+  const totalSettlements = settlementsByStatus.reduce((sum, row) => sum + row._count._all, 0);
+  const settledCount = statusCount(SettlementStatus.SETTLED);
+  const reconciledCount = statusCount(SettlementStatus.RECONCILED);
+  const failedCount = statusCount(SettlementStatus.FAILED) + statusCount(SettlementStatus.CANCELLED);
+  const completedCount = settledCount + reconciledCount;
+  const successRate = totalSettlements ? Math.round(((completedCount) / totalSettlements) * 100) : 0;
+  const reconciledRate = completedCount ? Math.round((reconciledCount / completedCount) * 100) : 0;
+
+  const avgMinutes =
+    settledForAvg.length > 0
+      ? Math.round(
+          settledForAvg.reduce(
+            (sum, row) => sum + (new Date(row.settledAt as Date).getTime() - new Date(row.createdAt).getTime()),
+            0,
+          ) /
+            settledForAvg.length /
+            60000,
+        )
+      : 0;
+  const avgSettlementTime =
+    avgMinutes <= 0
+      ? "—"
+      : avgMinutes < 60
+        ? `${avgMinutes}m`
+        : `${Math.floor(avgMinutes / 60)}h ${avgMinutes % 60}m`;
 
   const activeStatuses = new Set<SettlementStatus>([
     SettlementStatus.REQUESTED,
@@ -149,6 +196,16 @@ export default async function DashboardPage() {
         <MetricCard label="Exceptions" value={reconExceptions} hint="Reconciliation" tone={reconExceptions ? "danger" : "neutral"} />
       </div>
 
+      <section>
+        <SectionHeader title="Operational intelligence" description="Settlement reliability and reconciliation performance" />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard label="Settlement success rate" value={`${successRate}%`} hint={`${completedCount} of ${totalSettlements} completed`} tone="success" />
+          <MetricCard label="Auto-reconciled rate" value={`${reconciledRate}%`} hint="Of completed settlements" tone="info" />
+          <MetricCard label="Avg settlement time" value={avgSettlementTime} hint="Created → settled" />
+          <MetricCard label="Failed / cancelled" value={failedCount} hint="Lifetime" tone={failedCount ? "danger" : "neutral"} />
+        </div>
+      </section>
+
       <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
         <section>
           <SectionHeader title="Recent activity" description="Latest operational events" />
@@ -193,6 +250,33 @@ export default async function DashboardPage() {
             </div>
           </div>
 
+          {latestExceptions.length ? (
+            <div className="rounded-lg border bg-white p-4 shadow-sm">
+              <SectionHeader title="Latest exceptions" />
+              <ul className="divide-y">
+                {latestExceptions.map((record) => (
+                  <li key={record.id} className="flex items-center justify-between gap-2 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-800">{record.externalRef}</p>
+                      <p className="truncate text-xs text-slate-500">
+                        {record.exceptionReason ?? record.source.replaceAll("_", " ")}
+                      </p>
+                    </div>
+                    <span className="tabular-nums text-xs text-slate-500">
+                      {formatCurrency(String(record.amount), record.currency)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/reconciliation?status=EXCEPTION"
+                className="mt-2 inline-block text-xs font-medium text-teal-700 hover:underline"
+              >
+                Resolve in reconciliation →
+              </Link>
+            </div>
+          ) : null}
+
           {spotlight ? (
             <div className="rounded-lg border bg-white p-4 shadow-sm">
               <SectionHeader title="Latest settlement" />
@@ -203,7 +287,7 @@ export default async function DashboardPage() {
               <div className="rounded-lg border bg-slate-50/60 p-3">
                 <SettlementLifecycle status={spotlight.status} />
               </div>
-              <Link href="/settlements" className="mt-3 inline-block text-xs font-medium text-emerald-700 hover:underline">
+              <Link href="/settlements" className="mt-3 inline-block text-xs font-medium text-teal-700 hover:underline">
                 Open settlements →
               </Link>
             </div>
@@ -222,12 +306,13 @@ export default async function DashboardPage() {
         />
         {settlements.length ? (
           <DataGrid>
-            <table className="w-full min-w-[640px]">
+            <table className="w-full min-w-[820px]">
               <DataGridHead>
                 <DataGridTh>ID</DataGridTh>
                 <DataGridTh>Reference</DataGridTh>
                 <DataGridTh>Amount</DataGridTh>
                 <DataGridTh>Status</DataGridTh>
+                <DataGridTh className="min-w-[220px]">Lifecycle</DataGridTh>
               </DataGridHead>
               <DataGridBody>
                 {settlements.map((settlement) => (
@@ -239,6 +324,9 @@ export default async function DashboardPage() {
                     </DataGridTd>
                     <DataGridTd>
                       <StatusBadge status={settlement.status} />
+                    </DataGridTd>
+                    <DataGridTd className="min-w-[220px]">
+                      <SettlementLifecycle status={settlement.status} compact />
                     </DataGridTd>
                   </DataGridRow>
                 ))}

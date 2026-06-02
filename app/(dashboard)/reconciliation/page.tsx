@@ -1,8 +1,9 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
-import { createReconciliationRecord } from "@/lib/domain";
+import { autoMatchReconciliation, createReconciliationRecord } from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
+import { computeConfidence, matchTypeFor, MATCH_LABEL } from "@/lib/reconciliation";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
@@ -41,10 +42,22 @@ async function submitRecord(formData: FormData) {
   redirect("/reconciliation?success=created");
 }
 
+async function runAutoMatch() {
+  "use server";
+  const { user, organization } = await requireSession();
+  let result = { matched: 0, scanned: 0 };
+  try {
+    result = await autoMatchReconciliation(user.id, organization.id);
+  } catch (error) {
+    redirect(`/reconciliation?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
+  }
+  redirect(`/reconciliation?success=automatch&matched=${result.matched}&scanned=${result.scanned}`);
+}
+
 export default async function ReconciliationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string; q?: string; status?: string }>;
+  searchParams: Promise<{ error?: string; success?: string; q?: string; status?: string; matched?: string; scanned?: string }>;
 }) {
   const { organization } = await requireSession();
   const params = await searchParams;
@@ -63,6 +76,17 @@ export default async function ReconciliationPage({
     }),
   ]);
 
+  const confidenceFor = (record: (typeof records)[number]) =>
+    record.settlement
+      ? computeConfidence(Number(record.amount), record.currency, record.valueDate, {
+          sourceCurrency: record.settlement.sourceCurrency,
+          targetCurrency: record.settlement.targetCurrency,
+          sourceAmount: Number(record.settlement.sourceAmount),
+          targetAmount: Number(record.settlement.targetAmount),
+          refDate: record.settlement.settledAt ?? record.settlement.createdAt,
+        })
+      : 0;
+
   const query = params.q?.toLowerCase().trim() ?? "";
   const filteredRecords = records.filter((record) => {
     const matchesSearch =
@@ -74,35 +98,68 @@ export default async function ReconciliationPage({
     return matchesSearch && matchesStatus;
   });
 
-  const matched = records.filter((r) => r.status === "MATCHED").length;
+  const autoMatched = records.filter(
+    (r) => matchTypeFor(r.status, confidenceFor(r), Boolean(r.settlement)) === "AUTO_MATCHED",
+  ).length;
+  const suggested = records.filter(
+    (r) => matchTypeFor(r.status, confidenceFor(r), Boolean(r.settlement)) === "SUGGESTED",
+  ).length;
+  const manualReview = records.filter(
+    (r) => matchTypeFor(r.status, confidenceFor(r), Boolean(r.settlement)) === "MANUAL_REVIEW",
+  ).length;
   const exceptions = records.filter((r) => r.status === "EXCEPTION").length;
-  const unmatched = records.filter((r) => !r.settlement).length;
+  const matchRate = records.length
+    ? Math.round(((autoMatched + suggested) / records.length) * 100)
+    : 0;
 
-  const workspaceRows = filteredRecords.map((record) => ({
-    id: record.id,
-    externalRef: record.externalRef,
-    source: record.source,
-    amount: formatCurrency(String(record.amount), record.currency),
-    currency: record.currency,
-    status: record.status,
-    exceptionReason: record.exceptionReason,
-    valueDate: record.valueDate.toLocaleDateString(),
-    settlement: record.settlement
-      ? { publicId: record.settlement.publicId, reference: record.settlement.reference }
-      : null,
-  }));
+  const workspaceRows = filteredRecords.map((record) => {
+    const confidence = confidenceFor(record);
+    const matchType = matchTypeFor(record.status, confidence, Boolean(record.settlement));
+    return {
+      id: record.id,
+      externalRef: record.externalRef,
+      source: record.source,
+      amount: formatCurrency(String(record.amount), record.currency),
+      currency: record.currency,
+      status: record.status,
+      matchType,
+      matchLabel: MATCH_LABEL[matchType],
+      confidence,
+      exceptionReason: record.exceptionReason,
+      valueDate: record.valueDate.toLocaleDateString(),
+      settlement: record.settlement
+        ? { publicId: record.settlement.publicId, reference: record.settlement.reference }
+        : null,
+    };
+  });
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Reconciliation" description="Match external records to settlements and resolve exceptions efficiently." />
+      <PageHeader
+        title="Reconciliation"
+        description="Auto-match external records to settlements, review suggestions, and resolve exceptions."
+        actions={
+          <form action={runAutoMatch}>
+            <SubmitButton variant="primary" size="sm" pendingText="Matching...">
+              Run auto-match
+            </SubmitButton>
+          </form>
+        }
+      />
 
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {params.success === "created" ? <FlashMessage message="Reconciliation record saved." /> : null}
+      {params.success === "automatch" ? (
+        <FlashMessage
+          message={`Auto-match complete — ${params.matched ?? 0} of ${params.scanned ?? 0} open records matched and reconciled.`}
+        />
+      ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <MetricCard label="Matched" value={matched} hint="Linked to settlements" tone="success" />
-        <MetricCard label="Unmatched" value={unmatched} hint="Needs review" tone="warning" />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard label="Auto-matched" value={autoMatched} hint="100% confidence" tone="success" />
+        <MetricCard label="Manual review" value={manualReview + suggested} hint="Needs operator" tone="warning" />
         <MetricCard label="Exceptions" value={exceptions} hint="Operations queue" tone={exceptions ? "danger" : "neutral"} />
+        <MetricCard label="Match rate" value={`${matchRate}%`} hint="Matched + suggested" tone="info" />
       </div>
 
       <Card>

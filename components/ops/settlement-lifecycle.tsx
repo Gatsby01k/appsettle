@@ -12,13 +12,16 @@ const LABELS: Record<string, string> = {
 
 export function SettlementLifecycle({ status, compact }: { status: string; compact?: boolean }) {
   const current = settlementStepIndex(status);
+  // When fully reconciled, the lifecycle is complete — every step, including the
+  // final RECONCILED step, should render as done rather than "in progress".
+  const terminalComplete = status.toUpperCase() === "RECONCILED";
 
   return (
     <div className="w-full">
       <div className="flex items-center">
         {SETTLEMENT_LIFECYCLE.map((step, index) => {
-          const done = index < current;
-          const active = index === current;
+          const done = index < current || (terminalComplete && index === current);
+          const active = index === current && !terminalComplete;
           const future = index > current;
 
           return (

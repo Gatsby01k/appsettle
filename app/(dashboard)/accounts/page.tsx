@@ -1,9 +1,10 @@
 import { requireSession } from "@/lib/auth";
-import { ACCOUNTS, availableBalance } from "@/lib/treasury";
+import { ACCOUNTS, availableBalance, counterpartiesForAccount } from "@/lib/treasury";
 import { formatCurrency } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
+import { AccountDetailSheet } from "@/components/dashboard/account-detail-sheet";
 import {
   DataGrid,
   DataGridBody,
@@ -12,6 +13,18 @@ import {
   DataGridTd,
   DataGridTh,
 } from "@/components/ops/data-grid";
+
+function recentActivityFor(balance: number, currency: string) {
+  return [
+    { label: "Inbound settlement", fraction: 0.12, when: "Today, 11:42" },
+    { label: "Outbound payout", fraction: -0.06, when: "Yesterday, 17:08" },
+    { label: "Inbound settlement", fraction: 0.09, when: "2 days ago" },
+  ].map((row) => ({
+    label: row.label,
+    amount: `${row.fraction < 0 ? "-" : "+"}${formatCurrency(Math.round(Math.abs(balance * row.fraction)), currency)}`,
+    when: row.when,
+  }));
+}
 
 export default async function AccountsPage() {
   await requireSession();
@@ -43,6 +56,7 @@ export default async function AccountsPage() {
             <DataGridTh>Currency</DataGridTh>
             <DataGridTh>Balance</DataGridTh>
             <DataGridTh>Status</DataGridTh>
+            <DataGridTh className="text-right">Detail</DataGridTh>
           </DataGridHead>
           <DataGridBody>
             {ACCOUNTS.map((account) => (
@@ -56,6 +70,23 @@ export default async function AccountsPage() {
                 </DataGridTd>
                 <DataGridTd>
                   <StatusBadge status={account.status} />
+                </DataGridTd>
+                <DataGridTd className="text-right">
+                  <AccountDetailSheet
+                    account={{
+                      name: account.name,
+                      type: account.type,
+                      currency: account.currency,
+                      balance: formatCurrency(account.balance, account.currency),
+                      institution: account.institution,
+                      status: account.status,
+                      linkedCounterparties: counterpartiesForAccount(account).map((cp) => ({
+                        name: cp.name,
+                        type: cp.type,
+                      })),
+                      recentActivity: recentActivityFor(account.balance, account.currency),
+                    }}
+                  />
                 </DataGridTd>
               </DataGridRow>
             ))}

@@ -5,11 +5,28 @@ import { friendlyErrorMessage } from "@/lib/errors";
 import { canManageSettings } from "@/lib/permissions";
 import { PageHeader } from "@/components/ops/page-header";
 import { FlashMessage } from "@/components/ops/flash-message";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Separator } from "@/components/ui/separator";
+
+type ChipState = "Active" | "Configured" | "Not connected";
+
+function StatusChip({ state }: { state: ChipState }) {
+  const tone = state === "Active" ? "success" : state === "Configured" ? "info" : "neutral";
+  return <Badge tone={tone}>{state}</Badge>;
+}
+
+function SectionTitle({ title, chip }: { title: string; chip: ChipState }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <CardTitle>{title}</CardTitle>
+      <StatusChip state={chip} />
+    </div>
+  );
+}
 
 async function saveSettings(formData: FormData) {
   "use server";
@@ -43,9 +60,12 @@ export default async function SettingsPage({
   const settings = organization.settings;
   const disabled = !canManageSettings(membership.role);
 
+  const reconChip: ChipState = settings?.reconciliationEmail ? "Configured" : "Not connected";
+  const webhookChip: ChipState = settings?.webhookUrl ? "Active" : "Not connected";
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Settings" description="Organization controls for treasury operations, approvals, and integrations." />
+      <PageHeader title="Organization controls" description="Treasury policy, approval rules, integrations and audit retention for your organization." />
 
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {params.success === "saved" ? <FlashMessage message="Settings saved." /> : null}
@@ -54,21 +74,25 @@ export default async function SettingsPage({
       <form action={saveSettings} className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>General</CardTitle>
-            <CardDescription>Workspace identity</CardDescription>
+            <SectionTitle title="General" chip="Active" />
+            <CardDescription>Workspace identity and legal entity.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="displayName">Display name</Label>
               <Input id="displayName" name="displayName" defaultValue={organization.displayName} disabled={disabled} required />
             </div>
+            <div className="grid gap-1.5">
+              <Label>Legal entity</Label>
+              <Input value={organization.legalName} disabled readOnly />
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Treasury</CardTitle>
-            <CardDescription>Quote execution parameters</CardDescription>
+            <SectionTitle title="Treasury controls" chip="Active" />
+            <CardDescription>Quote execution parameters and rate validity.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             <div className="grid gap-1.5">
@@ -81,18 +105,19 @@ export default async function SettingsPage({
                 disabled={disabled}
                 required
               />
+              <p className="text-xs text-slate-500">How long a generated quote stays executable.</p>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Approvals</CardTitle>
-            <CardDescription>Maker-checker threshold</CardDescription>
+            <SectionTitle title="Approval rules" chip="Active" />
+            <CardDescription>Maker-checker threshold for settlements.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             <div className="grid gap-1.5">
-              <Label htmlFor="approvalThreshold">Approval threshold</Label>
+              <Label htmlFor="approvalThreshold">Approval threshold (INR)</Label>
               <Input
                 id="approvalThreshold"
                 name="approvalThreshold"
@@ -102,14 +127,15 @@ export default async function SettingsPage({
                 disabled={disabled}
                 required
               />
+              <p className="text-xs text-slate-500">Settlements above this notional require an approver.</p>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Reconciliation</CardTitle>
-            <CardDescription>Exception routing</CardDescription>
+            <SectionTitle title="Reconciliation rules" chip={reconChip} />
+            <CardDescription>Exception routing and matching notifications.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             <div className="grid gap-1.5">
@@ -118,42 +144,52 @@ export default async function SettingsPage({
                 id="reconciliationEmail"
                 name="reconciliationEmail"
                 type="email"
+                placeholder="finance@yourcompany.com"
                 defaultValue={settings?.reconciliationEmail ?? ""}
                 disabled={disabled}
               />
+              <p className="text-xs text-slate-500">Exceptions and unmatched records are routed here.</p>
             </div>
           </CardContent>
         </Card>
 
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Webhooks</CardTitle>
-            <CardDescription>Outbound event delivery</CardDescription>
+            <SectionTitle title="Webhook delivery" chip={webhookChip} />
+            <CardDescription>Outbound event delivery to your systems.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:max-w-xl">
             <div className="grid gap-1.5">
               <Label htmlFor="webhookUrl">Webhook URL</Label>
-              <Input id="webhookUrl" name="webhookUrl" type="url" defaultValue={settings?.webhookUrl ?? ""} disabled={disabled} />
+              <Input id="webhookUrl" name="webhookUrl" type="url" placeholder="https://api.yourcompany.com/webhooks/inrsettle" defaultValue={settings?.webhookUrl ?? ""} disabled={disabled} />
+              <p className="text-xs text-slate-500">
+                Receives <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">settlement.*</code> and{" "}
+                <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">reconciliation.*</code> events.
+              </p>
             </div>
           </CardContent>
         </Card>
 
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Audit</CardTitle>
-            <CardDescription>Evidence retention is automatic for all operational changes.</CardDescription>
+            <SectionTitle title="Audit & retention" chip="Active" />
+            <CardDescription>Immutable evidence is retained automatically for every operational change.</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-slate-600">
               View the full immutable trail in{" "}
-              <a href="/audit-logs" className="font-medium text-emerald-700 hover:underline">
+              <a href="/audit-logs" className="font-medium text-teal-700 hover:underline">
                 Audit logs
+              </a>{" "}
+              or export an audit evidence package from{" "}
+              <a href="/reports" className="font-medium text-teal-700 hover:underline">
+                Reports
               </a>
               .
             </p>
             <Separator className="my-4" />
             <SubmitButton type="submit" variant="primary" disabled={disabled} pendingText="Saving...">
-              Save settings
+              Save changes
             </SubmitButton>
           </CardContent>
         </Card>

@@ -49,6 +49,27 @@ const routeMap: Record<string, string> = {
   "/contact.html": "/contact",
 };
 
+// Additive, scoped polish layer injected after the base marketing stylesheet.
+// Does not modify styles.css. Fixes nav/CTA spacing, prevents the Sign in button
+// from wrapping, tightens hero/footer balance and improves small-screen behavior.
+const MARKETING_POLISH_CSS = `
+.nav-actions{display:flex;align-items:center;gap:12px}
+.nav-actions .btn{white-space:nowrap}
+.nav-actions .btn.primary{box-shadow:0 10px 26px rgba(7,19,43,.14)}
+.hero-ctas{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+.hero-ctas .btn{white-space:nowrap}
+.hero-ctas .btn.primary{box-shadow:0 14px 34px rgba(7,19,43,.18)}
+.site-header .nav{gap:18px}
+@media (max-width:860px){
+  .nav-actions{gap:8px}
+}
+@media (max-width:640px){
+  .hero-ctas{width:100%}
+  .hero-ctas .btn{flex:1 1 160px;justify-content:center}
+  .footer-grid{gap:24px}
+}
+`;
+
 function readStaticFile(fileName: string) {
   const filePath = staticFiles[fileName];
   if (!filePath) throw new Error(`Unknown marketing page: ${fileName}`);
@@ -148,6 +169,7 @@ export function StaticMarketingPage({ fileName }: { fileName: string }) {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: css }} />
+      <style dangerouslySetInnerHTML={{ __html: MARKETING_POLISH_CSS }} />
       <div dangerouslySetInnerHTML={{ __html: html }} />
       {analytics ? <Script id="inrsettle-marketing-analytics" strategy="afterInteractive">{analytics}</Script> : null}
       {script ? <Script id={`inrsettle-marketing-${fileName}`} strategy="afterInteractive">{script}</Script> : null}
