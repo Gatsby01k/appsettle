@@ -1,157 +1,194 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { createQuote } from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
-import { DetailDrawer } from "@/components/dashboard/detail-drawer";
-import { EmptyState, FilterBar, MetricCard, PageHeader, PremiumStatusBadge } from "@/components/dashboard/premium";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/ops/page-header";
+import { MetricCard } from "@/components/ops/metric-card";
+import { StatusBadge } from "@/components/ops/status-badge";
+import { EmptyState } from "@/components/ops/empty-state";
+import { FlashMessage } from "@/components/ops/flash-message";
+import { TabLinks } from "@/components/ops/tab-links";
+import { FilterBar } from "@/components/ops/filter-bar";
+import { FormSelect } from "@/components/ops/form-select";
+import {
+  DataGrid,
+  DataGridBody,
+  DataGridHead,
+  DataGridRow,
+  DataGridTd,
+  DataGridTh,
+} from "@/components/ops/data-grid";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Reveal, RevealGroup } from "@/components/ui/reveal";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 async function submitQuote(formData: FormData) {
   "use server";
   const { user, organization } = await requireSession();
   try {
-    await createQuote({
-      corridor: String(formData.get("corridor") ?? ""),
-      sourceAmount: formData.get("sourceAmount"),
-      settlementWindow: String(formData.get("settlementWindow") ?? ""),
-    }, user.id, organization.id);
+    await createQuote(
+      {
+        corridor: String(formData.get("corridor") ?? ""),
+        sourceAmount: formData.get("sourceAmount"),
+        settlementWindow: String(formData.get("settlementWindow") ?? ""),
+      },
+      user.id,
+      organization.id,
+    );
   } catch (error) {
     redirect(`/quotes?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
   }
-  redirect("/quotes?success=created");
+  redirect("/quotes?success=created&tab=active");
 }
 
-export default async function QuotesPage({ searchParams }: { searchParams: Promise<{ error?: string; success?: string; q?: string; status?: string }> }) {
+function quoteTab(quote: { status: string; expiresAt: Date }, tab: string) {
+  const expired = quote.status === "EXPIRED" || (quote.status === "ACTIVE" && quote.expiresAt < new Date());
+  if (tab === "active") return quote.status === "ACTIVE" && !expired;
+  if (tab === "accepted") return quote.status === "ACCEPTED";
+  if (tab === "expired") return expired || quote.status === "EXPIRED";
+  return true;
+}
+
+export default async function QuotesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; success?: string; q?: string; tab?: string }>;
+}) {
   const { organization } = await requireSession();
   const params = await searchParams;
+  const tab = params.tab ?? "active";
   const quotes = await prisma.quote.findMany({
     where: { organizationId: organization.id },
     orderBy: { createdAt: "desc" },
-    take: 50,
+    take: 100,
   });
+
   const query = params.q?.toLowerCase().trim() ?? "";
-  const filteredQuotes = quotes.filter((quote) => {
-    const matchesSearch = !query || quote.corridor.toLowerCase().includes(query) || quote.id.toLowerCase().includes(query);
-    const matchesStatus = !params.status || quote.status === params.status;
-    return matchesSearch && matchesStatus;
+  const filtered = quotes.filter((quote) => quoteTab(quote, tab)).filter((quote) => {
+    if (!query) return true;
+    return quote.corridor.toLowerCase().includes(query) || quote.id.toLowerCase().includes(query);
   });
-  const activeCount = quotes.filter((quote) => quote.status === "ACTIVE").length;
-  const acceptedCount = quotes.filter((quote) => quote.status === "ACCEPTED").length;
+
+  const activeCount = quotes.filter((q) => quoteTab(q, "active")).length;
+  const acceptedCount = quotes.filter((q) => quoteTab(q, "accepted")).length;
+  const expiredCount = quotes.filter((q) => quoteTab(q, "expired")).length;
 
   return (
-    <RevealGroup className="space-y-8">
-      <Reveal>
-        <PageHeader
-          eyebrow="Treasury quotes"
-          title="Quote orchestration for corridor liquidity"
-          description="Create executable corridor quotes, monitor inventory, and preserve accepted quotes for treasury history."
-        />
-      </Reveal>
-      {params.error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
-          {params.error}
-        </div>
-      ) : null}
-      {params.success === "created" ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800">
-          Quote created. Use it from the settlement form while it is ACTIVE.
-        </div>
-      ) : null}
+    <div className="space-y-6">
+      <PageHeader title="Quotes" description="Create corridor quotes and manage active, accepted, and expired inventory." />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Reveal><MetricCard label="Total quotes" value={quotes.length} helper="All quote history" tone="slate" /></Reveal>
-        <Reveal><MetricCard label="Active" value={activeCount} helper="Available for settlement creation" tone="emerald" /></Reveal>
-        <Reveal><MetricCard label="Accepted" value={acceptedCount} helper="Consumed by settlements" tone="amber" /></Reveal>
+      {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
+      {params.success === "created" ? <FlashMessage message="Quote created. Use it from Settlements while ACTIVE." /> : null}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <MetricCard label="Active" value={activeCount} hint="Available for settlement" tone="success" />
+        <MetricCard label="Accepted" value={acceptedCount} hint="Consumed by settlements" />
+        <MetricCard label="Expired" value={expiredCount} hint="Needs refresh" tone="warning" />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[.8fr_1.2fr]">
-        <Reveal>
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <Card className="h-fit">
           <CardHeader>
             <CardTitle>New quote</CardTitle>
-            <p className="text-sm text-slate-500">ACTIVE quotes can be converted into settlements until they expire. ACCEPTED quotes are already consumed but remain visible in history.</p>
+            <CardDescription>Generate an executable corridor quote.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={submitQuote} className="grid gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="corridor">Corridor</Label>
-                <select id="corridor" name="corridor" className="h-11 rounded-xl border bg-background px-3 text-sm">
-                  <option value="INR_USDT">INR → USDT</option>
-                  <option value="USDT_INR">USDT → INR</option>
-                </select>
+            <form action={submitQuote} className="grid gap-3">
+              <div className="grid gap-1.5">
+                <Label>Corridor</Label>
+                <FormSelect
+                  name="corridor"
+                  defaultValue="INR_USDT"
+                  options={[
+                    { value: "INR_USDT", label: "INR → USDT" },
+                    { value: "USDT_INR", label: "USDT → INR" },
+                  ]}
+                />
               </div>
-              <div className="grid gap-2">
+              <div className="grid gap-1.5">
                 <Label htmlFor="sourceAmount">Source amount</Label>
                 <Input id="sourceAmount" name="sourceAmount" type="number" min="1" step="0.01" required />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="settlementWindow">Settlement window</Label>
-                <select id="settlementWindow" name="settlementWindow" className="h-11 rounded-xl border bg-background px-3 text-sm">
-                  <option value="instant">Instant</option>
-                  <option value="same_day">Same day</option>
-                  <option value="next_day">Next day</option>
-                </select>
+              <div className="grid gap-1.5">
+                <Label>Settlement window</Label>
+                <FormSelect
+                  name="settlementWindow"
+                  defaultValue="instant"
+                  options={[
+                    { value: "instant", label: "Instant" },
+                    { value: "same_day", label: "Same day" },
+                    { value: "next_day", label: "Next day" },
+                  ]}
+                />
               </div>
-              <SubmitButton type="submit" pendingText="Generating quote...">Generate quote</SubmitButton>
+              <SubmitButton type="submit" variant="primary" pendingText="Generating...">
+                Generate quote
+              </SubmitButton>
             </form>
           </CardContent>
         </Card>
-        </Reveal>
-        <Reveal>
-        <Card>
-          <CardHeader className="space-y-4">
-            <CardTitle>Quote history</CardTitle>
-            <FilterBar
-              searchPlaceholder="Search corridor or quote id..."
-              statusOptions={["ACTIVE", "ACCEPTED", "EXPIRED", "REJECTED"]}
-              defaultSearch={params.q}
-              defaultStatus={params.status}
+
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <TabLinks
+              basePath="/quotes"
+              active={tab}
+              preserve={params.q ? { q: params.q } : undefined}
+              tabs={[
+                { id: "active", label: "Active", count: activeCount },
+                { id: "accepted", label: "Accepted", count: acceptedCount },
+                { id: "expired", label: "Expired", count: expiredCount },
+              ]}
             />
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            {filteredQuotes.length ? filteredQuotes.map((quote) => (
-              <div key={quote.id} className="rounded-3xl border border-slate-200/70 bg-white/80 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_20px_60px_rgba(15,23,42,0.10)]">
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <div className="flex items-center gap-3">
-                      <p className="font-semibold text-slate-950">{quote.corridor.replace("_", " → ")}</p>
-                      <PremiumStatusBadge status={quote.status} />
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">Quote {quote.id.slice(0, 10)} · expires {quote.expiresAt.toLocaleString()}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-6 text-sm">
-                    <div>
-                      <p className="text-slate-500">Source</p>
-                      <p className="font-semibold text-slate-950">{formatCurrency(String(quote.sourceAmount), quote.sourceCurrency)}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500">Target</p>
-                      <p className="font-semibold text-slate-950">{formatCurrency(String(quote.targetAmount), quote.targetCurrency)}</p>
-                    </div>
-                  </div>
-                  <DetailDrawer title={`${quote.corridor.replace("_", " → ")} quote`}>
-                    <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm">
-                      <div className="flex justify-between"><span className="text-slate-500">Rate</span><span className="font-medium">{String(quote.rate)}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Fee</span><span className="font-medium">{formatCurrency(String(quote.feeAmount), quote.sourceCurrency)}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Window</span><span className="font-medium">{quote.settlementWindow}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Status</span><PremiumStatusBadge status={quote.status} /></div>
-                    </div>
-                  </DetailDrawer>
-                </div>
-              </div>
-            )) : (
-              <EmptyState title="No quotes match your filters" description="Adjust the search or create a new corridor quote." />
-            )}
-          </CardContent>
-        </Card>
-        </Reveal>
+            <Suspense fallback={null}>
+              <FilterBar searchPlaceholder="Search corridor or ID..." />
+            </Suspense>
+          </div>
+
+          {filtered.length ? (
+            <DataGrid>
+              <table className="w-full min-w-[640px]">
+                <DataGridHead>
+                  <DataGridTh>Corridor</DataGridTh>
+                  <DataGridTh>Source</DataGridTh>
+                  <DataGridTh>Target</DataGridTh>
+                  <DataGridTh>Status</DataGridTh>
+                  <DataGridTh>Expires</DataGridTh>
+                </DataGridHead>
+                <DataGridBody>
+                  {filtered.map((quote) => (
+                    <DataGridRow key={quote.id}>
+                      <DataGridTd className="font-medium">{quote.corridor.replace("_", " → ")}</DataGridTd>
+                      <DataGridTd className="tabular-nums">
+                        {formatCurrency(String(quote.sourceAmount), quote.sourceCurrency)}
+                      </DataGridTd>
+                      <DataGridTd className="tabular-nums">
+                        {formatCurrency(String(quote.targetAmount), quote.targetCurrency)}
+                      </DataGridTd>
+                      <DataGridTd>
+                        <StatusBadge status={quote.status} />
+                      </DataGridTd>
+                      <DataGridTd className="text-xs text-slate-500">{quote.expiresAt.toLocaleString()}</DataGridTd>
+                    </DataGridRow>
+                  ))}
+                </DataGridBody>
+              </table>
+            </DataGrid>
+          ) : (
+            <EmptyState
+              title={`No ${tab} quotes`}
+              description={
+                tab === "active" ? "Generate a quote to start settlement creation." : "Nothing in this tab matches your search."
+              }
+              action={tab === "active" ? undefined : { label: "View active", href: "/quotes?tab=active" }}
+            />
+          )}
+        </div>
       </div>
-    </RevealGroup>
+    </div>
   );
 }
