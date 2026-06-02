@@ -1,22 +1,30 @@
 @import "tailwindcss";
 
 :root {
-  --background: 210 20% 98%;
-  --foreground: 222 47% 11%;
+  /* INRSettle brand palette (source of truth: marketing site) */
+  --brand-navy: #07132b;
+  --brand-navy-2: #0c1f44;
+  --brand-amber: #f5a300;
+  --brand-gold: #d9c43c;
+  --brand-mint: #42d5b7;
+  --brand-aqua: #4fe3ff;
+
+  --background: 174 38% 98%;
+  --foreground: 218 64% 10%;
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --primary: 160 84% 39%;
+  --card-foreground: 218 64% 10%;
+  --primary: 169 86% 30%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 210 16% 93%;
-  --secondary-foreground: 222 47% 11%;
-  --muted: 210 16% 93%;
-  --muted-foreground: 215 16% 47%;
+  --secondary: 200 24% 95%;
+  --secondary-foreground: 218 64% 10%;
+  --muted: 200 24% 95%;
+  --muted-foreground: 213 18% 46%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
-  --border: 214 20% 90%;
-  --input: 214 20% 90%;
-  --ring: 160 84% 39%;
-  --radius: 0.5rem;
+  --border: 200 22% 89%;
+  --input: 200 22% 89%;
+  --ring: 169 72% 42%;
+  --radius: 0.625rem;
 }
 
 * {
@@ -32,8 +40,30 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* App surface: light with subtle brand liquidity glow, matching marketing */
+.app-surface {
+  background:
+    radial-gradient(820px 460px at 12% -6%, rgba(66, 213, 183, 0.1), transparent 60%),
+    radial-gradient(680px 480px at 96% -10%, rgba(245, 163, 0, 0.07), transparent 58%),
+    hsl(var(--background));
+}
+
+.brand-gradient-text {
+  background: linear-gradient(120deg, var(--brand-mint), var(--brand-aqua));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.brand-glow {
+  background:
+    radial-gradient(600px 360px at 20% 0%, rgba(66, 213, 183, 0.22), transparent 60%),
+    radial-gradient(520px 380px at 90% 100%, rgba(79, 227, 255, 0.16), transparent 60%),
+    radial-gradient(420px 320px at 60% 40%, rgba(245, 163, 0, 0.1), transparent 60%);
+}
+
 ::selection {
-  background: rgba(16, 185, 129, 0.18);
+  background: rgba(66, 213, 183, 0.22);
 }
 
 :focus-visible {

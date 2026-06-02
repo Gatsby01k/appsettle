@@ -8,8 +8,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-slate-900 text-white shadow-sm hover:bg-slate-800",
-        primary: "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700",
+        default: "bg-[#07132b] text-white shadow-sm hover:bg-[#0c1f44]",
+        primary:
+          "bg-[hsl(var(--primary))] text-white shadow-sm shadow-emerald-900/10 hover:bg-[hsl(169_86%_26%)]",
         secondary: "bg-slate-100 text-slate-900 hover:bg-slate-200",
         outline: "border bg-white shadow-sm hover:bg-slate-50",
         ghost: "hover:bg-slate-100",

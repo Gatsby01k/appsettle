@@ -20,10 +20,10 @@ export function DashboardShell({
   userName: string;
 }) {
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-950">
+    <div className="app-surface min-h-screen text-slate-950">
       <SidebarNav organizationName={organizationName} />
       <div className="lg:pl-56">
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-white/95 px-4 backdrop-blur sm:px-6">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-slate-200/70 bg-white/80 px-4 backdrop-blur-xl sm:px-6">
           <div className="flex items-center gap-3">
             <CommandPalette />
             <div className="min-w-0 lg:hidden">

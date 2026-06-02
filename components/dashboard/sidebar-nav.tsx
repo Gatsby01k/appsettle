@@ -19,12 +19,12 @@ export function SidebarNav({ organizationName }: { organizationName: string }) {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r bg-white lg:flex">
-      <div className="flex h-14 items-center gap-2.5 border-b px-4">
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col bg-[#07132b] text-white lg:flex">
+      <div className="flex h-14 items-center gap-2.5 border-b border-white/10 px-4">
         <Image src="/assets/mark.png" alt="" width={28} height={28} className="rounded-md" />
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-950">INRSettle</p>
-          <p className="truncate text-xs text-slate-500">{organizationName}</p>
+          <p className="truncate text-sm font-semibold text-white">INRSettle</p>
+          <p className="truncate text-xs text-white/55">{organizationName}</p>
         </div>
       </div>
       <nav className="flex-1 space-y-0.5 p-2" aria-label="Primary">
@@ -37,18 +37,23 @@ export function SidebarNav({ organizationName }: { organizationName: string }) {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
-                active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950",
+                "relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
+                active
+                  ? "bg-white/10 text-white"
+                  : "text-white/60 hover:bg-white/5 hover:text-white",
               )}
             >
-              <Icon className={cn("h-4 w-4 shrink-0", active ? "text-white" : "text-slate-400")} />
+              {active ? (
+                <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-[#42d5b7]" />
+              ) : null}
+              <Icon className={cn("h-4 w-4 shrink-0", active ? "text-[#42d5b7]" : "text-white/45")} />
               {item.label}
             </Link>
           );
         })}
       </nav>
-      <div className="border-t p-3">
-        <p className="text-[11px] leading-relaxed text-slate-400">Treasury operations console</p>
+      <div className="border-t border-white/10 p-3">
+        <p className="text-[11px] leading-relaxed text-white/40">Treasury operations console</p>
       </div>
     </aside>
   );
