@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/auth";
 import { createSettlement, transitionSettlement } from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
 import { canApproveSettlement } from "@/lib/permissions";
+import { counterpartyForCorridor } from "@/lib/treasury";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
@@ -111,6 +112,10 @@ export default async function SettlementsPage({
       where: { organizationId: organization.id },
       orderBy: { createdAt: "desc" },
       take: 100,
+      include: {
+        events: { orderBy: { createdAt: "asc" } },
+        reconciliation: true,
+      },
     }),
   ]);
 
@@ -252,9 +257,29 @@ export default async function SettlementsPage({
                           status: settlement.status,
                           sourceAmount: formatCurrency(String(settlement.sourceAmount), settlement.sourceCurrency),
                           targetAmount: formatCurrency(String(settlement.targetAmount), settlement.targetCurrency),
+                          feeAmount: formatCurrency(String(settlement.feeAmount), settlement.sourceCurrency),
                           createdAt: formatDateTime(settlement.createdAt),
                           approvedAt: settlement.approvedAt ? formatDateTime(settlement.approvedAt) : undefined,
                           settledAt: settlement.settledAt ? formatDateTime(settlement.settledAt) : undefined,
+                          reconciledAt: settlement.reconciledAt ? formatDateTime(settlement.reconciledAt) : undefined,
+                          sourceAccount: settlement.sourceAccount,
+                          targetAccount: settlement.targetAccount,
+                          counterparty: (() => {
+                            const cp = counterpartyForCorridor(settlement.corridor);
+                            return { name: cp.name, type: cp.type, country: cp.country };
+                          })(),
+                          events: settlement.events.map((event) => ({
+                            label: event.toStatus.replaceAll("_", " "),
+                            note: event.note ?? undefined,
+                            at: formatDateTime(event.createdAt),
+                          })),
+                          reconciliation: settlement.reconciliation.map((record) => ({
+                            externalRef: record.externalRef,
+                            source: record.source,
+                            status: record.status,
+                            amount: formatCurrency(String(record.amount), record.currency),
+                            valueDate: formatDateTime(record.valueDate),
+                          })),
                         }}
                       />
                     </div>

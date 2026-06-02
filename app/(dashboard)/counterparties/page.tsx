@@ -1,0 +1,68 @@
+import { requireSession } from "@/lib/auth";
+import { COUNTERPARTIES } from "@/lib/treasury";
+import { formatCurrency } from "@/lib/utils";
+import { PageHeader } from "@/components/ops/page-header";
+import { MetricCard } from "@/components/ops/metric-card";
+import { StatusBadge } from "@/components/ops/status-badge";
+import {
+  DataGrid,
+  DataGridBody,
+  DataGridHead,
+  DataGridRow,
+  DataGridTd,
+  DataGridTh,
+} from "@/components/ops/data-grid";
+
+export default async function CounterpartiesPage() {
+  await requireSession();
+
+  const active = COUNTERPARTIES.filter((cp) => cp.status === "ACTIVE").length;
+  const pending = COUNTERPARTIES.filter((cp) => cp.status === "PENDING").length;
+  const totalVolume = COUNTERPARTIES.reduce((sum, cp) => sum + cp.settledVolume, 0);
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Counterparties"
+        description="Exchanges, PSPs and banking partners that settle across your corridors."
+      />
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard label="Counterparties" value={COUNTERPARTIES.length} hint="Across corridors" />
+        <MetricCard label="Active" value={active} hint="Live settlement" tone="success" />
+        <MetricCard label="Onboarding" value={pending} hint="KYB in review" tone="warning" />
+        <MetricCard label="Lifetime settled" value={formatCurrency(totalVolume)} hint="All counterparties" />
+      </div>
+
+      <DataGrid>
+        <table className="w-full min-w-[820px]">
+          <DataGridHead>
+            <DataGridTh>Counterparty</DataGridTh>
+            <DataGridTh>Type</DataGridTh>
+            <DataGridTh>Corridor</DataGridTh>
+            <DataGridTh>Country</DataGridTh>
+            <DataGridTh>Settled volume</DataGridTh>
+            <DataGridTh>Status</DataGridTh>
+          </DataGridHead>
+          <DataGridBody>
+            {COUNTERPARTIES.map((cp) => (
+              <DataGridRow key={cp.id}>
+                <DataGridTd>
+                  <p className="font-medium text-slate-950">{cp.name}</p>
+                  <p className="max-w-[280px] truncate text-xs text-slate-500">{cp.notes}</p>
+                </DataGridTd>
+                <DataGridTd className="text-slate-600">{cp.type}</DataGridTd>
+                <DataGridTd className="text-slate-600">{cp.corridor.replace("_", " → ")}</DataGridTd>
+                <DataGridTd className="text-slate-600">{cp.country}</DataGridTd>
+                <DataGridTd className="tabular-nums">{formatCurrency(cp.settledVolume)}</DataGridTd>
+                <DataGridTd>
+                  <StatusBadge status={cp.status} />
+                </DataGridTd>
+              </DataGridRow>
+            ))}
+          </DataGridBody>
+        </table>
+      </DataGrid>
+    </div>
+  );
+}

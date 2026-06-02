@@ -1,8 +1,9 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
-import { createQuote } from "@/lib/domain";
+import { createQuote, createSettlement } from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
+import { defaultAccountsForCorridor } from "@/lib/treasury";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
@@ -43,6 +44,29 @@ async function submitQuote(formData: FormData) {
     redirect(`/quotes?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
   }
   redirect("/quotes?success=created&tab=active");
+}
+
+async function acceptQuote(formData: FormData) {
+  "use server";
+  const { user, organization } = await requireSession();
+  const quoteId = String(formData.get("quoteId") ?? "");
+  const corridor = String(formData.get("corridor") ?? "INR_USDT") as "INR_USDT" | "USDT_INR";
+  const accounts = defaultAccountsForCorridor(corridor);
+  try {
+    await createSettlement(
+      {
+        quoteId,
+        reference: `auto_${quoteId.slice(-6)}_${Date.now().toString(36)}`,
+        sourceAccount: accounts.sourceAccount,
+        targetAccount: accounts.targetAccount,
+      },
+      user.id,
+      organization.id,
+    );
+  } catch (error) {
+    redirect(`/quotes?error=${encodeURIComponent(friendlyErrorMessage(error))}&tab=active`);
+  }
+  redirect("/settlements?success=created");
 }
 
 function quoteTab(quote: { status: string; expiresAt: Date }, tab: string) {
@@ -158,23 +182,40 @@ export default async function QuotesPage({
                   <DataGridTh>Target</DataGridTh>
                   <DataGridTh>Status</DataGridTh>
                   <DataGridTh>Expires</DataGridTh>
+                  <DataGridTh className="text-right">Action</DataGridTh>
                 </DataGridHead>
                 <DataGridBody>
-                  {filtered.map((quote) => (
-                    <DataGridRow key={quote.id}>
-                      <DataGridTd className="font-medium">{quote.corridor.replace("_", " → ")}</DataGridTd>
-                      <DataGridTd className="tabular-nums">
-                        {formatCurrency(String(quote.sourceAmount), quote.sourceCurrency)}
-                      </DataGridTd>
-                      <DataGridTd className="tabular-nums">
-                        {formatCurrency(String(quote.targetAmount), quote.targetCurrency)}
-                      </DataGridTd>
-                      <DataGridTd>
-                        <StatusBadge status={quote.status} />
-                      </DataGridTd>
-                      <DataGridTd className="text-xs text-slate-500">{quote.expiresAt.toLocaleString()}</DataGridTd>
-                    </DataGridRow>
-                  ))}
+                  {filtered.map((quote) => {
+                    const isActive = quoteTab(quote, "active");
+                    return (
+                      <DataGridRow key={quote.id}>
+                        <DataGridTd className="font-medium">{quote.corridor.replace("_", " → ")}</DataGridTd>
+                        <DataGridTd className="tabular-nums">
+                          {formatCurrency(String(quote.sourceAmount), quote.sourceCurrency)}
+                        </DataGridTd>
+                        <DataGridTd className="tabular-nums">
+                          {formatCurrency(String(quote.targetAmount), quote.targetCurrency)}
+                        </DataGridTd>
+                        <DataGridTd>
+                          <StatusBadge status={quote.status} />
+                        </DataGridTd>
+                        <DataGridTd className="text-xs text-slate-500">{quote.expiresAt.toLocaleString()}</DataGridTd>
+                        <DataGridTd className="text-right">
+                          {isActive ? (
+                            <form action={acceptQuote} className="flex justify-end">
+                              <input type="hidden" name="quoteId" value={quote.id} />
+                              <input type="hidden" name="corridor" value={quote.corridor} />
+                              <SubmitButton variant="primary" size="sm" pendingText="...">
+                                Create settlement
+                              </SubmitButton>
+                            </form>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </DataGridTd>
+                      </DataGridRow>
+                    );
+                  })}
                 </DataGridBody>
               </table>
             </DataGrid>

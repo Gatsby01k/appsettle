@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SettlementStatus } from "@prisma/client";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { availableBalance } from "@/lib/treasury";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { PageHeader, SectionHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
@@ -36,32 +37,63 @@ export default async function DashboardPage() {
   const startOfDay = new Date(now);
   startOfDay.setHours(0, 0, 0, 0);
 
-  const [settlements, activeQuotes, reconExceptions, auditLogs, expiredQuotes, pendingApprovals, reconciledToday] =
-    await Promise.all([
-      prisma.settlement.findMany({
-        where: { organizationId: organization.id },
-        orderBy: { createdAt: "desc" },
-        take: 8,
-      }),
-      prisma.quote.count({ where: { organizationId: organization.id, status: "ACTIVE" } }),
-      prisma.reconciliationRecord.count({ where: { organizationId: organization.id, status: "EXCEPTION" } }),
-      prisma.auditLog.findMany({
-        where: { organizationId: organization.id },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-        include: { user: true },
-      }),
-      prisma.quote.count({
-        where: {
-          organizationId: organization.id,
-          OR: [{ status: "EXPIRED" }, { status: "ACTIVE", expiresAt: { lt: now } }],
-        },
-      }),
-      prisma.settlement.count({ where: { organizationId: organization.id, status: SettlementStatus.REQUESTED } }),
-      prisma.settlement.count({
-        where: { organizationId: organization.id, status: SettlementStatus.RECONCILED, reconciledAt: { gte: startOfDay } },
-      }),
-    ]);
+  const [
+    settlements,
+    activeQuotes,
+    reconExceptions,
+    auditLogs,
+    expiredQuotes,
+    pendingApprovals,
+    reconciledToday,
+    pendingVolume,
+    settledVolume,
+    reconciledVolume,
+  ] = await Promise.all([
+    prisma.settlement.findMany({
+      where: { organizationId: organization.id },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+    }),
+    prisma.quote.count({ where: { organizationId: organization.id, status: "ACTIVE" } }),
+    prisma.reconciliationRecord.count({ where: { organizationId: organization.id, status: "EXCEPTION" } }),
+    prisma.auditLog.findMany({
+      where: { organizationId: organization.id },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      include: { user: true },
+    }),
+    prisma.quote.count({
+      where: {
+        organizationId: organization.id,
+        OR: [{ status: "EXPIRED" }, { status: "ACTIVE", expiresAt: { lt: now } }],
+      },
+    }),
+    prisma.settlement.count({ where: { organizationId: organization.id, status: SettlementStatus.REQUESTED } }),
+    prisma.settlement.count({
+      where: { organizationId: organization.id, status: SettlementStatus.RECONCILED, reconciledAt: { gte: startOfDay } },
+    }),
+    prisma.settlement.aggregate({
+      _sum: { sourceAmount: true },
+      where: {
+        organizationId: organization.id,
+        status: { in: [SettlementStatus.REQUESTED, SettlementStatus.APPROVED, SettlementStatus.EXECUTING] },
+      },
+    }),
+    prisma.settlement.aggregate({
+      _sum: { sourceAmount: true },
+      where: { organizationId: organization.id, status: SettlementStatus.SETTLED },
+    }),
+    prisma.settlement.aggregate({
+      _sum: { sourceAmount: true },
+      where: { organizationId: organization.id, status: SettlementStatus.RECONCILED },
+    }),
+  ]);
+
+  const availableInr = availableBalance("INR");
+  const availableUsdt = availableBalance("USDT");
+  const pendingVolumeValue = Number(pendingVolume._sum.sourceAmount ?? 0);
+  const settledVolumeValue = Number(settledVolume._sum.sourceAmount ?? 0);
+  const reconciledVolumeValue = Number(reconciledVolume._sum.sourceAmount ?? 0);
 
   const activeStatuses = new Set<SettlementStatus>([
     SettlementStatus.REQUESTED,
@@ -69,7 +101,6 @@ export default async function DashboardPage() {
     SettlementStatus.EXECUTING,
   ]);
   const activeSettlements = settlements.filter((s) => activeStatuses.has(s.status)).length;
-  const volume = settlements.reduce((sum, s) => sum + Number(s.sourceAmount), 0);
   const spotlight = settlements[0];
 
   const alerts = [
@@ -92,12 +123,29 @@ export default async function DashboardPage() {
         actions={<QuickActions />}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <section>
+        <SectionHeader
+          title="Treasury snapshot"
+          description="Available balances and settlement volume across the lifecycle"
+          action={
+            <Link href="/accounts" className="text-xs font-medium text-slate-600 hover:text-slate-950">
+              View accounts
+            </Link>
+          }
+        />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <MetricCard label="Available INR" value={formatCurrency(availableInr, "INR")} hint="Fiat accounts" tone="success" />
+          <MetricCard label="Available USDT" value={formatCurrency(availableUsdt, "USDT")} hint="Treasury wallet" tone="info" />
+          <MetricCard label="Pending volume" value={formatCurrency(pendingVolumeValue)} hint="In workflow" tone="warning" />
+          <MetricCard label="Settled volume" value={formatCurrency(settledVolumeValue)} hint="Awaiting reconciliation" />
+          <MetricCard label="Reconciled volume" value={formatCurrency(reconciledVolumeValue)} hint="Fully matched" tone="success" />
+        </div>
+      </section>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard label="Active settlements" value={activeSettlements} hint="In workflow" />
-        <MetricCard label="Pending approvals" value={pendingApprovals} hint="Requested" tone="warning" />
+        <MetricCard label="Approval queue" value={pendingApprovals} hint="Awaiting approval" tone="warning" />
         <MetricCard label="Reconciled today" value={reconciledToday} hint="Since midnight" tone="success" />
-        <MetricCard label="Settlement volume" value={formatCurrency(volume)} hint="Recent queue" />
-        <MetricCard label="Approval queue" value={pendingApprovals} hint="Needs action" tone="warning" />
         <MetricCard label="Exceptions" value={reconExceptions} hint="Reconciliation" tone={reconExceptions ? "danger" : "neutral"} />
       </div>
 
