@@ -23,14 +23,14 @@ function successMessage(value?: string) {
 
 function hasWorkflowAction(status: SettlementStatus) {
   return new Set<SettlementStatus>([
-    SettlementStatus.CREATED,
+    SettlementStatus.REQUESTED,
     SettlementStatus.APPROVED,
     SettlementStatus.EXECUTING,
   ]).has(status);
 }
 
 function canApproveStatus(status: SettlementStatus) {
-  return status === SettlementStatus.CREATED;
+  return status === SettlementStatus.REQUESTED;
 }
 
 async function submitSettlement(formData: FormData) {

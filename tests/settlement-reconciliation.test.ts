@@ -163,7 +163,7 @@ describe("settlement and reconciliation workflow", () => {
       targetAccount: "USDT wallet",
     }, "user_1", "org_1");
 
-    expect(settlement.status).toBe(SettlementStatus.CREATED);
+    expect(settlement.status).toBe(SettlementStatus.REQUESTED);
     expect(mock.store.quotes[0].status).toBe("ACCEPTED");
 
     const approved = await transitionSettlement(settlement.id, SettlementStatus.APPROVED, "user_1", "org_1");
@@ -196,12 +196,12 @@ describe("settlement and reconciliation workflow", () => {
       organizationId: "org_1",
       publicId: "SET-1",
       reference: "ref_1",
-      status: SettlementStatus.CREATED,
+      status: SettlementStatus.REQUESTED,
     });
 
     await expect(
       transitionSettlement("settlement_1", SettlementStatus.SETTLED, "user_1", "org_1"),
-    ).rejects.toThrow("Cannot move settlement from CREATED to SETTLED.");
+    ).rejects.toThrow("Cannot move settlement from REQUESTED to SETTLED.");
   });
 
   it("rejects contradictory reconciliation states", async () => {

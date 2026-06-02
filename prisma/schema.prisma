@@ -29,11 +29,16 @@ enum QuoteStatus {
 }
 
 enum SettlementStatus {
-  CREATED
+  REQUESTED
+  QUOTED
+  PENDING_APPROVAL
   APPROVED
   EXECUTING
   SETTLED
   RECONCILED
+  FAILED
+  CANCELLED
+  ON_HOLD
 }
 
 enum Corridor {
@@ -155,7 +160,7 @@ model Settlement {
   sourceAmount      Decimal            @db.Decimal(20, 2)
   targetAmount      Decimal            @db.Decimal(20, 6)
   feeAmount         Decimal            @default(0) @db.Decimal(20, 2)
-  status            SettlementStatus   @default(CREATED)
+  status            SettlementStatus   @default(REQUESTED)
   sourceAccount     String
   targetAccount     String
   failureReason     String?

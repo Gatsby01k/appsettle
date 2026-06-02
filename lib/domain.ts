@@ -12,11 +12,16 @@ const RATE_BY_CORRIDOR = {
 
 function assertValidSettlementTransition(from: SettlementStatus, to: SettlementStatus) {
   const allowed: Record<SettlementStatus, SettlementStatus[]> = {
-    [SettlementStatus.CREATED]: [SettlementStatus.APPROVED],
+    [SettlementStatus.REQUESTED]: [SettlementStatus.APPROVED],
+    [SettlementStatus.QUOTED]: [SettlementStatus.APPROVED],
+    [SettlementStatus.PENDING_APPROVAL]: [SettlementStatus.APPROVED],
     [SettlementStatus.APPROVED]: [SettlementStatus.EXECUTING],
     [SettlementStatus.EXECUTING]: [SettlementStatus.SETTLED],
     [SettlementStatus.SETTLED]: [SettlementStatus.RECONCILED],
     [SettlementStatus.RECONCILED]: [],
+    [SettlementStatus.FAILED]: [],
+    [SettlementStatus.CANCELLED]: [],
+    [SettlementStatus.ON_HOLD]: [],
   };
 
   if (!allowed[from].includes(to)) {
@@ -97,7 +102,7 @@ export async function createSettlement(input: unknown, userId: string, organizat
         feeAmount: quote.feeAmount,
         sourceAccount: data.sourceAccount,
         targetAccount: data.targetAccount,
-        status: SettlementStatus.CREATED,
+        status: SettlementStatus.REQUESTED,
       },
     });
 
@@ -109,7 +114,7 @@ export async function createSettlement(input: unknown, userId: string, organizat
     await tx.settlementEvent.create({
       data: {
         settlementId: created.id,
-        toStatus: SettlementStatus.CREATED,
+        toStatus: SettlementStatus.REQUESTED,
         actorId: userId,
         note: "Settlement created from accepted quote.",
       },

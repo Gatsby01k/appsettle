@@ -8,7 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 function statusTone(status: SettlementStatus) {
   if (new Set<SettlementStatus>([SettlementStatus.SETTLED, SettlementStatus.RECONCILED, SettlementStatus.APPROVED]).has(status)) return "success";
-  if (new Set<SettlementStatus>([SettlementStatus.CREATED, SettlementStatus.EXECUTING]).has(status)) return "warning";
+  if (new Set<SettlementStatus>([SettlementStatus.REQUESTED, SettlementStatus.EXECUTING]).has(status)) return "warning";
+  if (new Set<SettlementStatus>([SettlementStatus.FAILED, SettlementStatus.CANCELLED]).has(status)) return "danger";
   return "neutral";
 }
 
@@ -26,7 +27,7 @@ export default async function DashboardPage() {
   ]);
 
   const volume = settlements.reduce((sum, settlement) => sum + Number(settlement.sourceAmount), 0);
-  const pending = settlements.filter((settlement) => settlement.status === SettlementStatus.CREATED).length;
+  const pending = settlements.filter((settlement) => settlement.status === SettlementStatus.REQUESTED).length;
 
   return (
     <div className="space-y-8">
@@ -41,7 +42,7 @@ export default async function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card><CardHeader><CardTitle>Volume</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{formatCurrency(volume)}</CardContent></Card>
         <Card><CardHeader><CardTitle>Open Quotes</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{quotes}</CardContent></Card>
-        <Card><CardHeader><CardTitle>Created</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{pending}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Requested</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{pending}</CardContent></Card>
         <Card><CardHeader><CardTitle>Recon Exceptions</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{reconciliation}</CardContent></Card>
       </div>
 
