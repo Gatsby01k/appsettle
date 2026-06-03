@@ -6,12 +6,15 @@ type Tone = "neutral" | "success" | "warning" | "danger" | "info";
 export function MetricCard({
   label,
   value,
+  valueTitle,
   hint,
   tone = "neutral",
   icon: Icon,
 }: {
   label: string;
   value: string | number;
+  /** Full-precision value surfaced on hover when `value` is shown compact. */
+  valueTitle?: string;
   hint?: string;
   tone?: Tone;
   icon?: LucideIcon;
@@ -44,17 +47,23 @@ export function MetricCard({
     <div className="ops-panel ops-card-hover relative overflow-hidden p-[18px] pl-5">
       <span className={cn("absolute inset-y-3 left-0 w-[3px] rounded-full", rail[tone])} />
       <div className="flex items-start justify-between gap-3">
-        <p className="text-[12px] font-medium uppercase tracking-[0.06em] text-slate-500">{label}</p>
+        <p className="min-w-0 truncate text-[12px] font-medium uppercase tracking-[0.06em] text-slate-500">{label}</p>
         {Icon ? (
           <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-lg ring-1", iconWrap[tone])}>
             <Icon className="h-4 w-4" />
           </span>
         ) : null}
       </div>
-      <p className={cn("mt-2 text-[26px] font-semibold leading-none tracking-tight tabular-nums", valueTone[tone])}>
+      <p
+        title={valueTitle ?? (typeof value === "string" ? value : undefined)}
+        className={cn(
+          "mt-2 min-w-0 truncate whitespace-nowrap text-[26px] font-semibold leading-none tracking-tight tabular-nums",
+          valueTone[tone],
+        )}
+      >
         {value}
       </p>
-      {hint ? <p className="mt-2 text-[12.5px] text-slate-500">{hint}</p> : null}
+      {hint ? <p className="mt-2 truncate text-[12.5px] text-slate-500">{hint}</p> : null}
     </div>
   );
 }

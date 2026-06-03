@@ -22,7 +22,7 @@ import {
   MATCH_LABEL,
 } from "@/lib/reconciliation";
 import { prisma } from "@/lib/prisma";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrencyFull, formatPercent } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { FlashMessage } from "@/components/ops/flash-message";
@@ -242,7 +242,7 @@ export default async function ReconciliationPage({
       id: record.id,
       externalRef: record.externalRef,
       source: record.source,
-      amount: formatCurrency(String(record.amount), record.currency),
+      amount: formatCurrencyFull(String(record.amount), record.currency),
       currency: record.currency,
       status: record.status,
       matchType,
@@ -310,7 +310,7 @@ export default async function ReconciliationPage({
           tone={manualReview ? "warning" : "neutral"}
         />
         <MetricCard label="Exceptions" value={exceptions} hint="Operations queue" tone={exceptions ? "danger" : "neutral"} />
-        <MetricCard label="Match rate" value={`${matchRate}%`} hint="Reconciled records" tone="info" />
+        <MetricCard label="Match rate" value={formatPercent(matchRate)} hint="Reconciled records" tone="info" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">

@@ -32,6 +32,18 @@ export function DataGridRow({ children, className }: { children: React.ReactNode
   );
 }
 
-export function DataGridTd({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <td className={cn("px-4 py-3.5 align-middle first:pl-5 last:pr-5", className)}>{children}</td>;
+export function DataGridTd({
+  children,
+  className,
+  title,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <td title={title} className={cn("px-4 py-3.5 align-middle first:pl-5 last:pr-5", className)}>
+      {children}
+    </td>
+  );
 }

@@ -1,6 +1,6 @@
 import { requireSession } from "@/lib/auth";
 import { COUNTERPARTIES, accountsForCounterparty } from "@/lib/treasury";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrencyCompact, formatCurrencyFull } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
@@ -23,7 +23,7 @@ function recentSettlementsFor(volume: number, corridor: "INR_USDT" | "USDT_INR")
     { fraction: 0.07, status: "RECONCILED", when: "1 week ago" },
   ].map((row, index) => ({
     reference: `psp_batch_${1840 - index}`,
-    amount: formatCurrency(Math.round(volume * row.fraction), currency),
+    amount: formatCurrencyFull(Math.round(volume * row.fraction), currency),
     status: row.status,
     when: row.when,
   }));
@@ -47,7 +47,12 @@ export default async function CounterpartiesPage() {
         <MetricCard label="Counterparties" value={COUNTERPARTIES.length} hint="Across corridors" />
         <MetricCard label="Active" value={active} hint="Live settlement" tone="success" />
         <MetricCard label="Onboarding" value={pending} hint="KYB in review" tone="warning" />
-        <MetricCard label="Lifetime settled" value={formatCurrency(totalVolume)} hint="All counterparties" />
+        <MetricCard
+          label="Lifetime settled"
+          value={formatCurrencyCompact(totalVolume)}
+          valueTitle={formatCurrencyFull(totalVolume)}
+          hint="All counterparties"
+        />
       </div>
 
       <DataGrid>
@@ -71,7 +76,12 @@ export default async function CounterpartiesPage() {
                 <DataGridTd className="text-slate-600">{cp.type}</DataGridTd>
                 <DataGridTd className="text-slate-600">{cp.corridor.replace("_", " → ")}</DataGridTd>
                 <DataGridTd className="text-slate-600">{cp.country}</DataGridTd>
-                <DataGridTd className="tabular-nums">{formatCurrency(cp.settledVolume)}</DataGridTd>
+                <DataGridTd
+                  className="whitespace-nowrap tabular-nums"
+                  title={formatCurrencyFull(cp.settledVolume)}
+                >
+                  {formatCurrencyFull(cp.settledVolume)}
+                </DataGridTd>
                 <DataGridTd>
                   <StatusBadge status={cp.status} />
                 </DataGridTd>
@@ -83,12 +93,12 @@ export default async function CounterpartiesPage() {
                       country: cp.country,
                       corridor: cp.corridor.replace("_", " → "),
                       status: cp.status,
-                      settledVolume: formatCurrency(cp.settledVolume),
+                      settledVolume: formatCurrencyFull(cp.settledVolume),
                       notes: cp.notes,
                       linkedAccounts: accountsForCounterparty(cp).map((account) => ({
                         name: account.name,
                         currency: account.currency,
-                        balance: formatCurrency(account.balance, account.currency),
+                        balance: formatCurrencyFull(account.balance, account.currency),
                       })),
                       recentSettlements: recentSettlementsFor(cp.settledVolume, cp.corridor),
                     }}

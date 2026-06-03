@@ -7,7 +7,7 @@ import { friendlyErrorMessage } from "@/lib/errors";
 import { canApproveSettlement } from "@/lib/permissions";
 import { counterpartyForCorridor } from "@/lib/treasury";
 import { prisma } from "@/lib/prisma";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { formatCurrencyCompact, formatCurrencyFull, formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
@@ -163,7 +163,7 @@ export default async function SettlementsPage({
                   quotes.length
                     ? quotes.map((quote) => ({
                         value: quote.id,
-                        label: `${quote.corridor.replace("_", " → ")} · ${formatCurrency(String(quote.sourceAmount), quote.sourceCurrency)}`,
+                        label: `${quote.corridor.replace("_", " → ")} · ${formatCurrencyCompact(String(quote.sourceAmount), quote.sourceCurrency)}`,
                       }))
                     : [{ value: "_none", label: "No active quotes" }]
                 }
@@ -211,8 +211,11 @@ export default async function SettlementsPage({
                     <p className="font-medium text-slate-950">{settlement.publicId}</p>
                     <p className="text-xs text-slate-500">{settlement.reference}</p>
                   </DataGridTd>
-                  <DataGridTd className="tabular-nums">
-                    {formatCurrency(String(settlement.sourceAmount), settlement.sourceCurrency)}
+                  <DataGridTd
+                    className="whitespace-nowrap tabular-nums"
+                    title={formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
+                  >
+                    {formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
                   </DataGridTd>
                   <DataGridTd>
                     <StatusBadge status={settlement.status} />
@@ -251,9 +254,9 @@ export default async function SettlementsPage({
                           reference: settlement.reference,
                           corridor: settlement.corridor.replace("_", " → "),
                           status: settlement.status,
-                          sourceAmount: formatCurrency(String(settlement.sourceAmount), settlement.sourceCurrency),
-                          targetAmount: formatCurrency(String(settlement.targetAmount), settlement.targetCurrency),
-                          feeAmount: formatCurrency(String(settlement.feeAmount), settlement.sourceCurrency),
+                          sourceAmount: formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency),
+                          targetAmount: formatCurrencyFull(String(settlement.targetAmount), settlement.targetCurrency),
+                          feeAmount: formatCurrencyFull(String(settlement.feeAmount), settlement.sourceCurrency),
                           createdAt: formatDateTime(settlement.createdAt),
                           approvedAt: settlement.approvedAt ? formatDateTime(settlement.approvedAt) : undefined,
                           settledAt: settlement.settledAt ? formatDateTime(settlement.settledAt) : undefined,
@@ -273,7 +276,7 @@ export default async function SettlementsPage({
                             externalRef: record.externalRef,
                             source: record.source,
                             status: record.status,
-                            amount: formatCurrency(String(record.amount), record.currency),
+                            amount: formatCurrencyFull(String(record.amount), record.currency),
                             valueDate: formatDateTime(record.valueDate),
                           })),
                         }}

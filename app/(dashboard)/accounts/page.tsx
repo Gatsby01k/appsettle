@@ -1,6 +1,6 @@
 import { requireSession } from "@/lib/auth";
 import { ACCOUNTS, availableBalance, counterpartiesForAccount } from "@/lib/treasury";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrencyCompact, formatCurrencyFull } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
@@ -21,7 +21,7 @@ function recentActivityFor(balance: number, currency: string) {
     { label: "Inbound settlement", fraction: 0.09, when: "2 days ago" },
   ].map((row) => ({
     label: row.label,
-    amount: `${row.fraction < 0 ? "-" : "+"}${formatCurrency(Math.round(Math.abs(balance * row.fraction)), currency)}`,
+    amount: `${row.fraction < 0 ? "-" : "+"}${formatCurrencyFull(Math.round(Math.abs(balance * row.fraction)), currency)}`,
     when: row.when,
   }));
 }
@@ -40,10 +40,28 @@ export default async function AccountsPage() {
         description="Fiat operating and settlement accounts alongside stablecoin treasury wallets."
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Available INR" value={formatCurrency(inr, "INR")} hint="Fiat accounts" tone="success" />
-        <MetricCard label="Available USDT" value={formatCurrency(usdt, "USDT")} hint="Treasury wallet" tone="info" />
-        <MetricCard label="Available USDC" value={formatCurrency(usdc, "USDC")} hint="Reserve" tone="info" />
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
+        <MetricCard
+          label="Available INR"
+          value={formatCurrencyCompact(inr, "INR")}
+          valueTitle={formatCurrencyFull(inr, "INR")}
+          hint="Fiat accounts"
+          tone="success"
+        />
+        <MetricCard
+          label="Available USDT"
+          value={formatCurrencyCompact(usdt, "USDT")}
+          valueTitle={formatCurrencyFull(usdt, "USDT")}
+          hint="Treasury wallet"
+          tone="info"
+        />
+        <MetricCard
+          label="Available USDC"
+          value={formatCurrencyCompact(usdc, "USDC")}
+          valueTitle={formatCurrencyFull(usdc, "USDC")}
+          hint="Reserve"
+          tone="info"
+        />
         <MetricCard label="Accounts" value={ACCOUNTS.length} hint="Across institutions" />
       </div>
 
@@ -65,8 +83,11 @@ export default async function AccountsPage() {
                 <DataGridTd className="text-slate-600">{account.type}</DataGridTd>
                 <DataGridTd className="text-slate-600">{account.institution}</DataGridTd>
                 <DataGridTd className="text-slate-600">{account.currency}</DataGridTd>
-                <DataGridTd className="tabular-nums font-medium">
-                  {formatCurrency(account.balance, account.currency)}
+                <DataGridTd
+                  className="whitespace-nowrap tabular-nums font-medium"
+                  title={formatCurrencyFull(account.balance, account.currency)}
+                >
+                  {formatCurrencyFull(account.balance, account.currency)}
                 </DataGridTd>
                 <DataGridTd>
                   <StatusBadge status={account.status} />
@@ -77,7 +98,7 @@ export default async function AccountsPage() {
                       name: account.name,
                       type: account.type,
                       currency: account.currency,
-                      balance: formatCurrency(account.balance, account.currency),
+                      balance: formatCurrencyFull(account.balance, account.currency),
                       institution: account.institution,
                       status: account.status,
                       linkedCounterparties: counterpartiesForAccount(account).map((cp) => ({

@@ -5,7 +5,7 @@ import { requireSession } from "@/lib/auth";
 import { autoMatchReconciliation } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 import { availableBalance } from "@/lib/treasury";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { formatCurrencyCompact, formatCurrencyFull, formatDateTime, formatPercent } from "@/lib/utils";
 import { PageHeader, SectionHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { ActivityItem } from "@/components/ops/activity-item";
@@ -190,12 +190,41 @@ export default async function DashboardPage() {
             </Link>
           }
         />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          <MetricCard label="Available INR" value={formatCurrency(availableInr, "INR")} hint="Fiat accounts" tone="success" />
-          <MetricCard label="Available USDT" value={formatCurrency(availableUsdt, "USDT")} hint="Treasury wallet" tone="info" />
-          <MetricCard label="Pending volume" value={formatCurrency(pendingVolumeValue)} hint="In workflow" tone="warning" />
-          <MetricCard label="Settled volume" value={formatCurrency(settledVolumeValue)} hint="Awaiting reconciliation" />
-          <MetricCard label="Reconciled volume" value={formatCurrency(reconciledVolumeValue)} hint="Fully matched" tone="success" />
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
+          <MetricCard
+            label="Available INR"
+            value={formatCurrencyCompact(availableInr, "INR")}
+            valueTitle={formatCurrencyFull(availableInr, "INR")}
+            hint="Fiat accounts"
+            tone="success"
+          />
+          <MetricCard
+            label="Available USDT"
+            value={formatCurrencyCompact(availableUsdt, "USDT")}
+            valueTitle={formatCurrencyFull(availableUsdt, "USDT")}
+            hint="Treasury wallet"
+            tone="info"
+          />
+          <MetricCard
+            label="Pending volume"
+            value={formatCurrencyCompact(pendingVolumeValue)}
+            valueTitle={formatCurrencyFull(pendingVolumeValue)}
+            hint="In workflow"
+            tone="warning"
+          />
+          <MetricCard
+            label="Settled volume"
+            value={formatCurrencyCompact(settledVolumeValue)}
+            valueTitle={formatCurrencyFull(settledVolumeValue)}
+            hint="Awaiting reconciliation"
+          />
+          <MetricCard
+            label="Reconciled volume"
+            value={formatCurrencyCompact(reconciledVolumeValue)}
+            valueTitle={formatCurrencyFull(reconciledVolumeValue)}
+            hint="Fully matched"
+            tone="success"
+          />
         </div>
       </section>
 
@@ -209,8 +238,8 @@ export default async function DashboardPage() {
       <section>
         <SectionHeader title="Operational intelligence" description="Settlement reliability and reconciliation performance" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard label="Settlement success rate" value={`${successRate}%`} hint={`${completedCount} of ${totalSettlements} completed`} tone="success" />
-          <MetricCard label="Auto-reconciled rate" value={`${reconciledRate}%`} hint="Of completed settlements" tone="info" />
+          <MetricCard label="Settlement success rate" value={formatPercent(successRate)} hint={`${completedCount} of ${totalSettlements} completed`} tone="success" />
+          <MetricCard label="Auto-reconciled rate" value={formatPercent(reconciledRate)} hint="Of completed settlements" tone="info" />
           <MetricCard label="Avg settlement time" value={avgSettlementTime} hint="Created → settled" />
           <MetricCard label="Failed / cancelled" value={failedCount} hint="Lifetime" tone={failedCount ? "danger" : "neutral"} />
         </div>
@@ -278,8 +307,11 @@ export default async function DashboardPage() {
                         {record.exceptionReason ?? record.source.replaceAll("_", " ")}
                       </p>
                     </div>
-                    <span className="tabular-nums text-xs text-slate-500">
-                      {formatCurrency(String(record.amount), record.currency)}
+                    <span
+                      className="whitespace-nowrap tabular-nums text-xs text-slate-500"
+                      title={formatCurrencyFull(String(record.amount), record.currency)}
+                    >
+                      {formatCurrencyFull(String(record.amount), record.currency)}
                     </span>
                   </li>
                 ))}
@@ -338,8 +370,11 @@ export default async function DashboardPage() {
                   <DataGridRow key={settlement.id}>
                     <DataGridTd className="font-medium">{settlement.publicId}</DataGridTd>
                     <DataGridTd className="text-slate-600">{settlement.reference}</DataGridTd>
-                    <DataGridTd className="tabular-nums">
-                      {formatCurrency(String(settlement.sourceAmount), settlement.sourceCurrency)}
+                    <DataGridTd
+                      className="whitespace-nowrap tabular-nums"
+                      title={formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
+                    >
+                      {formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
                     </DataGridTd>
                     <DataGridTd>
                       <StatusBadge status={settlement.status} />

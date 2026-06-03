@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, formatNumberCompact } from "@/lib/utils";
 
 const REPORTS = [
   {
@@ -48,9 +48,24 @@ export default async function ReportsPage() {
       />
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <MetricCard label="Settlement records" value={settlementCount} hint="Exportable rows" />
-        <MetricCard label="Reconciliation records" value={reconciliationCount} hint="Exportable rows" />
-        <MetricCard label="Audit events" value={auditCount} hint="Exportable rows" />
+        <MetricCard
+          label="Settlement records"
+          value={formatNumberCompact(settlementCount)}
+          valueTitle={settlementCount.toLocaleString("en-IN")}
+          hint="Exportable rows"
+        />
+        <MetricCard
+          label="Reconciliation records"
+          value={formatNumberCompact(reconciliationCount)}
+          valueTitle={reconciliationCount.toLocaleString("en-IN")}
+          hint="Exportable rows"
+        />
+        <MetricCard
+          label="Audit events"
+          value={formatNumberCompact(auditCount)}
+          valueTitle={auditCount.toLocaleString("en-IN")}
+          hint="Exportable rows"
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

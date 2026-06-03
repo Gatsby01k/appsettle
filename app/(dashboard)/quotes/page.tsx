@@ -6,7 +6,7 @@ import { friendlyErrorMessage } from "@/lib/errors";
 import { defaultAccountsForCorridor } from "@/lib/treasury";
 import { prisma } from "@/lib/prisma";
 import { displayQuoteStatus } from "@/lib/quotes";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrencyFull } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
@@ -214,11 +214,17 @@ export default async function QuotesPage({
                     return (
                       <DataGridRow key={quote.id}>
                         <DataGridTd className="font-medium">{quote.corridor.replace("_", " → ")}</DataGridTd>
-                        <DataGridTd className="tabular-nums">
-                          {formatCurrency(String(quote.sourceAmount), quote.sourceCurrency)}
+                        <DataGridTd
+                          className="whitespace-nowrap tabular-nums"
+                          title={formatCurrencyFull(String(quote.sourceAmount), quote.sourceCurrency)}
+                        >
+                          {formatCurrencyFull(String(quote.sourceAmount), quote.sourceCurrency)}
                         </DataGridTd>
-                        <DataGridTd className="tabular-nums">
-                          {formatCurrency(String(quote.targetAmount), quote.targetCurrency)}
+                        <DataGridTd
+                          className="whitespace-nowrap tabular-nums"
+                          title={formatCurrencyFull(String(quote.targetAmount), quote.targetCurrency)}
+                        >
+                          {formatCurrencyFull(String(quote.targetAmount), quote.targetCurrency)}
                         </DataGridTd>
                         <DataGridTd>
                           <StatusBadge status={displayStatus} />
