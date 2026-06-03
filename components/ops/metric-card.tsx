@@ -1,43 +1,60 @@
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type Tone = "neutral" | "success" | "warning" | "danger" | "info";
 
 export function MetricCard({
   label,
   value,
   hint,
   tone = "neutral",
+  icon: Icon,
 }: {
   label: string;
   value: string | number;
   hint?: string;
-  tone?: "neutral" | "success" | "warning" | "danger" | "info";
+  tone?: Tone;
+  icon?: LucideIcon;
 }) {
-  const valueTone: Record<string, string> = {
-    neutral: "text-[#07132b]",
-    success: "text-teal-700",
-    warning: "text-amber-700",
+  const valueTone: Record<Tone, string> = {
+    neutral: "text-brand-ink",
+    success: "text-brand-emerald-ink",
+    warning: "text-[#9b6810]",
     danger: "text-rose-700",
-    info: "text-sky-700",
+    info: "text-[#0a7d86]",
   };
 
-  const accent: Record<string, string> = {
-    neutral: "before:bg-[#07132b]/15",
-    success: "before:bg-[#42d5b7]",
-    warning: "before:bg-[#f5a300]",
-    danger: "before:bg-rose-500",
-    info: "before:bg-[#4fe3ff]",
+  const rail: Record<Tone, string> = {
+    neutral: "bg-brand-ink/15",
+    success: "bg-brand-emerald",
+    warning: "bg-brand-amber",
+    danger: "bg-rose-500",
+    info: "bg-brand-aqua",
+  };
+
+  const iconWrap: Record<Tone, string> = {
+    neutral: "bg-slate-100 text-slate-500 ring-slate-200/70",
+    success: "bg-[#e7faf4] text-brand-emerald-ink ring-[#00c79d]/25",
+    warning: "bg-[#fff5de] text-[#9b6810] ring-[#f2ad23]/25",
+    danger: "bg-rose-50 text-rose-600 ring-rose-200/70",
+    info: "bg-[#e7f7fb] text-[#0a7d86] ring-[#0bb4c4]/22",
   };
 
   return (
-    <div
-      className={cn(
-        "relative overflow-hidden rounded-lg border bg-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md",
-        "before:absolute before:inset-y-0 before:left-0 before:w-0.5",
-        accent[tone],
-      )}
-    >
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className={cn("mt-1 text-2xl font-semibold tabular-nums tracking-tight", valueTone[tone])}>{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+    <div className="ops-panel ops-card-hover relative overflow-hidden p-[18px] pl-5">
+      <span className={cn("absolute inset-y-3 left-0 w-[3px] rounded-full", rail[tone])} />
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[12px] font-medium uppercase tracking-[0.06em] text-slate-500">{label}</p>
+        {Icon ? (
+          <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-lg ring-1", iconWrap[tone])}>
+            <Icon className="h-4 w-4" />
+          </span>
+        ) : null}
+      </div>
+      <p className={cn("mt-2 text-[26px] font-semibold leading-none tracking-tight tabular-nums", valueTone[tone])}>
+        {value}
+      </p>
+      {hint ? <p className="mt-2 text-[12.5px] text-slate-500">{hint}</p> : null}
     </div>
   );
 }

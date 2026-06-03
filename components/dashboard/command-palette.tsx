@@ -46,17 +46,19 @@ export function CommandPalette() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="hidden items-center gap-2 rounded-md border bg-slate-50 px-3 py-1.5 text-xs text-slate-500 transition hover:bg-slate-100 lg:flex"
+        className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-500 shadow-ops-xs transition-colors hover:border-slate-300 hover:text-slate-700 lg:flex"
         aria-label="Open command palette"
       >
-        <Search className="h-3.5 w-3.5" />
+        <Search className="h-4 w-4 text-slate-400" />
         <span>Search</span>
-        <kbd className="rounded border bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-400">⌘K</kbd>
+        <kbd className="ml-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-slate-400">
+          ⌘K
+        </kbd>
       </button>
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/40" />
-          <Dialog.Content className="fixed left-1/2 top-[12%] z-50 w-[92%] max-w-lg -translate-x-1/2 overflow-hidden rounded-lg border bg-white shadow-2xl outline-none">
+          <Dialog.Overlay className="ops-animate-overlay fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm" />
+          <Dialog.Content className="ops-animate-pop fixed left-1/2 top-[12%] z-50 w-[92%] max-w-lg -translate-x-1/2 overflow-hidden rounded-2xl border border-[var(--ops-line)] bg-white shadow-ops-lg outline-none">
             <Dialog.Title className="sr-only">Command palette</Dialog.Title>
             <Dialog.Description className="sr-only">Search pages and quick actions</Dialog.Description>
             <Command>

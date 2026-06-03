@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useCallback, useTransition } from "react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Segmented } from "@/components/ops/segmented";
+import { cn } from "@/lib/utils";
 
 export function FilterBar({
   statusOptions = [],
@@ -30,36 +31,59 @@ export function FilterBar({
     [pathname, router, searchParams],
   );
 
+  const activeStatus = searchParams.get("status") ?? "";
+  const activeQuery = searchParams.get("q") ?? "";
+
   return (
-    <form
-      className="flex flex-col gap-2 sm:flex-row sm:items-center"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        apply({ q: String(data.get("q") ?? ""), status: String(data.get("status") ?? "") });
-      }}
-    >
-      <div className="relative min-w-0 flex-1">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        <Input name="q" defaultValue={searchParams.get("q") ?? ""} placeholder={searchPlaceholder} className="pl-9" />
-      </div>
+    <div className="ops-panel flex flex-col gap-3 p-3 lg:flex-row lg:items-center lg:justify-between">
+      <form
+        className="relative w-full min-w-0 lg:max-w-sm"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          apply({ q: String(data.get("q") ?? "") });
+        }}
+      >
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Input
+          name="q"
+          defaultValue={activeQuery}
+          placeholder={searchPlaceholder}
+          aria-label="Search"
+          className="pl-9 pr-9"
+        />
+        {activeQuery ? (
+          <button
+            type="button"
+            aria-label="Clear search"
+            onClick={() => apply({ q: "" })}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </form>
+
       {statusOptions.length ? (
-        <select
-          name="status"
-          defaultValue={searchParams.get("status") ?? ""}
-          className="h-9 w-full rounded-md border border-input bg-white px-3 text-sm shadow-sm sm:w-44"
-        >
-          <option value="">All statuses</option>
-          {statusOptions.map((status) => (
-            <option key={status} value={status}>
-              {status.replaceAll("_", " ")}
-            </option>
-          ))}
-        </select>
+        <div className={cn("flex items-center gap-2 overflow-x-auto", pending && "opacity-60")}>
+          <span className="hidden shrink-0 text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-400 sm:inline">
+            Status
+          </span>
+          <Segmented
+            ariaLabel="Filter by status"
+            size="sm"
+            value={activeStatus}
+            onChange={(next) => apply({ status: next })}
+            options={[
+              { value: "", label: "All" },
+              ...statusOptions.map((status) => ({
+                value: status,
+                label: status.replaceAll("_", " "),
+              })),
+            ]}
+          />
+        </div>
       ) : null}
-      <Button type="submit" variant="outline" size="sm" disabled={pending} className="h-9">
-        {pending ? "Filtering..." : "Apply"}
-      </Button>
-    </form>
+    </div>
   );
 }

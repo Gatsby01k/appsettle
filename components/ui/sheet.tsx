@@ -13,26 +13,38 @@ export function SheetContent({
   children,
   title,
   description,
+  eyebrow,
+  footer,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   title: string;
   description?: string;
+  eyebrow?: string;
+  footer?: React.ReactNode;
 }) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-950/40" />
+      <DialogPrimitive.Overlay className="ops-animate-overlay fixed inset-0 z-50 bg-[rgba(7,17,31,0.46)] backdrop-blur-[2px]" />
       <DialogPrimitive.Content
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col border-l bg-white shadow-xl outline-none",
+          "ops-animate-sheet fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col border-l border-[var(--ops-line)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,255,255,0.92))] shadow-[var(--ops-shadow-lg)] outline-none sm:inset-y-2 sm:right-2 sm:rounded-2xl sm:border",
           className,
         )}
         {...props}
       >
-        <div className="flex items-start justify-between border-b px-5 py-4">
-          <div>
-            <DialogPrimitive.Title className="text-base font-semibold text-slate-950">{title}</DialogPrimitive.Title>
+        <span className="pointer-events-none absolute inset-x-5 top-0 h-[2px] rounded-full bg-[linear-gradient(90deg,transparent,rgba(0,199,157,0.8),rgba(242,173,35,0.55),transparent)]" />
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--ops-line-soft)] px-5 py-4">
+          <div className="min-w-0">
+            {eyebrow ? (
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-brand-emerald-ink">
+                {eyebrow}
+              </p>
+            ) : null}
+            <DialogPrimitive.Title className="truncate text-[15px] font-semibold tracking-tight text-slate-950">
+              {title}
+            </DialogPrimitive.Title>
             {description ? (
-              <DialogPrimitive.Description className="mt-1 text-sm text-slate-500">
+              <DialogPrimitive.Description className="mt-0.5 truncate text-[13px] text-slate-500">
                 {description}
               </DialogPrimitive.Description>
             ) : (
@@ -40,13 +52,18 @@ export function SheetContent({
             )}
           </div>
           <DialogPrimitive.Close
-            className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Close panel"
           >
             <X className="h-4 w-4" />
           </DialogPrimitive.Close>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="ops-scroll flex-1 space-y-3 overflow-y-auto px-5 py-4">{children}</div>
+        {footer ? (
+          <div className="flex items-center justify-end gap-2 border-t border-[var(--ops-line-soft)] px-5 py-3.5">
+            {footer}
+          </div>
+        ) : null}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   );

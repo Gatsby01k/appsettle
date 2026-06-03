@@ -1,30 +1,55 @@
 @import "tailwindcss";
 
+/* ============================================================
+   INRSettle Console — design tokens
+   Source of truth: upgraded INRSettle marketing site.
+   Palette: emerald #00c79d · aqua #0bb4c4 · saffron #f2ad23 · ink #07111f.
+   Goal: premium, minimal, trustworthy, operationally clear.
+   ============================================================ */
 :root {
-  /* INRSettle brand palette (source of truth: marketing site) */
-  --brand-navy: #07132b;
-  --brand-navy-2: #0c1f44;
-  --brand-amber: #f5a300;
-  --brand-gold: #d9c43c;
-  --brand-mint: #42d5b7;
-  --brand-aqua: #4fe3ff;
+  /* Brand palette (mirrors marketing styles.css) */
+  --brand-ink: #07111f;
+  --brand-ink-2: #1c2b3d;
+  --brand-navy: #0a1626;
+  --brand-navy-2: #0e2036;
+  --brand-emerald: #00c79d;
+  --brand-emerald-2: #24ddb6;
+  --brand-emerald-ink: #087f69;
+  --brand-aqua: #0bb4c4;
+  --brand-amber: #f2ad23;
+  --brand-amber-ink: #a5670a;
 
-  --background: 174 38% 98%;
-  --foreground: 218 64% 10%;
+  /* Single source accent — used by controls, focus, indicators */
+  --accent: var(--brand-emerald);
+  --accent-ink: var(--brand-emerald-ink);
+
+  /* shadcn-compatible semantic tokens (HSL channels) */
+  --background: 80 16% 98%;
+  --foreground: 216 64% 8%;
   --card: 0 0% 100%;
-  --card-foreground: 218 64% 10%;
-  --primary: 169 86% 30%;
+  --card-foreground: 216 64% 8%;
+  --primary: 168 90% 33%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 200 24% 95%;
-  --secondary-foreground: 218 64% 10%;
-  --muted: 200 24% 95%;
-  --muted-foreground: 213 18% 46%;
+  --secondary: 160 16% 95%;
+  --secondary-foreground: 216 48% 13%;
+  --muted: 160 16% 95%;
+  --muted-foreground: 213 16% 45%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
-  --border: 200 22% 89%;
-  --input: 200 22% 89%;
-  --ring: 169 72% 42%;
-  --radius: 0.625rem;
+  --border: 200 18% 88%;
+  --input: 200 18% 88%;
+  --ring: 168 88% 38%;
+  --radius: 0.7rem;
+
+  /* Surface system */
+  --ops-line: rgba(7, 17, 31, 0.08);
+  --ops-line-soft: rgba(7, 17, 31, 0.055);
+  --ops-line-strong: rgba(7, 17, 31, 0.12);
+  --ops-shadow-xs: 0 1px 2px rgba(7, 17, 31, 0.05);
+  --ops-shadow-sm: 0 1px 2px rgba(7, 17, 31, 0.04), 0 10px 24px rgba(7, 17, 31, 0.05);
+  --ops-shadow-md: 0 2px 4px rgba(7, 17, 31, 0.05), 0 18px 44px rgba(7, 17, 31, 0.09);
+  --ops-shadow-lg: 0 30px 70px rgba(7, 17, 31, 0.14);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 * {
@@ -35,38 +60,286 @@ body {
   min-height: 100vh;
   background: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-feature-settings: "ss01" 1, "cv02" 1, "cv03" 1, "cv04" 1;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
 
-/* App surface: light with subtle brand liquidity glow, matching marketing */
+/* ============================================================
+   App surface — warm-neutral field with infrastructure-grade
+   atmosphere: dotted grid, settlement-rail glow, brand wash.
+   Mirrors the marketing background, tuned for an operator UI.
+   ============================================================ */
 .app-surface {
+  position: relative;
+  isolation: isolate;
   background:
-    radial-gradient(820px 460px at 12% -6%, rgba(66, 213, 183, 0.1), transparent 60%),
-    radial-gradient(680px 480px at 96% -10%, rgba(245, 163, 0, 0.07), transparent 58%),
-    hsl(var(--background));
+    radial-gradient(900px 520px at 8% -8%, rgba(0, 199, 157, 0.08), transparent 60%),
+    radial-gradient(760px 520px at 98% -10%, rgba(242, 173, 35, 0.05), transparent 58%),
+    linear-gradient(180deg, #fcfdfc 0%, #f6f8f5 52%, #f0f3ef 100%);
+}
+
+/* Dotted field, masked so it fades into whitespace */
+.app-surface::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(7, 17, 31, 0.045) 1px, transparent 1.6px);
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(1200px 760px at 80% -6%, #000, rgba(0, 0, 0, 0.26) 52%, transparent 82%);
+  mask-image: radial-gradient(1200px 760px at 80% -6%, #000, rgba(0, 0, 0, 0.26) 52%, transparent 82%);
+}
+
+/* Settlement-rail trails sweeping across the top of the console */
+.app-surface::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 360px;
+  z-index: -2;
+  pointer-events: none;
+  background-image:
+    linear-gradient(90deg, transparent, rgba(11, 180, 196, 0.14) 30%, rgba(242, 173, 35, 0.09) 62%, transparent),
+    linear-gradient(90deg, transparent, rgba(11, 180, 196, 0.09) 40%, transparent);
+  background-size: 100% 1px, 100% 1px;
+  background-position: 0 92px, 0 188px;
+  background-repeat: no-repeat;
+  opacity: 0.65;
 }
 
 .brand-gradient-text {
-  background: linear-gradient(120deg, var(--brand-mint), var(--brand-aqua));
+  background: linear-gradient(120deg, var(--brand-emerald), var(--brand-aqua));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
-.brand-glow {
+/* ============================================================
+   Surface primitives — refined cards & panels
+   ============================================================ */
+.ops-panel {
+  position: relative;
+  border-radius: 18px;
+  border: 1px solid var(--ops-line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(255, 255, 255, 0.86));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, var(--ops-shadow-sm);
+  backdrop-filter: blur(8px);
+}
+
+/* A panel with a hairline brand accent that lights on hover/focus-within */
+.ops-panel-accent::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(0, 199, 157, 0.8), rgba(242, 173, 35, 0.55), transparent);
+  opacity: 0;
+  transition: opacity 0.25s var(--ease);
+}
+.ops-panel-accent:hover::before,
+.ops-panel-accent:focus-within::before {
+  opacity: 1;
+}
+
+.ops-card-hover {
+  transition: transform 0.22s var(--ease), box-shadow 0.22s var(--ease), border-color 0.22s var(--ease);
+}
+.ops-card-hover:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 199, 157, 0.26);
+  box-shadow: var(--ops-shadow-md);
+}
+
+/* Inner faint grid for hero/spotlight panels */
+.ops-grid-faint {
+  background-image: radial-gradient(rgba(7, 17, 31, 0.05) 1px, transparent 1.4px);
+  background-size: 22px 22px;
+}
+
+/* Brand chip / eyebrow */
+.ops-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--ops-line);
+  background: rgba(255, 255, 255, 0.82);
+  color: #3f5167;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 6px 16px rgba(13, 32, 54, 0.05);
+}
+.ops-eyebrow::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand-emerald), var(--brand-amber));
+  box-shadow: 0 0 0 4px rgba(0, 199, 157, 0.12);
+}
+
+/* Live pulse dot */
+.ops-pulse {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand-emerald);
+  box-shadow: 0 0 0 5px rgba(0, 199, 157, 0.12);
+}
+.ops-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 199, 157, 0.5);
+  animation: opsPulse 2.4s ease-out infinite;
+}
+@keyframes opsPulse {
+  0% {
+    opacity: 0.6;
+    transform: scale(0.7);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+/* Brand gradient action surface (aqua → emerald, amber kicker) */
+.ops-btn-brand {
+  background: linear-gradient(135deg, #0bb4c4 0%, #21cdd6 70%, #f2ad23 150%);
+  color: #04222a;
+}
+.ops-btn-brand:hover {
+  box-shadow: 0 14px 30px rgba(11, 180, 196, 0.28);
+}
+
+/* Navy gradient action surface (primary CTA, mirrors marketing .btn.primary) */
+.ops-btn-navy {
+  background: linear-gradient(180deg, var(--brand-navy-2), var(--brand-navy));
+  color: #f3f8ff;
+}
+
+/* Refined scrollbars inside scroll panes */
+.ops-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(7, 17, 31, 0.18) transparent;
+}
+.ops-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.ops-scroll::-webkit-scrollbar-thumb {
+  background: rgba(7, 17, 31, 0.16);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.ops-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(7, 17, 31, 0.28);
+  background-clip: content-box;
+}
+
+/* Sidebar rail texture (dark navigation) */
+.ops-rail {
   background:
-    radial-gradient(600px 360px at 20% 0%, rgba(66, 213, 183, 0.22), transparent 60%),
-    radial-gradient(520px 380px at 90% 100%, rgba(79, 227, 255, 0.16), transparent 60%),
-    radial-gradient(420px 320px at 60% 40%, rgba(245, 163, 0, 0.1), transparent 60%);
+    radial-gradient(520px 280px at 0% 0%, rgba(0, 199, 157, 0.16), transparent 60%),
+    radial-gradient(420px 320px at 100% 100%, rgba(11, 180, 196, 0.12), transparent 60%),
+    linear-gradient(180deg, #07111f 0%, #0a1626 100%);
+}
+.ops-rail::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1.4px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(420px 420px at 20% 0%, #000, transparent 72%);
+  mask-image: radial-gradient(420px 420px at 20% 0%, #000, transparent 72%);
+}
+
+/* Helper / hint text */
+.ops-helper {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ============================================================
+   Overlay motion — drawers, tooltips, dialogs
+   ============================================================ */
+@keyframes opsOverlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes opsSheetIn {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes opsPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.ops-animate-overlay {
+  animation: opsOverlayIn 0.2s var(--ease);
+}
+.ops-animate-sheet {
+  animation: opsSheetIn 0.28s var(--ease);
+}
+.ops-animate-pop {
+  animation: opsPopIn 0.16s var(--ease);
 }
 
 ::selection {
-  background: rgba(66, 213, 183, 0.22);
+  background: rgba(0, 199, 157, 0.2);
 }
 
 :focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ops-pulse::after {
+    animation: none;
+  }
+  .ops-card-hover {
+    transition: none;
+  }
+  .ops-card-hover:hover {
+    transform: none;
+  }
+  .ops-animate-overlay,
+  .ops-animate-sheet,
+  .ops-animate-pop {
+    animation: none;
+  }
 }

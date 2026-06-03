@@ -15,7 +15,10 @@ export function DropdownMenuContent({
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         sideOffset={sideOffset}
-        className={cn("z-50 min-w-40 overflow-hidden rounded-md border bg-white p-1 shadow-lg", className)}
+        className={cn(
+          "ops-animate-pop z-50 min-w-44 overflow-hidden rounded-xl border border-[var(--ops-line)] bg-white p-1.5 shadow-ops-lg",
+          className,
+        )}
         {...props}
       />
     </DropdownMenuPrimitive.Portal>
@@ -29,7 +32,7 @@ export function DropdownMenuItem({
   return (
     <DropdownMenuPrimitive.Item
       className={cn(
-        "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-slate-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm text-slate-700 outline-none transition-colors focus:bg-slate-100 focus:text-slate-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
       {...props}
