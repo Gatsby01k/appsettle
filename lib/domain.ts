@@ -213,8 +213,34 @@ export async function transitionSettlement(
   return updated;
 }
 
+const AUTO_REF_PREFIX = "BANK-AUTO-";
+
+/**
+ * Generates the next sequential auto external reference for an organization
+ * (BANK-AUTO-001, BANK-AUTO-002, ...). Used when an operator leaves the external
+ * reference blank so reconciliation feels like a matching engine, not data entry.
+ */
+async function generateExternalRef(organizationId: string): Promise<string> {
+  const existing = await prisma.reconciliationRecord.findMany({
+    where: { organizationId, externalRef: { startsWith: AUTO_REF_PREFIX } },
+    select: { externalRef: true },
+  });
+
+  let max = 0;
+  for (const { externalRef } of existing) {
+    const parsed = Number.parseInt(externalRef.slice(AUTO_REF_PREFIX.length), 10);
+    if (Number.isFinite(parsed) && parsed > max) max = parsed;
+  }
+
+  return `${AUTO_REF_PREFIX}${String(max + 1).padStart(3, "0")}`;
+}
+
 export async function createReconciliationRecord(input: unknown, userId: string, organizationId: string) {
   const data = reconciliationSchema.parse(input);
+  const externalRef =
+    data.externalRef && data.externalRef.trim()
+      ? data.externalRef.trim()
+      : await generateExternalRef(organizationId);
   const matchedSettlement = data.settlementId
     ? await prisma.settlement.findFirst({
         where: {
@@ -252,7 +278,7 @@ export async function createReconciliationRecord(input: unknown, userId: string,
     where: {
       organizationId,
       source: data.source,
-      externalRef: data.externalRef,
+      externalRef,
     },
   });
 
@@ -263,15 +289,16 @@ export async function createReconciliationRecord(input: unknown, userId: string,
   // A manual match (operator picks a settlement at create time) is an explicit,
   // operator-driven reconciliation — tag its origin so the UI never labels it "Auto".
   const isManualMatch = data.status === "MATCHED" && Boolean(matchedSettlement);
+  const payloadData = { ...data, externalRef };
   const rawPayload: Prisma.InputJsonValue = isManualMatch
-    ? ({ ...data, _matchOrigin: "MANUAL" } as Prisma.InputJsonValue)
-    : (data as Prisma.InputJsonValue);
+    ? ({ ...payloadData, _matchOrigin: "MANUAL" } as Prisma.InputJsonValue)
+    : (payloadData as Prisma.InputJsonValue);
 
   const record = await prisma.reconciliationRecord.create({
     data: {
       organizationId,
       settlementId: matchedSettlement?.id || null,
-      externalRef: data.externalRef,
+      externalRef,
       source: data.source,
       amount: new Prisma.Decimal(data.amount),
       currency: data.currency,
@@ -313,6 +340,72 @@ export async function createReconciliationRecord(input: unknown, userId: string,
   });
 
   return record;
+}
+
+/**
+ * Demo helper: creates a realistic OPEN external record that mirrors the latest
+ * SETTLED (not-yet-reconciled) settlement's leg amount, currency, and value date so
+ * the auto-match engine can reconcile it on the next run. It deliberately does NOT
+ * link the settlement — that is the engine's (or operator's) job.
+ */
+export async function createMatchingDemoRecord(source: string, userId: string, organizationId: string) {
+  const settled = await prisma.settlement.findMany({
+    where: { organizationId, status: SettlementStatus.SETTLED },
+  });
+
+  if (settled.length === 0) {
+    throw new UserFacingError(
+      "No SETTLED settlement is waiting to be reconciled. Settle a settlement first, then create a matching record.",
+    );
+  }
+
+  // Latest SETTLED settlement (by settle time, falling back to creation time).
+  const settlement = settled
+    .slice()
+    .sort((a, b) => {
+      const aDate = (a.settledAt ?? a.createdAt).getTime();
+      const bDate = (b.settledAt ?? b.createdAt).getTime();
+      return bDate - aDate;
+    })[0];
+
+  const refDate = settlement.settledAt ?? settlement.createdAt;
+
+  // Use the full ISO timestamp so the generated value date is the *same day* as the
+  // settlement's reference date regardless of timezone, guaranteeing a 100% match.
+  return createReconciliationRecord(
+    {
+      externalRef: "",
+      source,
+      amount: Number(settlement.sourceAmount),
+      currency: settlement.sourceCurrency,
+      valueDate: new Date(refDate).toISOString(),
+      status: "OPEN",
+    },
+    userId,
+    organizationId,
+  );
+}
+
+/**
+ * Demo helper: creates an external record that intentionally matches no settlement
+ * and is flagged as an EXCEPTION for manual review, with a realistic reason.
+ */
+export async function createExceptionDemoRecord(userId: string, organizationId: string) {
+  // A deliberately unusual amount so it never matches a real settlement leg.
+  const amount = Math.round((4000 + Math.random() * 6000) * 100) / 100;
+  return createReconciliationRecord(
+    {
+      externalRef: "",
+      source: "bank_statement",
+      amount,
+      currency: "INR",
+      valueDate: new Date().toISOString(),
+      status: "EXCEPTION",
+      exceptionReason: "Unidentified bank credit with no matching settlement reference.",
+    },
+    userId,
+    organizationId,
+  );
 }
 
 type SettlementCandidate = {

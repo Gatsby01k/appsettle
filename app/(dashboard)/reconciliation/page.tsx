@@ -5,6 +5,8 @@ import {
   autoMatchReconciliation,
   bestSettlementMatch,
   confirmReconciliationMatch,
+  createExceptionDemoRecord,
+  createMatchingDemoRecord,
   createReconciliationRecord,
   matchOriginOf,
   rejectReconciliationSuggestion,
@@ -75,6 +77,39 @@ async function runAutoMatch() {
     redirect(`/reconciliation?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
   }
   redirect(`/reconciliation?success=automatch&matched=${result.matched}&scanned=${result.scanned}`);
+}
+
+async function createMatchingBankRecord() {
+  "use server";
+  const { user, organization } = await requireSession();
+  try {
+    await createMatchingDemoRecord("bank_statement", user.id, organization.id);
+  } catch (error) {
+    redirect(`/reconciliation?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
+  }
+  redirect("/reconciliation?success=demo_match");
+}
+
+async function createMatchingChainRecord() {
+  "use server";
+  const { user, organization } = await requireSession();
+  try {
+    await createMatchingDemoRecord("chain_tx", user.id, organization.id);
+  } catch (error) {
+    redirect(`/reconciliation?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
+  }
+  redirect("/reconciliation?success=demo_match");
+}
+
+async function createExceptionRecord() {
+  "use server";
+  const { user, organization } = await requireSession();
+  try {
+    await createExceptionDemoRecord(user.id, organization.id);
+  } catch (error) {
+    redirect(`/reconciliation?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
+  }
+  redirect("/reconciliation?success=demo_exception");
 }
 
 async function confirmMatch(formData: FormData) {
@@ -241,6 +276,12 @@ export default async function ReconciliationPage({
           message={`Auto-match complete — ${params.matched ?? 0} of ${params.scanned ?? 0} open records matched and reconciled.`}
         />
       ) : null}
+      {params.success === "demo_match" ? (
+        <FlashMessage message="Matching external record created. Run auto-match to reconcile." />
+      ) : null}
+      {params.success === "demo_exception" ? (
+        <FlashMessage message="Exception record created — sent to the operations queue for manual review." />
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard label="Matched" value={matchedCount} hint="Linked & reconciled" tone="success" />
@@ -271,22 +312,51 @@ export default async function ReconciliationPage({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Auto-match engine</CardTitle>
-            <CardDescription>
-              Scans every OPEN/UNMATCHED record and reconciles only exact 100% matches against SETTLED settlements
-              (same amount, currency, and value date). 80–99% candidates become suggestions for review.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={runAutoMatch}>
-              <SubmitButton variant="primary" pendingText="Matching...">
-                Run auto-match
-              </SubmitButton>
-            </form>
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Auto-match engine</CardTitle>
+              <CardDescription>
+                Scans every OPEN/UNMATCHED record and reconciles only exact 100% matches against SETTLED settlements
+                (same amount, currency, and value date). 80–99% candidates become suggestions for review.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form action={runAutoMatch}>
+                <SubmitButton variant="primary" pendingText="Matching...">
+                  Run auto-match
+                </SubmitButton>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick create</CardTitle>
+              <CardDescription>
+                Generate demo external records in one click. Matching records are saved as OPEN — run auto-match to
+                reconcile them.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-2">
+              <form action={createMatchingBankRecord}>
+                <SubmitButton variant="outline" pendingText="Creating..." className="w-full justify-start">
+                  Create matching bank record
+                </SubmitButton>
+              </form>
+              <form action={createMatchingChainRecord}>
+                <SubmitButton variant="outline" pendingText="Creating..." className="w-full justify-start">
+                  Create matching chain record
+                </SubmitButton>
+              </form>
+              <form action={createExceptionRecord}>
+                <SubmitButton variant="outline" pendingText="Creating..." className="w-full justify-start">
+                  Create exception record
+                </SubmitButton>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Suspense fallback={null}>

@@ -14,7 +14,16 @@ export const settlementSchema = z.object({
 });
 
 export const reconciliationSchema = z.object({
-  externalRef: z.string().min(3).max(100),
+  // Optional: when blank, the domain layer auto-generates a BANK-AUTO-### reference.
+  // When provided it must still be a sensible length.
+  externalRef: z
+    .string()
+    .trim()
+    .max(100)
+    .refine((value) => value === "" || value.length >= 3, {
+      message: "External reference must be at least 3 characters.",
+    })
+    .optional(),
   source: z.enum(["bank_statement", "chain_tx", "psp_report", "manual"]),
   amount: z.coerce.number().positive(),
   currency: z.enum(["INR", "USDT"]),
