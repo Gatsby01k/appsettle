@@ -44,9 +44,9 @@ type WorkspaceProps = {
 function ConfidenceBar({ confidence }: { confidence: number }) {
   return (
     <div className="flex items-center gap-2">
-      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200">
+      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200/80">
         <div
-          className={cn("h-full rounded-full", confidence >= 100 ? "bg-[#42d5b7]" : "bg-[#4fe3ff]")}
+          className={cn("h-full rounded-full", confidence >= 100 ? "bg-brand-emerald" : "bg-brand-aqua")}
           style={{ width: `${Math.max(confidence, 6)}%` }}
         />
       </div>
@@ -79,12 +79,12 @@ export function ReconciliationWorkspace({ records, confirmAction, rejectAction, 
   }
 
   return (
-    <div className="grid min-h-[460px] overflow-hidden rounded-lg border bg-white lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-      <div className="border-b lg:border-b-0 lg:border-r">
-        <div className="border-b px-3 py-2">
-          <p className="text-xs font-medium text-slate-500">{records.length} records</p>
+    <div className="ops-panel grid min-h-[460px] overflow-hidden lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+      <div className="border-b border-[var(--ops-line)] lg:border-b-0 lg:border-r">
+        <div className="border-b border-[var(--ops-line-soft)] bg-slate-50/60 px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-500">{records.length} records</p>
         </div>
-        <ul className="max-h-[520px] divide-y overflow-y-auto">
+        <ul className="ops-scroll max-h-[520px] divide-y divide-slate-100 overflow-y-auto">
           {records.map((record) => {
             const active = record.id === selected?.id;
             return (
@@ -93,8 +93,8 @@ export function ReconciliationWorkspace({ records, confirmAction, rejectAction, 
                   type="button"
                   onClick={() => setSelectedId(record.id)}
                   className={cn(
-                    "w-full px-3 py-3 text-left transition-colors hover:bg-slate-50",
-                    active && "bg-slate-50 ring-1 ring-inset ring-slate-200",
+                    "w-full px-3 py-3 text-left transition-colors hover:bg-brand-emerald/[0.04]",
+                    active && "bg-brand-emerald/[0.06] ring-1 ring-inset ring-brand-emerald/20",
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -105,7 +105,7 @@ export function ReconciliationWorkspace({ records, confirmAction, rejectAction, 
                     {record.source.replaceAll("_", " ")} · {record.amount}
                   </p>
                   {record.suggestion ? (
-                    <p className="mt-1 truncate text-xs font-medium text-sky-700">
+                    <p className="mt-1 truncate text-xs font-medium text-[#0a7d86]">
                       Suggested {record.suggestion.publicId} · {record.suggestion.confidence}%
                     </p>
                   ) : null}
@@ -121,19 +121,19 @@ export function ReconciliationWorkspace({ records, confirmAction, rejectAction, 
             <h3 className="text-base font-semibold text-slate-950">{selected.externalRef}</h3>
             <Badge tone={MATCH_TONE[selected.matchType]}>{selected.matchLabel}</Badge>
           </div>
-          <div className="mt-4 rounded-lg border bg-slate-50/50 p-3">
+          <div className="mt-4 rounded-xl border border-[var(--ops-line-soft)] bg-slate-50/70 p-3">
             <StatRow label="Source" value={selected.source.replaceAll("_", " ")} />
             <StatRow label="Amount" value={selected.amount} />
             <StatRow label="Value date" value={selected.valueDate} />
             {selected.exceptionReason ? <StatRow label="Exception" value={selected.exceptionReason} /> : null}
           </div>
-          <div className="mt-4 rounded-lg border p-4">
+          <div className="mt-4 rounded-xl border border-[var(--ops-line)] p-4">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Match</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-500">Match</p>
               {showMatched || showSuggestion ? <ConfidenceBar confidence={selected.confidence} /> : null}
             </div>
 
-            <div className="mt-3 grid gap-0.5 rounded-lg border bg-slate-50/50 px-3 py-1">
+            <div className="mt-3 grid gap-0.5 rounded-xl border border-[var(--ops-line-soft)] bg-slate-50/70 px-3 py-1">
               <StatRow label="Match type" value={selected.matchLabel} />
               {showMatched || showSuggestion ? <StatRow label="Confidence" value={`${selected.confidence}%`} /> : null}
               {showMatched && selected.settlement ? (
@@ -185,11 +185,11 @@ export function ReconciliationWorkspace({ records, confirmAction, rejectAction, 
                     {selected.externalRef}
                   </span>
                   <ArrowRight className="h-4 w-4 text-slate-400" />
-                  <span className="rounded-md bg-teal-50 px-2 py-1 font-medium text-teal-700 ring-1 ring-teal-200/80">
+                  <span className="rounded-md bg-[#e7faf4] px-2 py-1 font-medium text-brand-emerald-ink ring-1 ring-[#00c79d]/25">
                     {selected.settlement.publicId} · {selected.settlement.reference}
                   </span>
                 </div>
-                <p className="mt-3 text-xs text-teal-700">
+                <p className="mt-3 text-xs text-brand-emerald-ink">
                   {selected.matchType === "AUTO_MATCHED"
                     ? "Auto-reconciled at 100% confidence — no operator action required."
                     : "Manually reconciled by an operator — record linked and settlement reconciled."}

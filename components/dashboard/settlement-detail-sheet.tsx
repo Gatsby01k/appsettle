@@ -36,13 +36,13 @@ export function SettlementDetailSheet({ settlement }: { settlement: SettlementDe
       <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
         Details
       </Button>
-      <SheetContent title={settlement.publicId} description={settlement.reference}>
+      <SheetContent eyebrow="Settlement" title={settlement.publicId} description={settlement.reference}>
         <div className="mb-3 flex items-center gap-2">
           <StatusBadge status={settlement.status} />
           <span className="text-xs text-slate-500">{settlement.corridor}</span>
         </div>
 
-        <div className="rounded-lg border bg-slate-50/60 p-4">
+        <div className="rounded-xl border border-[var(--ops-line-soft)] bg-slate-50/70 p-4">
           <SettlementLifecycle status={settlement.status} />
         </div>
 
@@ -60,7 +60,7 @@ export function SettlementDetailSheet({ settlement }: { settlement: SettlementDe
           </TabsList>
 
           <TabsContent value="overview">
-            <div className="rounded-lg border p-3">
+            <div className="rounded-xl border border-[var(--ops-line)] p-3">
               <StatRow label="Source amount" value={settlement.sourceAmount} />
               <StatRow label="Destination amount" value={settlement.targetAmount} />
               <StatRow label="Fee" value={settlement.feeAmount} />
@@ -71,8 +71,8 @@ export function SettlementDetailSheet({ settlement }: { settlement: SettlementDe
               {settlement.settledAt ? <StatRow label="Settled" value={settlement.settledAt} /> : null}
               {settlement.reconciledAt ? <StatRow label="Reconciled" value={settlement.reconciledAt} /> : null}
             </div>
-            <div className="mt-3 rounded-lg border p-3">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Counterparty</p>
+            <div className="mt-3 rounded-xl border border-[var(--ops-line)] p-3">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Counterparty</p>
               <StatRow label="Name" value={settlement.counterparty.name} />
               <StatRow label="Type" value={settlement.counterparty.type} />
               <StatRow label="Country" value={settlement.counterparty.country} />
@@ -84,7 +84,7 @@ export function SettlementDetailSheet({ settlement }: { settlement: SettlementDe
               <ol className="relative space-y-4 border-l border-slate-200 pl-4">
                 {settlement.events.map((event, index) => (
                   <li key={`${event.label}-${index}`} className="relative">
-                    <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-[#42d5b7]" />
+                    <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-brand-emerald" />
                     <p className="text-sm font-medium text-slate-950">{event.label}</p>
                     {event.note ? <p className="text-xs text-slate-500">{event.note}</p> : null}
                     <p className="mt-0.5 text-[11px] text-slate-400">{event.at}</p>
@@ -92,7 +92,7 @@ export function SettlementDetailSheet({ settlement }: { settlement: SettlementDe
                 ))}
               </ol>
             ) : (
-              <p className="rounded-lg border bg-slate-50/60 px-3 py-6 text-center text-sm text-slate-500">
+              <p className="rounded-xl border border-[var(--ops-line-soft)] bg-slate-50/70 px-3 py-6 text-center text-sm text-slate-500">
                 No lifecycle events recorded yet.
               </p>
             )}
@@ -102,7 +102,7 @@ export function SettlementDetailSheet({ settlement }: { settlement: SettlementDe
             {settlement.reconciliation.length ? (
               <div className="space-y-2">
                 {settlement.reconciliation.map((record) => (
-                  <div key={record.externalRef} className="rounded-lg border p-3">
+                  <div key={record.externalRef} className="rounded-xl border border-[var(--ops-line)] p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-medium text-slate-950">{record.externalRef}</p>
                       <StatusBadge status={record.status} />
@@ -119,7 +119,7 @@ export function SettlementDetailSheet({ settlement }: { settlement: SettlementDe
                 ))}
               </div>
             ) : (
-              <p className="rounded-lg border bg-slate-50/60 px-3 py-6 text-center text-sm text-slate-500">
+              <p className="rounded-xl border border-[var(--ops-line-soft)] bg-slate-50/70 px-3 py-6 text-center text-sm text-slate-500">
                 No reconciliation records linked to this settlement.
               </p>
             )}

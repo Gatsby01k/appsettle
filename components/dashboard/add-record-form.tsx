@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { FormSelect } from "@/components/ops/form-select";
+import { Segmented } from "@/components/ops/segmented";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HelperText } from "@/components/ui/helper-text";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { cn } from "@/lib/utils";
 
 const NO_SETTLEMENT = "_none";
 
@@ -31,46 +32,6 @@ function yesterdayISO(): string {
   const d = new Date();
   d.setDate(d.getDate() - 1);
   return localISODate(d);
-}
-
-type SegmentedOption = { value: string; label: string };
-
-function Segmented({
-  options,
-  value,
-  onChange,
-  ariaLabel,
-}: {
-  options: SegmentedOption[];
-  value: string;
-  onChange: (value: string) => void;
-  ariaLabel: string;
-}) {
-  return (
-    <div
-      role="group"
-      aria-label={ariaLabel}
-      className="inline-flex flex-wrap gap-1 rounded-lg border border-input bg-slate-50 p-1"
-    >
-      {options.map((option) => {
-        const active = option.value === value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              active ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800",
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
-  );
 }
 
 /**
@@ -107,7 +68,7 @@ export function AddRecordForm({
         <div className="grid gap-1.5">
           <Label htmlFor="externalRef">External reference</Label>
           <Input id="externalRef" name="externalRef" placeholder="BANK-AUTO-001" />
-          <p className="text-xs text-slate-500">Leave blank to auto-generate.</p>
+          <HelperText>Leave blank to auto-generate.</HelperText>
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="amount">Amount</Label>
@@ -156,7 +117,7 @@ export function AddRecordForm({
         </div>
       </div>
 
-      <details className="group rounded-lg border border-dashed bg-slate-50/60 p-3">
+      <details className="group rounded-xl border border-dashed border-[var(--ops-line)] bg-slate-50/60 p-3">
         <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wide text-slate-500 marker:hidden">
           <span className="inline-flex items-center gap-1.5">
             <span className="transition-transform group-open:rotate-90">›</span>
@@ -184,7 +145,7 @@ export function AddRecordForm({
             </div>
           </div>
           {isManualMatch ? (
-            <p className="text-xs font-medium text-sky-700">
+            <p className="text-xs font-medium text-[#0a7d86]">
               This will link the record and reconcile the settlement.
             </p>
           ) : null}

@@ -25,7 +25,7 @@ import {
 } from "@/components/ops/data-grid";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field } from "@/components/ui/helper-text";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 async function submitQuote(formData: FormData) {
@@ -146,9 +146,8 @@ export default async function QuotesPage({
             <CardDescription>Generate an executable corridor quote.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={submitQuote} className="grid gap-3">
-              <div className="grid gap-1.5">
-                <Label>Corridor</Label>
+            <form action={submitQuote} className="grid gap-4">
+              <Field label="Corridor" hint="Direction of the conversion.">
                 <FormSelect
                   name="corridor"
                   defaultValue="INR_USDT"
@@ -157,13 +156,11 @@ export default async function QuotesPage({
                     { value: "USDT_INR", label: "USDT → INR" },
                   ]}
                 />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="sourceAmount">Source amount</Label>
+              </Field>
+              <Field label="Source amount" htmlFor="sourceAmount" hint="Amount you send in the source currency." required>
                 <Input id="sourceAmount" name="sourceAmount" type="number" min="1" step="0.01" required />
-              </div>
-              <div className="grid gap-1.5">
-                <Label>Settlement window</Label>
+              </Field>
+              <Field label="Settlement window" hint="How quickly funds should settle.">
                 <FormSelect
                   name="settlementWindow"
                   defaultValue="instant"
@@ -173,7 +170,7 @@ export default async function QuotesPage({
                     { value: "next_day", label: "Next day" },
                   ]}
                 />
-              </div>
+              </Field>
               <SubmitButton type="submit" variant="primary" pendingText="Generating...">
                 Generate quote
               </SubmitButton>
@@ -244,7 +241,7 @@ export default async function QuotesPage({
                               <SubmitButton variant="outline" size="sm" pendingText="Refreshing...">
                                 Refresh quote
                               </SubmitButton>
-                              <span className="text-[11px] text-slate-400">Generate a new quote to continue.</span>
+                              <span className="text-[11px] leading-snug text-slate-500">Generate a new quote to continue.</span>
                             </form>
                           ) : (
                             <span className="text-xs text-slate-400">—</span>

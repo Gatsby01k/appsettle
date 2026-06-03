@@ -27,7 +27,7 @@ import {
 import { SettlementDetailSheet } from "@/components/dashboard/settlement-detail-sheet";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field } from "@/components/ui/helper-text";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 function successMessage(value?: string) {
@@ -152,9 +152,8 @@ export default async function SettlementsPage({
           <CardDescription>Only ACTIVE, unexpired quotes appear. The quote becomes ACCEPTED after creation.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={submitSettlement} className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-            <div className="grid gap-1.5 lg:col-span-2">
-              <Label>Quote</Label>
+          <form action={submitSettlement} className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+            <Field label="Quote" hint="Only ACTIVE, unexpired quotes appear." required className="lg:col-span-2">
               <FormSelect
                 name="quoteId"
                 placeholder="Select quote"
@@ -169,19 +168,16 @@ export default async function SettlementsPage({
                     : [{ value: "_none", label: "No active quotes" }]
                 }
               />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="reference">Reference</Label>
+            </Field>
+            <Field label="Reference" htmlFor="reference" hint="Your internal batch identifier." required>
               <Input id="reference" name="reference" placeholder="psp_batch_1842" required />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="sourceAccount">Source account</Label>
+            </Field>
+            <Field label="Source account" htmlFor="sourceAccount" hint="Account to debit." required>
               <Input id="sourceAccount" name="sourceAccount" required />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="targetAccount">Target account</Label>
+            </Field>
+            <Field label="Target account" htmlFor="targetAccount" hint="Account to credit." required>
               <Input id="targetAccount" name="targetAccount" required />
-            </div>
+            </Field>
             <div className="flex items-end md:col-span-2 lg:col-span-5">
               <SubmitButton type="submit" variant="primary" disabled={quotes.length === 0} pendingText="Creating...">
                 Create settlement

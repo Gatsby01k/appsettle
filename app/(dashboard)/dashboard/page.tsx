@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CheckCircle2 } from "lucide-react";
 import { SettlementStatus } from "@prisma/client";
 import { requireSession } from "@/lib/auth";
 import { autoMatchReconciliation } from "@/lib/domain";
@@ -218,7 +219,7 @@ export default async function DashboardPage() {
       <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
         <section>
           <SectionHeader title="Recent activity" description="Latest operational events" />
-          <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <div className="ops-panel p-4">
             {auditLogs.length ? (
               auditLogs.map((log) => (
                 <ActivityItem
@@ -252,15 +253,21 @@ export default async function DashboardPage() {
                   />
                 ))
               ) : (
-                <div className="rounded-lg border bg-white px-4 py-6 text-sm text-slate-500 shadow-sm">
-                  No active alerts. Operations are running smoothly.
+                <div className="ops-panel flex items-center gap-3 px-4 py-5">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#e7faf4] text-brand-emerald-ink ring-1 ring-[#00c79d]/25">
+                    <CheckCircle2 className="h-[18px] w-[18px]" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[13.5px] font-semibold tracking-tight text-slate-900">All clear</p>
+                    <p className="ops-helper">No active alerts. Operations are running smoothly.</p>
+                  </div>
                 </div>
               )}
             </div>
           </div>
 
           {latestExceptions.length ? (
-            <div className="rounded-lg border bg-white p-4 shadow-sm">
+            <div className="ops-panel p-4">
               <SectionHeader title="Latest exceptions" />
               <ul className="divide-y">
                 {latestExceptions.map((record) => (
@@ -279,7 +286,7 @@ export default async function DashboardPage() {
               </ul>
               <Link
                 href="/reconciliation?status=EXCEPTION"
-                className="mt-2 inline-block text-xs font-medium text-teal-700 hover:underline"
+                className="mt-2 inline-block text-xs font-semibold text-brand-emerald-ink hover:underline"
               >
                 Resolve in reconciliation →
               </Link>
@@ -287,16 +294,19 @@ export default async function DashboardPage() {
           ) : null}
 
           {spotlight ? (
-            <div className="rounded-lg border bg-white p-4 shadow-sm">
+            <div className="ops-panel p-4">
               <SectionHeader title="Latest settlement" />
               <div className="mb-3 flex items-center gap-2">
                 <p className="text-sm font-medium text-slate-950">{spotlight.publicId}</p>
                 <StatusBadge status={spotlight.status} />
               </div>
-              <div className="rounded-lg border bg-slate-50/60 p-3">
+              <div className="rounded-xl border border-[var(--ops-line-soft)] bg-slate-50/70 p-3">
                 <SettlementLifecycle status={spotlight.status} />
               </div>
-              <Link href="/settlements" className="mt-3 inline-block text-xs font-medium text-teal-700 hover:underline">
+              <Link
+                href="/settlements"
+                className="mt-3 inline-block text-xs font-semibold text-brand-emerald-ink hover:underline"
+              >
                 Open settlements →
               </Link>
             </div>
@@ -351,7 +361,7 @@ export default async function DashboardPage() {
         )}
       </section>
 
-      <p className="text-xs text-slate-500">{activeQuotes} active quotes available for settlement.</p>
+      <p className="ops-helper">{activeQuotes} active quotes available for settlement.</p>
     </div>
   );
 }
