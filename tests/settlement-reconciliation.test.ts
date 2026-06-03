@@ -212,6 +212,40 @@ describe("settlement and reconciliation workflow", () => {
     expect(mock.store.settlements[0].status).toBe(SettlementStatus.RECONCILED);
   });
 
+  it("an expired quote cannot create a settlement", async () => {
+    const { createSettlement } = await import("@/lib/domain");
+    // An ACTIVE quote whose expiresAt is in the past must be rejected by createSettlement.
+    mock.store.quotes.push({
+      id: "quote_expired_1",
+      organizationId: "org_1",
+      status: "ACTIVE",
+      expiresAt: new Date(Date.now() - 60_000),
+      corridor: "INR_USDT",
+      sourceCurrency: "INR",
+      targetCurrency: "USDT",
+      sourceAmount: 1000,
+      targetAmount: 12,
+      feeAmount: 1,
+    });
+
+    await expect(
+      createSettlement(
+        {
+          quoteId: "quote_expired_1",
+          reference: "ref_expired",
+          sourceAccount: "INR treasury",
+          targetAccount: "USDT wallet",
+        },
+        "user_1",
+        "org_1",
+      ),
+    ).rejects.toThrow("Selected quote is unavailable, expired, or does not belong to this organization.");
+
+    // The expired quote must not be consumed (still ACTIVE in store, no settlement created).
+    expect(mock.store.quotes[0].status).toBe("ACTIVE");
+    expect(mock.store.settlements).toHaveLength(0);
+  });
+
   it("blocks invalid settlement transitions", async () => {
     const { transitionSettlement } = await import("@/lib/domain");
     mock.store.settlements.push({
@@ -595,5 +629,30 @@ describe("matchTypeFor display lifecycle", () => {
     expect(matchTypeFor("RESOLVED", 0, false)).toBe("RESOLVED");
     // Even a stray linkage must not present a resolved record as reconciled.
     expect(matchTypeFor("RESOLVED", 100, true, "AUTO")).toBe("RESOLVED");
+  });
+});
+
+describe("computed quote status", () => {
+  it("shows ACTIVE for an active quote that has not expired", async () => {
+    const { displayQuoteStatus, isQuoteExpired } = await import("@/lib/quotes");
+    const quote = { status: "ACTIVE", expiresAt: new Date(Date.now() + 60_000) };
+    expect(isQuoteExpired(quote)).toBe(false);
+    expect(displayQuoteStatus(quote)).toBe("ACTIVE");
+  });
+
+  it("shows EXPIRED for an active quote whose expiresAt is in the past", async () => {
+    const { displayQuoteStatus, isQuoteExpired } = await import("@/lib/quotes");
+    const quote = { status: "ACTIVE", expiresAt: new Date(Date.now() - 60_000) };
+    expect(isQuoteExpired(quote)).toBe(true);
+    expect(displayQuoteStatus(quote)).toBe("EXPIRED");
+  });
+
+  it("keeps stored EXPIRED and never expires non-ACTIVE statuses", async () => {
+    const { displayQuoteStatus, isQuoteExpired } = await import("@/lib/quotes");
+    // Stored EXPIRED always displays EXPIRED.
+    expect(displayQuoteStatus({ status: "EXPIRED", expiresAt: new Date(Date.now() + 60_000) })).toBe("EXPIRED");
+    // An ACCEPTED quote past its expiry is still ACCEPTED (consumed, not expired).
+    expect(isQuoteExpired({ status: "ACCEPTED", expiresAt: new Date(Date.now() - 60_000) })).toBe(false);
+    expect(displayQuoteStatus({ status: "ACCEPTED", expiresAt: new Date(Date.now() - 60_000) })).toBe("ACCEPTED");
   });
 });

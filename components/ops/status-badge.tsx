@@ -7,7 +7,7 @@ export function StatusBadge({ status }: { status: string }) {
       ? "success"
       : ["FAILED", "CANCELLED", "EXCEPTION", "REJECTED"].includes(normalized)
         ? "danger"
-        : ["EXECUTING", "REQUESTED", "OPEN", "PARTIALLY_MATCHED"].includes(normalized)
+        : ["EXECUTING", "REQUESTED", "OPEN", "PARTIALLY_MATCHED", "EXPIRED"].includes(normalized)
           ? "warning"
           : ["UNMATCHED", "QUOTED", "PENDING_APPROVAL"].includes(normalized)
             ? "info"

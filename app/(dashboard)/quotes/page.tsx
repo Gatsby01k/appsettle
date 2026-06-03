@@ -5,6 +5,7 @@ import { createQuote, createSettlement } from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
 import { defaultAccountsForCorridor } from "@/lib/treasury";
 import { prisma } from "@/lib/prisma";
+import { displayQuoteStatus } from "@/lib/quotes";
 import { formatCurrency } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
@@ -69,11 +70,32 @@ async function acceptQuote(formData: FormData) {
   redirect("/settlements?success=created");
 }
 
+async function refreshQuote(formData: FormData) {
+  "use server";
+  const { user, organization } = await requireSession();
+  try {
+    await createQuote(
+      {
+        corridor: String(formData.get("corridor") ?? ""),
+        sourceAmount: formData.get("sourceAmount"),
+        settlementWindow: String(formData.get("settlementWindow") ?? ""),
+      },
+      user.id,
+      organization.id,
+    );
+  } catch (error) {
+    redirect(`/quotes?error=${encodeURIComponent(friendlyErrorMessage(error))}&tab=expired`);
+  }
+  redirect("/quotes?success=refreshed&tab=active");
+}
+
+// Bucket a quote by its *displayed* status so a time-expired ACTIVE quote is
+// treated as EXPIRED everywhere (tabs, counts, badges), never as ACTIVE.
 function quoteTab(quote: { status: string; expiresAt: Date }, tab: string) {
-  const expired = quote.status === "EXPIRED" || (quote.status === "ACTIVE" && quote.expiresAt < new Date());
-  if (tab === "active") return quote.status === "ACTIVE" && !expired;
-  if (tab === "accepted") return quote.status === "ACCEPTED";
-  if (tab === "expired") return expired || quote.status === "EXPIRED";
+  const status = displayQuoteStatus(quote);
+  if (tab === "active") return status === "ACTIVE";
+  if (tab === "accepted") return status === "ACCEPTED";
+  if (tab === "expired") return status === "EXPIRED";
   return true;
 }
 
@@ -107,6 +129,9 @@ export default async function QuotesPage({
 
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {params.success === "created" ? <FlashMessage message="Quote created. Use it from Settlements while ACTIVE." /> : null}
+      {params.success === "refreshed" ? (
+        <FlashMessage message="Replacement quote generated — it is ACTIVE and ready for settlement." />
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <MetricCard label="Active" value={activeCount} hint="Available for settlement" tone="success" />
@@ -186,7 +211,9 @@ export default async function QuotesPage({
                 </DataGridHead>
                 <DataGridBody>
                   {filtered.map((quote) => {
-                    const isActive = quoteTab(quote, "active");
+                    const displayStatus = displayQuoteStatus(quote);
+                    const isActive = displayStatus === "ACTIVE";
+                    const isExpired = displayStatus === "EXPIRED";
                     return (
                       <DataGridRow key={quote.id}>
                         <DataGridTd className="font-medium">{quote.corridor.replace("_", " → ")}</DataGridTd>
@@ -197,7 +224,7 @@ export default async function QuotesPage({
                           {formatCurrency(String(quote.targetAmount), quote.targetCurrency)}
                         </DataGridTd>
                         <DataGridTd>
-                          <StatusBadge status={quote.status} />
+                          <StatusBadge status={displayStatus} />
                         </DataGridTd>
                         <DataGridTd className="text-xs text-slate-500">{quote.expiresAt.toLocaleString()}</DataGridTd>
                         <DataGridTd className="text-right">
@@ -208,6 +235,16 @@ export default async function QuotesPage({
                               <SubmitButton variant="primary" size="sm" pendingText="...">
                                 Create settlement
                               </SubmitButton>
+                            </form>
+                          ) : isExpired ? (
+                            <form action={refreshQuote} className="flex flex-col items-end gap-1">
+                              <input type="hidden" name="corridor" value={quote.corridor} />
+                              <input type="hidden" name="sourceAmount" value={String(quote.sourceAmount)} />
+                              <input type="hidden" name="settlementWindow" value={quote.settlementWindow} />
+                              <SubmitButton variant="outline" size="sm" pendingText="Refreshing...">
+                                Refresh quote
+                              </SubmitButton>
+                              <span className="text-[11px] text-slate-400">Generate a new quote to continue.</span>
                             </form>
                           ) : (
                             <span className="text-xs text-slate-400">—</span>

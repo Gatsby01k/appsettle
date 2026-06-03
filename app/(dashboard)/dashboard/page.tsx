@@ -66,7 +66,7 @@ export default async function DashboardPage() {
       orderBy: { createdAt: "desc" },
       take: 8,
     }),
-    prisma.quote.count({ where: { organizationId: organization.id, status: "ACTIVE" } }),
+    prisma.quote.count({ where: { organizationId: organization.id, status: "ACTIVE", expiresAt: { gt: now } } }),
     prisma.reconciliationRecord.count({ where: { organizationId: organization.id, status: "EXCEPTION" } }),
     prisma.auditLog.findMany({
       where: { organizationId: organization.id },
