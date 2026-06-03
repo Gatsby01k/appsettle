@@ -1,15 +1,26 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { createSession, getSession, verifyPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { getDemoCredentials } from "@/lib/demo";
+import { AuthLayout } from "@/components/auth/auth-layout";
+import { AuthHero } from "@/components/auth/auth-hero";
+import { DemoAccessBlock } from "@/components/auth/demo-access-block";
+import { LoginForm, type LoginState } from "@/components/auth/login-form";
 
-async function login(formData: FormData) {
+export const metadata: Metadata = {
+  title: "Sign in — INRSettle Console",
+  description: "Access treasury, settlement, and reconciliation workflows for your organization.",
+  robots: { index: false, follow: false },
+  alternates: { canonical: "https://inrsettle.com/login" },
+  icons: { icon: "/assets/favicon.png", apple: "/assets/favicon.png" },
+};
+
+async function login(_prev: LoginState, formData: FormData): Promise<LoginState> {
   "use server";
 
   const email = String(formData.get("email") ?? "").toLowerCase().trim();
@@ -20,7 +31,7 @@ async function login(formData: FormData) {
   });
 
   if (!user || !(await verifyPassword(password, user.passwordHash)) || !user.memberships[0]) {
-    redirect("/login?error=invalid");
+    return { error: "Invalid email or password. Please try again." };
   }
 
   const membership = user.memberships[0];
@@ -36,88 +47,65 @@ async function login(formData: FormData) {
   redirect("/dashboard");
 }
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function LoginPage() {
   const session = await getSession();
   if (session) redirect("/dashboard");
-  const params = await searchParams;
+
+  const demoCredentials = getDemoCredentials();
 
   return (
-    <main className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      {/* Brand panel — the bridge from the marketing site */}
-      <section className="relative hidden overflow-hidden bg-[#07132b] text-white lg:flex lg:flex-col lg:justify-between">
-        <div className="brand-glow pointer-events-none absolute inset-0" />
-        <div className="relative flex items-center gap-3 px-12 pt-12">
-          <Image src="/assets/mark.png" alt="" width={40} height={40} className="rounded-xl" />
-          <span className="text-lg font-semibold tracking-tight">INRSettle</span>
+    <AuthLayout hero={<AuthHero />}>
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 transition-colors hover:text-slate-900"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+        Back to inrsettle.com
+      </Link>
+
+      <div className="mt-8 flex items-center gap-3 lg:hidden">
+        <Image
+          src="/assets/mark.png"
+          alt="INRSettle"
+          width={40}
+          height={40}
+          className="rounded-xl border border-slate-200 bg-white p-1.5 shadow-ops-xs"
+        />
+        <span className="text-lg font-semibold tracking-tight text-slate-900">INRSettle</span>
+      </div>
+
+      <header className="mt-8">
+        <h1 className="text-[1.7rem] font-semibold leading-tight tracking-tight text-slate-900">
+          Sign in to the console
+        </h1>
+        <p className="mt-2 text-[15px] leading-relaxed text-slate-500">
+          Access treasury, settlement, and reconciliation workflows for your organization.
+        </p>
+      </header>
+
+      <div className="mt-7">
+        <LoginForm action={login} />
+      </div>
+
+      <p className="mt-6 text-[13px] text-slate-500">
+        Need access for your team?{" "}
+        <Link
+          href="/contact?intent=access"
+          className="font-semibold text-brand-emerald-ink transition-colors hover:text-brand-emerald"
+        >
+          Request access
+        </Link>
+      </p>
+
+      {demoCredentials ? (
+        <div className="mt-6">
+          <DemoAccessBlock credentials={demoCredentials} />
         </div>
-        <div className="relative space-y-6 px-12">
-          <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-[#42d5b7]">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Protected treasury environment
-          </p>
-          <h1 className="max-w-md text-3xl font-semibold leading-tight tracking-tight">
-            The operations console behind <span className="brand-gradient-text">INR ↔ stablecoin</span> settlement rails.
-          </h1>
-          <p className="max-w-md text-sm leading-relaxed text-white/70">
-            Quote, settle, reconcile and audit cross-border liquidity in one institutional workspace. Access is
-            restricted to authorized treasury and settlement operators.
-          </p>
-        </div>
-        <div className="relative flex items-center gap-6 px-12 pb-12 text-xs text-white/55">
-          <span>SOC 2 aligned controls</span>
-          <span>Immutable audit trail</span>
-          <span>Role-based access</span>
-        </div>
-      </section>
+      ) : null}
 
-      {/* Access form */}
-      <section className="flex flex-col justify-center px-6 py-12 sm:px-12">
-        <div className="mx-auto w-full max-w-sm">
-          <Link
-            href="/"
-            className="mb-8 inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 transition-colors hover:text-slate-900"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back to inrsettle.com
-          </Link>
-
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <Image src="/assets/mark.png" alt="INRSettle" width={40} height={40} className="rounded-xl" />
-            <span className="text-lg font-semibold tracking-tight text-slate-900">INRSettle</span>
-          </div>
-
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Sign in to the console</h2>
-          <p className="mt-1.5 text-sm text-slate-500">Manage settlement operations for your organization.</p>
-
-          {params.error ? (
-            <div className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
-              Invalid email or password.
-            </div>
-          ) : null}
-
-          <form action={login} className="mt-6 grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="email">Work email</Label>
-              <Input id="email" name="email" type="email" autoComplete="email" placeholder="you@company.com" required />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" name="password" type="password" autoComplete="current-password" required />
-            </div>
-            <Button type="submit" size="lg" variant="primary" className="mt-1">
-              Sign in to console
-            </Button>
-          </form>
-
-          <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-xs text-slate-500">
-            <span className="font-medium text-slate-700">Demo access</span> · ops@inrsettle.com · ChangeMe123!
-          </div>
-
-          <p className="mt-6 text-xs leading-relaxed text-slate-400">
-            This is a restricted environment. Activity is logged for compliance and audit purposes.
-          </p>
-        </div>
-      </section>
-    </main>
+      <p className="mt-8 border-t border-slate-200/70 pt-5 text-[12px] leading-relaxed text-slate-400">
+        Restricted environment. Access is logged for compliance and audit purposes.
+      </p>
+    </AuthLayout>
   );
 }
