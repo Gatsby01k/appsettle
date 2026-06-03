@@ -263,6 +263,31 @@ function defaultContactMainHtml() {
 </main>`;
 }
 
+// Pages that own a bespoke closing CTA and must not receive the shared band.
+const FINAL_CTA_EXCLUDED = new Set(["index.html", "contact.html"]);
+
+const finalCtaBand = `
+<section class="section">
+  <div class="container">
+    <div class="cta-band">
+      <div class="cta-inner">
+        <div class="eyebrow">Get started</div>
+        <h2>Modernize Your India Settlement Stack</h2>
+        <p>Bring INR ↔ USDT settlement, treasury visibility, and auto-reconciliation onto one corridor-native operating layer.</p>
+        <div class="hero-ctas">
+          <a class="btn primary" href="/contact?intent=access">Request Access</a>
+          <a class="btn" href="/contact?intent=sales">Talk to Sales</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>`;
+
+function injectFinalCta(html: string, fileName: string) {
+  if (FINAL_CTA_EXCLUDED.has(fileName)) return html;
+  return html.replace(/<footer/i, `${finalCtaBand}<footer`);
+}
+
 function applyContactIntent(html: string, fileName: string, intent: ContactIntent) {
   if (fileName !== "contact.html") return html;
 
@@ -282,8 +307,9 @@ function bodyHtml(fileName: string, intent: ContactIntent = "default") {
 
   const withConsole = addHomepageConsoleCtas(addConsoleNavigation(rewritten), fileName);
   const withCtas = rewriteContactCtas(withConsole);
+  const withFinalCta = injectFinalCta(withCtas, fileName);
 
-  return applyContactIntent(withCtas, fileName, intent);
+  return applyContactIntent(withFinalCta, fileName, intent);
 }
 
 const contactIntentMeta: Record<Exclude<ContactIntent, "default">, { title: string; description: string }> = {
@@ -337,6 +363,60 @@ export function marketingMetadata(fileName: string, routePath: string, intent: C
   };
 }
 
+// Shared branded atmosphere rendered behind every public page: dotted global
+// field, aqua/amber settlement-rail trails with glowing nodes, and soft glow.
+function MarketingBackground() {
+  return (
+    <div className="mkt-bg" aria-hidden="true">
+      <div className="mkt-bg-dots" />
+      <svg
+        className="mkt-bg-rails"
+        viewBox="0 0 1680 820"
+        fill="none"
+        preserveAspectRatio="xMidYMin slice"
+      >
+        <defs>
+          <linearGradient id="railA" x1="0" y1="0" x2="1680" y2="0" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#0bb4c4" stopOpacity="0" />
+            <stop offset="0.22" stopColor="#0bb4c4" stopOpacity="0.75" />
+            <stop offset="0.68" stopColor="#f2ad23" stopOpacity="0.6" />
+            <stop offset="1" stopColor="#f2ad23" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="railB" x1="0" y1="0" x2="1680" y2="0" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#f2ad23" stopOpacity="0" />
+            <stop offset="0.3" stopColor="#f2ad23" stopOpacity="0.5" />
+            <stop offset="0.75" stopColor="#0bb4c4" stopOpacity="0.65" />
+            <stop offset="1" stopColor="#0bb4c4" stopOpacity="0" />
+          </linearGradient>
+          <radialGradient id="node" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stopColor="#0bb4c4" stopOpacity="0.9" />
+            <stop offset="1" stopColor="#0bb4c4" stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id="nodeAmber" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stopColor="#f2ad23" stopOpacity="0.9" />
+            <stop offset="1" stopColor="#f2ad23" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <path d="M-60,250 C 340,90 660,330 1010,200 S 1500,140 1740,300" stroke="url(#railA)" strokeWidth="2" />
+        <path d="M-60,150 C 380,300 720,70 1070,250 S 1540,330 1740,170" stroke="url(#railB)" strokeWidth="1.6" strokeDasharray="2 9" />
+        <path d="M-60,460 C 320,560 700,330 1060,480 S 1520,560 1740,420" stroke="url(#railA)" strokeWidth="1.6" />
+        <path d="M-60,360 C 420,200 780,520 1140,360 S 1560,250 1740,420" stroke="url(#railB)" strokeWidth="1.2" strokeDasharray="2 10" />
+        <g>
+          <circle cx="320" cy="150" r="26" fill="url(#node)" />
+          <circle cx="320" cy="150" r="3.2" fill="#0bb4c4" />
+          <circle cx="1010" cy="200" r="30" fill="url(#nodeAmber)" />
+          <circle cx="1010" cy="200" r="3.4" fill="#f2ad23" />
+          <circle cx="700" cy="330" r="24" fill="url(#node)" />
+          <circle cx="700" cy="330" r="3" fill="#0bb4c4" />
+          <circle cx="1400" cy="250" r="22" fill="url(#nodeAmber)" />
+          <circle cx="1400" cy="250" r="3" fill="#f2ad23" />
+        </g>
+      </svg>
+      <div className="mkt-bg-glow" />
+    </div>
+  );
+}
+
 export function StaticMarketingPage({ fileName, intent = "default" }: { fileName: string; intent?: ContactIntent }) {
   const css = fs.readFileSync(CSS_PATH, "utf8");
   const script = fs.existsSync(SCRIPT_PATH) ? fs.readFileSync(SCRIPT_PATH, "utf8") : "";
@@ -347,6 +427,7 @@ export function StaticMarketingPage({ fileName, intent = "default" }: { fileName
     <>
       <style dangerouslySetInnerHTML={{ __html: css }} />
       <style dangerouslySetInnerHTML={{ __html: MARKETING_POLISH_CSS }} />
+      <MarketingBackground />
       <div dangerouslySetInnerHTML={{ __html: html }} />
       {analytics ? <Script id="inrsettle-marketing-analytics" strategy="afterInteractive">{analytics}</Script> : null}
       {script ? <Script id={`inrsettle-marketing-${fileName}`} strategy="afterInteractive">{script}</Script> : null}
