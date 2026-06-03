@@ -52,7 +52,7 @@ export default async function TeamPage() {
               <ul className="space-y-1.5">
                 {role.permissions.map((permission) => (
                   <li key={permission} className="flex items-start gap-1.5 text-xs text-slate-600">
-                    <Check className="mt-0.5 h-3 w-3 shrink-0 text-[#0c8f78]" />
+                    <Check className="mt-0.5 h-3 w-3 shrink-0 text-brand-emerald-ink" />
                     {permission}
                   </li>
                 ))}

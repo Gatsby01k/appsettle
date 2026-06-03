@@ -26,21 +26,21 @@ export function CounterpartyDetailSheet({ counterparty }: { counterparty: Counte
       <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
         View
       </Button>
-      <SheetContent title={counterparty.name} description={`${counterparty.type} · ${counterparty.country}`}>
+      <SheetContent eyebrow="Counterparty" title={counterparty.name} description={`${counterparty.type} · ${counterparty.country}`}>
         <div className="mb-3 flex items-center gap-2">
           <StatusBadge status={counterparty.status} />
           <span className="text-xs text-slate-500">{counterparty.corridor}</span>
         </div>
 
-        <div className="rounded-lg border p-3">
+        <div className="rounded-xl border border-[var(--ops-line)] p-3">
           <StatRow label="Type" value={counterparty.type} />
           <StatRow label="Country" value={counterparty.country} />
           <StatRow label="Corridor" value={counterparty.corridor} />
           <StatRow label="Settled volume" value={counterparty.settledVolume} />
         </div>
 
-        <div className="mt-3 rounded-lg border p-3">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Linked accounts</p>
+        <div className="mt-3 rounded-xl border border-[var(--ops-line)] p-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Linked accounts</p>
           {counterparty.linkedAccounts.length ? (
             <ul className="space-y-2">
               {counterparty.linkedAccounts.map((account) => (
@@ -55,10 +55,10 @@ export function CounterpartyDetailSheet({ counterparty }: { counterparty: Counte
           )}
         </div>
 
-        <div className="mt-3 rounded-lg border p-3">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Recent settlements</p>
+        <div className="mt-3 rounded-xl border border-[var(--ops-line)] p-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Recent settlements</p>
           {counterparty.recentSettlements.length ? (
-            <ul className="divide-y">
+            <ul className="divide-y divide-slate-100">
               {counterparty.recentSettlements.map((settlement) => (
                 <li key={settlement.reference} className="flex items-center justify-between gap-2 py-2 text-sm">
                   <div className="min-w-0">
@@ -77,8 +77,8 @@ export function CounterpartyDetailSheet({ counterparty }: { counterparty: Counte
           )}
         </div>
 
-        <div className="mt-3 rounded-lg border bg-slate-50/60 p-3">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Notes</p>
+        <div className="mt-3 rounded-xl border border-[var(--ops-line-soft)] bg-slate-50/70 p-3">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Notes</p>
           <p className="text-sm text-slate-600">{counterparty.notes}</p>
         </div>
       </SheetContent>

@@ -95,7 +95,7 @@ export default async function AuditLogsPage({ searchParams }: { searchParams: Pr
         <FilterBar searchPlaceholder="Search action, resource, reference..." />
       </Suspense>
 
-      <div className="rounded-lg border bg-white p-4 shadow-sm">
+      <div className="ops-panel p-4">
         {filteredLogs.length ? (
           filteredLogs.map((log) => (
             <ActivityItem

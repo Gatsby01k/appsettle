@@ -61,7 +61,7 @@ export default async function ReportsPage() {
               <CardDescription>{report.description}</CardDescription>
             </CardHeader>
             <CardContent className="mt-auto space-y-3">
-              <dl className="grid grid-cols-2 gap-y-2 border-t border-slate-100 pt-3 text-xs">
+              <dl className="grid grid-cols-2 gap-y-2 border-t border-[var(--ops-line-soft)] pt-3 text-xs">
                 <dt className="text-slate-400">Records ready</dt>
                 <dd className="text-right font-medium tabular-nums text-slate-700">{counts[report.type]}</dd>
                 <dt className="text-slate-400">Generated</dt>
@@ -92,7 +92,7 @@ export default async function ReportsPage() {
         ))}
       </div>
 
-      <p className="text-xs text-slate-500">
+      <p className="ops-helper">
         Exports respect your organization scope and are generated on demand from live data.
       </p>
     </div>

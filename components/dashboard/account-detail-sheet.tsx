@@ -25,25 +25,25 @@ export function AccountDetailSheet({ account }: { account: AccountDetail }) {
       <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
         View
       </Button>
-      <SheetContent title={account.name} description={`${account.type} · ${account.institution}`}>
+      <SheetContent eyebrow="Account" title={account.name} description={`${account.type} · ${account.institution}`}>
         <div className="mb-3 flex items-center gap-2">
           <StatusBadge status={account.status} />
           <span className="text-xs text-slate-500">{account.currency}</span>
         </div>
 
-        <div className="rounded-lg border bg-slate-50/60 p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Available balance</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-[#07132b]">{account.balance}</p>
+        <div className="rounded-xl border border-[#00c79d]/20 bg-[linear-gradient(180deg,#e7faf4_0%,rgba(231,250,244,0.35)_100%)] p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-brand-emerald-ink">Available balance</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-brand-ink">{account.balance}</p>
         </div>
 
-        <div className="mt-3 rounded-lg border p-3">
+        <div className="mt-3 rounded-xl border border-[var(--ops-line)] p-3">
           <StatRow label="Account type" value={account.type} />
           <StatRow label="Currency" value={account.currency} />
           <StatRow label="Institution" value={account.institution} />
         </div>
 
-        <div className="mt-3 rounded-lg border p-3">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Linked counterparties</p>
+        <div className="mt-3 rounded-xl border border-[var(--ops-line)] p-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Linked counterparties</p>
           {account.linkedCounterparties.length ? (
             <ul className="space-y-2">
               {account.linkedCounterparties.map((cp) => (
@@ -58,10 +58,10 @@ export function AccountDetailSheet({ account }: { account: AccountDetail }) {
           )}
         </div>
 
-        <div className="mt-3 rounded-lg border p-3">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Recent activity</p>
+        <div className="mt-3 rounded-xl border border-[var(--ops-line)] p-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Recent activity</p>
           {account.recentActivity.length ? (
-            <ul className="divide-y">
+            <ul className="divide-y divide-slate-100">
               {account.recentActivity.map((activity) => (
                 <li key={activity.label} className="flex items-center justify-between gap-2 py-2 text-sm">
                   <div className="min-w-0">

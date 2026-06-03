@@ -8,8 +8,10 @@ function MethodBadge({ method }: { method: "GET" | "POST" }) {
   return (
     <span
       className={cn(
-        "inline-flex w-14 justify-center rounded-md px-2 py-0.5 text-xs font-semibold",
-        method === "GET" ? "bg-sky-50 text-sky-700 ring-1 ring-sky-200" : "bg-teal-50 text-teal-700 ring-1 ring-teal-200",
+        "inline-flex w-14 justify-center rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
+        method === "GET"
+          ? "bg-[#e7f7fb] text-[#0a7d86] ring-[#0bb4c4]/22"
+          : "bg-[#e7faf4] text-brand-emerald-ink ring-[#00c79d]/25",
       )}
     >
       {method}
@@ -20,8 +22,8 @@ function MethodBadge({ method }: { method: "GET" | "POST" }) {
 function CodeBlock({ label, code }: { label: string; code: string }) {
   return (
     <div>
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
-      <pre className="overflow-x-auto rounded-lg border border-white/10 bg-[#07132b] p-3 text-xs leading-relaxed text-slate-200">
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">{label}</p>
+      <pre className="ops-scroll overflow-x-auto rounded-xl border border-white/10 bg-brand-ink p-3 text-xs leading-relaxed text-slate-200">
         <code>{code}</code>
       </pre>
     </div>

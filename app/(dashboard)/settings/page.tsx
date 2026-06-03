@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Field, HelperText } from "@/components/ui/helper-text";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Separator } from "@/components/ui/separator";
 
@@ -77,15 +78,13 @@ export default async function SettingsPage({
             <SectionTitle title="General" chip="Active" />
             <CardDescription>Workspace identity and legal entity.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="displayName">Display name</Label>
+          <CardContent className="grid gap-4">
+            <Field label="Display name" htmlFor="displayName" required>
               <Input id="displayName" name="displayName" defaultValue={organization.displayName} disabled={disabled} required />
-            </div>
-            <div className="grid gap-1.5">
-              <Label>Legal entity</Label>
+            </Field>
+            <Field label="Legal entity" hint="Managed by INRSettle — contact support to change.">
               <Input value={organization.legalName} disabled readOnly />
-            </div>
+            </Field>
           </CardContent>
         </Card>
 
@@ -94,9 +93,8 @@ export default async function SettingsPage({
             <SectionTitle title="Treasury controls" chip="Active" />
             <CardDescription>Quote execution parameters and rate validity.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="quoteTtlSeconds">Quote TTL (seconds)</Label>
+          <CardContent className="grid gap-4">
+            <Field label="Quote TTL (seconds)" htmlFor="quoteTtlSeconds" hint="How long a generated quote stays executable." required>
               <Input
                 id="quoteTtlSeconds"
                 name="quoteTtlSeconds"
@@ -105,8 +103,7 @@ export default async function SettingsPage({
                 disabled={disabled}
                 required
               />
-              <p className="text-xs text-slate-500">How long a generated quote stays executable.</p>
-            </div>
+            </Field>
           </CardContent>
         </Card>
 
@@ -115,9 +112,8 @@ export default async function SettingsPage({
             <SectionTitle title="Approval rules" chip="Active" />
             <CardDescription>Maker-checker threshold for settlements.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="approvalThreshold">Approval threshold (INR)</Label>
+          <CardContent className="grid gap-4">
+            <Field label="Approval threshold (INR)" htmlFor="approvalThreshold" hint="Settlements above this notional require an approver." required>
               <Input
                 id="approvalThreshold"
                 name="approvalThreshold"
@@ -127,8 +123,7 @@ export default async function SettingsPage({
                 disabled={disabled}
                 required
               />
-              <p className="text-xs text-slate-500">Settlements above this notional require an approver.</p>
-            </div>
+            </Field>
           </CardContent>
         </Card>
 
@@ -137,9 +132,8 @@ export default async function SettingsPage({
             <SectionTitle title="Reconciliation rules" chip={reconChip} />
             <CardDescription>Exception routing and matching notifications.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="reconciliationEmail">Reconciliation email</Label>
+          <CardContent className="grid gap-4">
+            <Field label="Reconciliation email" htmlFor="reconciliationEmail" hint="Exceptions and unmatched records are routed here.">
               <Input
                 id="reconciliationEmail"
                 name="reconciliationEmail"
@@ -148,8 +142,7 @@ export default async function SettingsPage({
                 defaultValue={settings?.reconciliationEmail ?? ""}
                 disabled={disabled}
               />
-              <p className="text-xs text-slate-500">Exceptions and unmatched records are routed here.</p>
-            </div>
+            </Field>
           </CardContent>
         </Card>
 
@@ -159,13 +152,13 @@ export default async function SettingsPage({
             <CardDescription>Outbound event delivery to your systems.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:max-w-xl">
-            <div className="grid gap-1.5">
+            <div className="space-y-1.5">
               <Label htmlFor="webhookUrl">Webhook URL</Label>
               <Input id="webhookUrl" name="webhookUrl" type="url" placeholder="https://api.yourcompany.com/webhooks/inrsettle" defaultValue={settings?.webhookUrl ?? ""} disabled={disabled} />
-              <p className="text-xs text-slate-500">
+              <HelperText>
                 Receives <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">settlement.*</code> and{" "}
                 <code className="rounded bg-slate-100 px-1 py-0.5 text-[11px]">reconciliation.*</code> events.
-              </p>
+              </HelperText>
             </div>
           </CardContent>
         </Card>
@@ -178,11 +171,11 @@ export default async function SettingsPage({
           <CardContent>
             <p className="text-sm text-slate-600">
               View the full immutable trail in{" "}
-              <a href="/audit-logs" className="font-medium text-teal-700 hover:underline">
+              <a href="/audit-logs" className="font-semibold text-brand-emerald-ink hover:underline">
                 Audit logs
               </a>{" "}
               or export an audit evidence package from{" "}
-              <a href="/reports" className="font-medium text-teal-700 hover:underline">
+              <a href="/reports" className="font-semibold text-brand-emerald-ink hover:underline">
                 Reports
               </a>
               .
