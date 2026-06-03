@@ -49,29 +49,213 @@ const routeMap: Record<string, string> = {
   "/contact.html": "/contact",
 };
 
-// Additive, scoped polish layer injected after the base marketing stylesheet.
-// Does not modify styles.css. Fixes nav/CTA spacing, prevents the Sign in button
-// from wrapping, tightens hero/footer balance and improves small-screen behavior.
+// Additive, scoped polish layer injected AFTER the base marketing stylesheet so
+// these rules win where they overlap. Does not modify styles.css. Delivers a
+// mobile-first refinement pass: zero horizontal overflow, a premium hamburger
+// drawer, a rebuilt hero, a compacted preview console, a vertical workflow
+// timeline, tidy stacked sections/footer, fluid typography, and iOS safe-area
+// support — while preserving the institutional desktop direction.
 const MARKETING_POLISH_CSS = `
-.nav-actions{display:flex;align-items:center;gap:12px}
+/* ---- Desktop / base polish ---- */
+.nav-actions{display:flex;align-items:center;gap:8px}
 .nav-actions .btn{white-space:nowrap}
 .nav-actions .btn.primary{box-shadow:0 10px 26px rgba(7,19,43,.14)}
 .hero-ctas{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
 .hero-ctas .btn{white-space:nowrap}
 .hero-ctas .btn.primary{box-shadow:0 14px 34px rgba(7,19,43,.18)}
 .site-header .nav{gap:18px}
-@media (max-width:860px){
-  .nav-actions{gap:8px}
-}
-@media (max-width:640px){
-  .hero-ctas{width:100%}
-  .hero-ctas .btn{flex:1 1 160px;justify-content:center}
-  .footer-grid{gap:24px}
-}
 .intent-card{display:flex;flex-direction:column}
 .intent-card .feature-list{flex:1}
 .intent-card .intent-cta{margin-top:26px}
 .intent-card .intent-cta .btn{width:auto}
+
+/* ============================================================
+   GLOBAL — eliminate horizontal overflow + safe-area scaffolding
+   (overflow-x:clip avoids the position:sticky breakage that
+   overflow-x:hidden causes, and is supported on iOS Safari 16+.)
+   ============================================================ */
+html{overflow-x:clip;-webkit-text-size-adjust:100%}
+body{overflow-x:clip;max-width:100%}
+main{overflow-x:clip}
+/* allow flex/grid children holding long content to shrink instead of pushing width */
+.nav>*,.hero-grid>*,.feature-split>*,.split>*,.section-head>*,.flow-line>*,
+.settlement-row>*,.execution-strip>*,.rail-footer>*,.proof-item>*,.recon-row>*,
+.assurance-strip>*,.corridor-signature>*{min-width:0}
+h1,h2,h3,.lead,p,code{overflow-wrap:break-word}
+
+/* honor notch / safe areas for the centered container on small screens */
+@media (max-width:1100px){
+  .container{
+    width:min(100% - 28px,1280px);
+    padding-left:env(safe-area-inset-left);
+    padding-right:env(safe-area-inset-right);
+  }
+}
+
+/* ============================================================
+   HEADER / NAV — premium hamburger + drawer
+   ============================================================ */
+.site-header{padding-top:env(safe-area-inset-top)}
+.menu-btn{align-items:center;justify-content:center;width:46px;height:46px;padding:0;
+  border-radius:14px;border:1px solid rgba(7,17,31,.12);background:rgba(255,255,255,.92);
+  box-shadow:0 8px 20px rgba(7,17,31,.06);color:var(--ink)}
+.menu-btn svg{width:22px;height:22px;display:block;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round;fill:none}
+.menu-btn .menu-icon-close{display:none}
+.menu-btn[aria-expanded="true"] .menu-icon-open{display:none}
+.menu-btn[aria-expanded="true"] .menu-icon-close{display:block}
+
+@media (max-width:1100px){
+  .nav{height:64px;gap:14px}
+  /* the desktop pill nav + action buttons live in the drawer on mobile */
+  .nav-links,.nav-actions{display:none}
+  .menu-btn{display:inline-flex}
+  .mobile-panel{display:none}
+  .mobile-panel.open{
+    display:block;position:absolute;
+    left:max(14px,env(safe-area-inset-left));
+    right:max(14px,env(safe-area-inset-right));
+    top:calc(100% + 8px);
+    background:rgba(255,255,255,.97);backdrop-filter:blur(22px);
+    border:1px solid rgba(7,17,31,.1);border-radius:22px;padding:14px;
+    box-shadow:0 30px 70px rgba(7,17,31,.18);
+    max-height:calc(100dvh - 86px);overflow-y:auto;
+    animation:mpanelIn .26s var(--ease) both;
+  }
+  @keyframes mpanelIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  .mobile-panel-label{margin:2px 6px 8px;font-size:11px;font-weight:800;letter-spacing:.08em;
+    text-transform:uppercase;color:#8492a5}
+  .mobile-panel a:not(.btn){display:block;padding:13px 14px;border-radius:13px;font-weight:650;
+    color:#3c4b5e;font-size:15px}
+  .mobile-panel a:not(.btn):hover{background:rgba(11,180,196,.08);color:var(--ink)}
+  .mobile-panel a[href="/login"]{font-weight:750;color:var(--ink)}
+  .mobile-panel-actions{display:grid;gap:10px;margin-top:12px;padding-top:14px;
+    border-top:1px solid rgba(7,17,31,.08)}
+  .mobile-panel-actions .btn{width:100%;min-height:50px}
+}
+
+/* ============================================================
+   HERO — rebuilt for mobile
+   ============================================================ */
+@media (max-width:760px){
+  .hero-grid{padding:28px 0 44px;gap:30px}
+  h1{font-size:clamp(30px,8.2vw,42px);line-height:1.08;letter-spacing:-.02em;text-wrap:balance}
+  .lead{font-size:clamp(16px,4.3vw,18px);line-height:1.5;margin-top:18px;max-width:560px;text-wrap:pretty}
+  .eyebrow{margin-bottom:14px}
+  .hero-ctas{flex-direction:column;align-items:stretch;gap:12px;width:100%;max-width:420px;margin-top:24px}
+  .hero-ctas .btn{width:100%;flex:none}
+  .hero-proof{margin-top:20px;padding:12px 14px}
+  .trust-row{gap:10px;margin-top:20px}
+  .trust-card{min-height:0;padding:16px}
+  .trust-card strong{font-size:24px}
+}
+
+/* ============================================================
+   PREVIEW CONSOLE (live rail) — compacted for mobile
+   ============================================================ */
+@media (max-width:760px){
+  .dashboard{border-radius:24px}
+  .dash-top{height:50px;padding:0 14px}
+  .rail-meta{font-size:12px;gap:8px}
+  .sync-age{display:none}
+  .dash-body{padding:14px}
+  .assurance-strip{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+  .assurance-strip span{height:34px;font-size:11px}
+  .metric-grid{grid-template-columns:repeat(3,1fr);gap:8px}
+  .metric{height:auto;min-height:80px;padding:13px 12px}
+  .metric span{font-size:11.5px}
+  .metric strong{font-size:clamp(18px,5.6vw,24px);margin-top:6px;letter-spacing:-.04em}
+  .metric em{margin-top:7px;font-size:11.5px}
+  .flow-card{padding:14px;border-radius:20px;margin-top:14px}
+  .risk-ledger{height:auto;min-height:46px;padding:10px 14px;flex-wrap:wrap;gap:2px 12px}
+  .risk-ledger strong{font-size:14px;max-width:100%}
+  .currency{height:auto;min-height:92px;padding:16px}
+  .currency strong{font-size:22px}
+  .execution-strip{grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .execution-strip span:first-child{grid-column:1 / -1}
+  .rail-footer{grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+  .rail-footer>div{height:auto;min-height:62px;padding:11px 10px}
+  .rail-footer strong{font-size:14px}
+  .label{font-size:10px}
+  .settlement-list{margin-top:12px;gap:8px}
+  .settlement-row{grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"title pill" "meta pill";
+    height:auto;min-height:56px;gap:2px 10px;align-items:center;padding:11px 14px}
+  .settlement-row>span:first-child{grid-area:title;font-size:13px}
+  .settlement-row small{grid-area:meta;font-size:11px}
+  .settlement-row .pill{grid-area:pill;align-self:center;justify-self:end}
+  .ledger-note{margin-top:12px;padding:11px 12px;flex-wrap:wrap;gap:6px 10px}
+}
+@media (max-width:430px){
+  .settlement-list .settlement-row:nth-child(n+4){display:none}
+}
+
+/* ============================================================
+   WORKFLOW — vertical timeline on mobile
+   ============================================================ */
+@media (max-width:600px){
+  .workflow-rail{grid-template-columns:1fr;gap:0;margin-top:6px}
+  .workflow-rail::before{display:none}
+  .wf-step{display:grid;grid-template-columns:54px 1fr;column-gap:16px;align-items:start;
+    text-align:left;padding:0 0 24px;position:relative}
+  .wf-step::after{content:"";position:absolute;left:26px;top:58px;bottom:-2px;width:2px;
+    background:linear-gradient(180deg,rgba(11,180,196,.45),rgba(11,180,196,.22))}
+  .wf-step:nth-child(n+5)::after{background:linear-gradient(180deg,rgba(242,173,35,.45),rgba(242,173,35,.22))}
+  .wf-step:last-child::after{display:none}
+  .wf-node{grid-row:1 / span 2;width:54px;height:54px;align-self:start}
+  .wf-step b{align-self:center;font-size:15px}
+  .wf-step span{font-size:13px;margin-top:2px}
+}
+
+/* developer split stacks before the iPad portrait width so the code
+   panel gets full width instead of internal horizontal scroll */
+@media (max-width:820px){
+  .split{grid-template-columns:1fr;gap:28px}
+}
+
+/* ============================================================
+   SECTIONS — cards / grids / stats / CTA
+   ============================================================ */
+@media (max-width:760px){
+  .section,.section.alt{padding:52px 0}
+  .section-head{margin-bottom:24px}
+  .section-head p{font-size:16px}
+  h2{font-size:clamp(25px,6.6vw,34px);line-height:1.14;text-wrap:balance}
+  .card{min-height:0;padding:22px;border-radius:20px}
+  .card h3{font-size:19px}
+  .card p{font-size:15px}
+  .grid-4{gap:14px}
+  .proof-band{padding:24px 0 0}
+  .feature-split{gap:24px}
+  .feature-split .lead{font-size:16px;margin-top:14px}
+  .panel{padding:16px;border-radius:22px}
+  .tile-grid{gap:10px}
+  .tile{padding:14px}
+  .tile strong{font-size:20px}
+  .stat-band{grid-template-columns:1fr 1fr;gap:12px}
+  .stat{padding:20px;border-radius:20px}
+  .stat strong{font-size:24px}
+  .endpoint{padding:14px 16px}
+  .code-panel pre{font-size:12.5px}
+  .cta-band{padding:34px 22px;border-radius:24px}
+  .cta-band h2{font-size:clamp(24px,6.4vw,32px)}
+  .cta-band p{font-size:16px}
+  .cta-band .hero-ctas{max-width:none}
+}
+
+/* ============================================================
+   FOOTER — tidy stacked columns + bottom safe-area
+   ============================================================ */
+@media (max-width:760px){
+  .footer{padding:44px 0 calc(36px + env(safe-area-inset-bottom))}
+  .footer-grid{grid-template-columns:1fr 1fr;gap:26px 20px}
+  .footer-grid>:first-child{grid-column:1 / -1}
+  .footer h4{margin-bottom:12px}
+  .footer a:not(.brand){margin:8px 0}
+}
+@media (max-width:380px){
+  .footer-grid{grid-template-columns:1fr}
+}
 `;
 
 function readStaticFile(fileName: string) {

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>INRSettle — Stablecoin Settlement Infrastructure for India Payment Flows</title>
   <meta name="description" content="INR ↔ USDT treasury and settlement rails for merchants, PSPs, and payment operators.">
   <meta name="theme-color" content="#050816">
@@ -45,8 +45,12 @@
       <a class="btn" href="/contact.html">Talk to Sales</a>
       <a class="btn primary" href="/contact.html#access">Request Access</a>
     </div>
-    <button class="menu-btn" type="button" data-menu aria-controls="mobile-navigation" aria-expanded="false">Menu</button>
+    <button class="menu-btn" type="button" data-menu aria-controls="mobile-navigation" aria-expanded="false" aria-label="Open menu">
+      <svg class="menu-icon-open" viewBox="0 0 24 24" aria-hidden="true" fill="none"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      <svg class="menu-icon-close" viewBox="0 0 24 24" aria-hidden="true" fill="none"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
     <div class="mobile-panel" id="mobile-navigation" data-mobile>
+      <p class="mobile-panel-label">Platform</p>
       <a href="/infrastructure.html">Infrastructure</a>
       <a href="/api.html">API</a>
       <a href="/use-cases.html">Use Cases</a>
@@ -54,6 +58,10 @@
       <a href="/compliance.html">Compliance</a>
       <a href="/docs/index.html">Docs</a>
       <a href="/contact.html">Contact</a>
+      <div class="mobile-panel-actions">
+        <a class="btn primary" href="/contact.html#access">Request Access</a>
+        <a class="btn" href="/contact.html">Talk to Sales</a>
+      </div>
     </div>
   </div>
 </header>
