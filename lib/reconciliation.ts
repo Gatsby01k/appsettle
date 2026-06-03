@@ -1,7 +1,7 @@
 // Pure reconciliation matching helpers (no framework/Prisma coupling) so they can
 // run in the auto-match engine (server domain) and in page render for display.
 
-export type MatchType = "AUTO_MATCHED" | "MANUAL_MATCHED" | "SUGGESTED" | "MANUAL_REVIEW" | "EXCEPTION";
+export type MatchType = "AUTO_MATCHED" | "MANUAL_MATCHED" | "SUGGESTED" | "MANUAL_REVIEW" | "EXCEPTION" | "RESOLVED";
 
 /**
  * How a linked record came to be matched:
@@ -66,6 +66,10 @@ export function matchTypeFor(
 ): MatchType {
   if (status === "EXCEPTION") return "EXCEPTION";
 
+  // A resolved exception has been reviewed by an operator. It is never shown as
+  // matched/reconciled and never carries a settlement link.
+  if (status === "RESOLVED") return "RESOLVED";
+
   // A record linked to a settlement is matched/reconciled, not a pending suggestion.
   // Prefer the recorded origin; fall back to confidence for legacy records.
   if (hasSettlement) {
@@ -100,12 +104,14 @@ export const MATCH_LABEL: Record<MatchType, string> = {
   SUGGESTED: "Suggested match",
   MANUAL_REVIEW: "Manual review",
   EXCEPTION: "Exception",
+  RESOLVED: "Resolved",
 };
 
-export const MATCH_TONE: Record<MatchType, "success" | "info" | "warning" | "danger"> = {
+export const MATCH_TONE: Record<MatchType, "success" | "info" | "warning" | "danger" | "neutral"> = {
   AUTO_MATCHED: "success",
   MANUAL_MATCHED: "success",
   SUGGESTED: "info",
   MANUAL_REVIEW: "warning",
   EXCEPTION: "danger",
+  RESOLVED: "neutral",
 };

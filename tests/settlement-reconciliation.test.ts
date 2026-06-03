@@ -499,6 +499,33 @@ describe("settlement and reconciliation workflow", () => {
     expect(settlement.status).toBe(SettlementStatus.SETTLED);
   });
 
+  it("resolves an EXCEPTION record without linking or reconciling a settlement", async () => {
+    const { createExceptionDemoRecord, resolveReconciliationException } = await import("@/lib/domain");
+    // A settlement that would otherwise match exists but must stay SETTLED.
+    const settlement = seedSettledSettlement({ settledAt: new Date("2026-06-02T00:00:00Z") });
+
+    const record = await createExceptionDemoRecord("user_1", "org_1");
+    expect(record.status).toBe(ReconciliationStatus.EXCEPTION);
+
+    const resolved = await resolveReconciliationException(record.id, "user_1", "org_1");
+
+    expect(resolved.status).toBe(ReconciliationStatus.RESOLVED);
+    expect(resolved.settlementId).toBeFalsy();
+    expect(settlement.status).toBe(SettlementStatus.SETTLED);
+    expect(mock.store.auditLogs.some((log) => log.action === "reconciliation.resolve_exception")).toBe(true);
+    // Resolving never reconciles a settlement.
+    expect(mock.store.auditLogs.some((log) => log.action === "settlement.transition")).toBe(false);
+  });
+
+  it("only EXCEPTION records can be resolved", async () => {
+    const { resolveReconciliationException } = await import("@/lib/domain");
+    const record = seedOpenRecord({ valueDate: new Date("2026-06-02T00:00:00Z") });
+
+    await expect(resolveReconciliationException(record.id, "user_1", "org_1")).rejects.toThrow(
+      "Only EXCEPTION records can be resolved.",
+    );
+  });
+
   it("a manual match reconciles only when a settlement is explicitly selected", async () => {
     const { createReconciliationRecord } = await import("@/lib/domain");
     const settlement = seedSettledSettlement({ settledAt: new Date("2026-06-02T00:00:00Z") });
@@ -553,5 +580,20 @@ describe("matchTypeFor display lifecycle", () => {
     const { matchTypeFor } = await import("@/lib/reconciliation");
     expect(matchTypeFor("EXCEPTION", 100, true)).toBe("EXCEPTION");
     expect(matchTypeFor("EXCEPTION", 0, false)).toBe("EXCEPTION");
+  });
+
+  it("never shows an EXCEPTION record as matched even when a settlement is linked", async () => {
+    const { matchTypeFor } = await import("@/lib/reconciliation");
+    // Even with a settlement + match origin, an exception is never auto/manual matched.
+    expect(matchTypeFor("EXCEPTION", 100, true, "AUTO")).toBe("EXCEPTION");
+    expect(matchTypeFor("EXCEPTION", 100, true, "MANUAL")).toBe("EXCEPTION");
+    expect(matchTypeFor("EXCEPTION", 100, true, "MANUAL")).not.toBe("MANUAL_MATCHED");
+  });
+
+  it("reports RESOLVED for resolved exceptions and never as matched", async () => {
+    const { matchTypeFor } = await import("@/lib/reconciliation");
+    expect(matchTypeFor("RESOLVED", 0, false)).toBe("RESOLVED");
+    // Even a stray linkage must not present a resolved record as reconciled.
+    expect(matchTypeFor("RESOLVED", 100, true, "AUTO")).toBe("RESOLVED");
   });
 });

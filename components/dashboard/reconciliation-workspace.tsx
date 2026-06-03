@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowRight, Check, X } from "lucide-react";
+import { ArrowRight, Check, ShieldCheck, X } from "lucide-react";
 import { StatRow } from "@/components/ops/stat-row";
 import { EmptyState } from "@/components/ops/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,7 @@ type WorkspaceProps = {
   records: ReconciliationRow[];
   confirmAction: (formData: FormData) => Promise<void>;
   rejectAction: (formData: FormData) => Promise<void>;
+  resolveAction: (formData: FormData) => Promise<void>;
 };
 
 function ConfidenceBar({ confidence }: { confidence: number }) {
@@ -54,12 +55,19 @@ function ConfidenceBar({ confidence }: { confidence: number }) {
   );
 }
 
-export function ReconciliationWorkspace({ records, confirmAction, rejectAction }: WorkspaceProps) {
+export function ReconciliationWorkspace({ records, confirmAction, rejectAction, resolveAction }: WorkspaceProps) {
   const [selectedId, setSelectedId] = useState(records[0]?.id ?? "");
   const selected = useMemo(
     () => records.find((record) => record.id === selectedId) ?? records[0],
     [records, selectedId],
   );
+
+  // An EXCEPTION (or already-resolved) record must never display as matched or
+  // "reconciled", even if a settlement is somehow linked to it.
+  const isException = selected?.matchType === "EXCEPTION";
+  const isResolved = selected?.matchType === "RESOLVED";
+  const showMatched = Boolean(selected?.settlement) && !isException && !isResolved;
+  const showSuggestion = Boolean(selected?.suggestion) && !isException && !isResolved;
 
   if (!records.length) {
     return (
@@ -122,31 +130,55 @@ export function ReconciliationWorkspace({ records, confirmAction, rejectAction }
           <div className="mt-4 rounded-lg border p-4">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Match</p>
-              {selected.settlement || selected.suggestion ? (
-                <ConfidenceBar confidence={selected.confidence} />
-              ) : null}
+              {showMatched || showSuggestion ? <ConfidenceBar confidence={selected.confidence} /> : null}
             </div>
 
             <div className="mt-3 grid gap-0.5 rounded-lg border bg-slate-50/50 px-3 py-1">
               <StatRow label="Match type" value={selected.matchLabel} />
-              {selected.settlement || selected.suggestion ? (
-                <StatRow label="Confidence" value={`${selected.confidence}%`} />
-              ) : null}
-              {selected.settlement ? (
+              {showMatched || showSuggestion ? <StatRow label="Confidence" value={`${selected.confidence}%`} /> : null}
+              {showMatched && selected.settlement ? (
                 <StatRow
                   label="Matched settlement"
                   value={`${selected.settlement.publicId} · ${selected.settlement.reference}`}
                 />
-              ) : selected.suggestion ? (
+              ) : showSuggestion && selected.suggestion ? (
                 <StatRow
                   label="Suggested settlement"
                   value={`${selected.suggestion.publicId} · ${selected.suggestion.reference}`}
                 />
+              ) : isException ? (
+                <StatRow label="Matched settlement" value="No match" />
               ) : null}
-              {selected.matchReason ? <StatRow label="Reason" value={selected.matchReason} /> : null}
+              {isException && selected.exceptionReason ? (
+                <StatRow label="Reason" value={selected.exceptionReason} />
+              ) : selected.matchReason ? (
+                <StatRow label="Reason" value={selected.matchReason} />
+              ) : null}
             </div>
 
-            {selected.settlement ? (
+            {isException ? (
+              <div className="mt-3 space-y-3">
+                <p className="text-xs text-rose-700">
+                  This record is flagged as an exception and is not reconciled. Review the reason above, then resolve it
+                  once handled.
+                </p>
+                <form action={resolveAction}>
+                  <input type="hidden" name="recordId" value={selected.id} />
+                  <SubmitButton variant="primary" size="sm" pendingText="Resolving...">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Resolve exception
+                  </SubmitButton>
+                </form>
+                <p className="text-xs text-slate-500">
+                  Resolving marks the exception as reviewed and clears it from the exceptions queue. It does not link or
+                  reconcile a settlement.
+                </p>
+              </div>
+            ) : isResolved ? (
+              <p className="mt-3 text-xs text-slate-600">
+                Exception reviewed and resolved by an operator. No settlement was linked.
+              </p>
+            ) : showMatched && selected.settlement ? (
               <>
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
                   <span className="rounded-md bg-slate-100 px-2 py-1 font-medium text-slate-700">
@@ -163,7 +195,7 @@ export function ReconciliationWorkspace({ records, confirmAction, rejectAction }
                     : "Manually reconciled by an operator — record linked and settlement reconciled."}
                 </p>
               </>
-            ) : selected.suggestion ? (
+            ) : showSuggestion && selected.suggestion ? (
               <div className="mt-3 space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <form action={confirmAction}>

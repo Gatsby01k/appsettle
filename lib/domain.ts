@@ -704,6 +704,54 @@ export async function rejectReconciliationSuggestion(
   return { recordId: record.id, rejectedSettlementId: settlementId };
 }
 
+/**
+ * Operator resolves an EXCEPTION record after reviewing it. The record moves from
+ * EXCEPTION to RESOLVED so it drops off the exceptions queue / dashboard alert. It
+ * never links a settlement and never reconciles one — resolving simply marks the
+ * exception as reviewed.
+ */
+export async function resolveReconciliationException(
+  recordId: string,
+  userId: string,
+  organizationId: string,
+  note?: string,
+) {
+  const record = await prisma.reconciliationRecord.findFirst({
+    where: { id: recordId, organizationId },
+  });
+  if (!record) {
+    throw new UserFacingError("Reconciliation record was not found.");
+  }
+  if (record.status !== ReconciliationStatus.EXCEPTION) {
+    throw new UserFacingError("Only EXCEPTION records can be resolved.");
+  }
+
+  const resolutionNote = note?.trim() || "Marked reviewed by operator.";
+
+  const updated = await prisma.reconciliationRecord.update({
+    where: { id: record.id },
+    data: {
+      status: ReconciliationStatus.RESOLVED,
+      rawPayload: {
+        ...baseRawPayload(record.rawPayload),
+        _resolutionNote: resolutionNote,
+      } as Prisma.InputJsonValue,
+    },
+  });
+
+  await writeAuditLog({
+    action: "reconciliation.resolve_exception",
+    resourceType: "reconciliation_record",
+    resourceId: record.id,
+    organizationId,
+    userId,
+    before: { id: record.id, status: record.status, exceptionReason: record.exceptionReason },
+    after: { id: updated.id, status: updated.status, resolutionNote },
+  });
+
+  return updated;
+}
+
 export async function updateSettings(input: unknown, userId: string, organizationId: string) {
   const data = settingsSchema.parse(input);
   const before = await prisma.organization.findUnique({

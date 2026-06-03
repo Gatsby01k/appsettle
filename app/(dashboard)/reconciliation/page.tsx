@@ -11,6 +11,7 @@ import {
   matchOriginOf,
   rejectReconciliationSuggestion,
   rejectedSettlementIdsOf,
+  resolveReconciliationException,
 } from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
 import {
@@ -138,6 +139,18 @@ async function rejectSuggestion(formData: FormData) {
   redirect("/reconciliation?success=rejected");
 }
 
+async function resolveException(formData: FormData) {
+  "use server";
+  const { user, organization } = await requireSession();
+  const recordId = String(formData.get("recordId") || "");
+  try {
+    await resolveReconciliationException(recordId, user.id, organization.id);
+  } catch (error) {
+    redirect(`/reconciliation?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
+  }
+  redirect("/reconciliation?success=resolved");
+}
+
 export default async function ReconciliationPage({
   searchParams,
 }: {
@@ -170,7 +183,7 @@ export default async function ReconciliationPage({
 
   // Best open settlement candidate for an unlinked record (excludes rejected ones).
   const suggestionFor = (record: (typeof records)[number]) => {
-    if (record.settlement || record.status === "EXCEPTION") return null;
+    if (record.settlement || record.status === "EXCEPTION" || record.status === "RESOLVED") return null;
     const best = bestSettlementMatch(record, settledCandidates, {
       excludeSettlementIds: new Set(rejectedSettlementIdsOf(record.rawPayload)),
       minConfidence: SUGGESTED_MIN_CONFIDENCE,
@@ -210,7 +223,9 @@ export default async function ReconciliationPage({
   });
 
   const matchedCount = records.filter((r) => Boolean(r.settlement) && r.status === "MATCHED").length;
-  const manualReview = records.filter((r) => !r.settlement && r.status !== "EXCEPTION").length;
+  const manualReview = records.filter(
+    (r) => !r.settlement && r.status !== "EXCEPTION" && r.status !== "RESOLVED",
+  ).length;
   const suggestedCount = records.filter((r) => !r.settlement && r.status !== "EXCEPTION" && suggestionFor(r)).length;
   const exceptions = records.filter((r) => r.status === "EXCEPTION").length;
   const matchRate = records.length ? Math.round((matchedCount / records.length) * 100) : 0;
@@ -270,6 +285,9 @@ export default async function ReconciliationPage({
       ) : null}
       {params.success === "rejected" ? (
         <FlashMessage message="Suggestion rejected — record kept in manual review." />
+      ) : null}
+      {params.success === "resolved" ? (
+        <FlashMessage message="Exception resolved — marked reviewed and cleared from the exceptions queue." />
       ) : null}
       {params.success === "automatch" ? (
         <FlashMessage
@@ -370,6 +388,7 @@ export default async function ReconciliationPage({
         records={workspaceRows}
         confirmAction={confirmMatch}
         rejectAction={rejectSuggestion}
+        resolveAction={resolveException}
       />
     </div>
   );
