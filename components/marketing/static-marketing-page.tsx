@@ -115,7 +115,6 @@ function addHomepageConsoleCtas(html: string, fileName: string) {
     '<div class="hero-ctas">' +
       '<a class="btn primary" href="/contact?intent=access">Request Access</a>' +
       '<a class="btn" href="/contact?intent=sales">Talk to Sales</a>' +
-      '<a class="btn" href="/login">Launch console</a>' +
       '</div><div class="hero-proof"',
   );
 }
