@@ -115,3 +115,4 @@ export default async function AuditLogsPage({ searchParams }: { searchParams: Pr
     </div>
   );
 }
+

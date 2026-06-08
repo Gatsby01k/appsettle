@@ -25,6 +25,10 @@ import {
   DataGridTh,
 } from "@/components/ops/data-grid";
 import { SettlementDetailSheet } from "@/components/dashboard/settlement-detail-sheet";
+import { RemitQuicklyTestButton } from "@/components/providers/remitquickly-test-button";
+import { isRemitQuicklyConfigured } from "@/lib/providers/remitquickly/client";
+import { isSandboxTestEnabled } from "@/lib/providers/remitquickly/flags";
+import { executeApprovedSettlement } from "@/lib/providers/remitquickly/settlement";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/helper-text";
@@ -79,14 +83,16 @@ async function transition(formData: FormData) {
   const { user, organization, membership } = await requireSession();
   if (!canApproveSettlement(membership.role)) redirect("/settlements");
   const status = String(formData.get("status")) as SettlementStatus;
+  const settlementId = String(formData.get("settlementId"));
   try {
-    await transitionSettlement(
-      String(formData.get("settlementId")),
-      status,
-      user.id,
-      organization.id,
-      "Updated from dashboard.",
-    );
+    // When RemitQuickly is configured, executing a settlement creates a real
+    // sandbox payout and records the provider id before moving to EXECUTING.
+    // Otherwise fall back to the plain lifecycle transition.
+    if (status === SettlementStatus.EXECUTING && isRemitQuicklyConfigured()) {
+      await executeApprovedSettlement(settlementId, user.id, organization.id);
+    } else {
+      await transitionSettlement(settlementId, status, user.id, organization.id, "Updated from dashboard.");
+    }
   } catch (error) {
     redirect(`/settlements?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
   }
@@ -132,6 +138,7 @@ export default async function SettlementsPage({
   const requested = settlements.filter((s) => s.status === SettlementStatus.REQUESTED).length;
   const inFlight = settlements.filter((s) => isInFlight(s.status)).length;
   const settled = settlements.filter((s) => isCompleted(s.status)).length;
+  const showSandboxTest = isSandboxTestEnabled();
 
   return (
     <div className="space-y-6">
@@ -139,6 +146,21 @@ export default async function SettlementsPage({
 
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {message ? <FlashMessage message={message} /> : null}
+
+      {showSandboxTest ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>RemitQuickly sandbox</CardTitle>
+            <CardDescription>
+              Private-beta only. Runs a safe end-to-end sandbox payout (submit → simulate → status) without
+              touching any settlement.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RemitQuicklyTestButton />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <MetricCard label="Requested" value={requested} hint="Awaiting approval" tone="warning" />
