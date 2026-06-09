@@ -3,7 +3,6 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
-  Check,
   CheckCircle2,
   FileText,
   Landmark,
@@ -18,7 +17,6 @@ import { prisma } from "@/lib/prisma";
 import { isPontisConfigured } from "@/lib/providers/pontis/client";
 import { isPontisGatewayConfigured } from "@/lib/providers/pontis/gateway";
 import { cn, formatCurrencyCompact, formatCurrencyFull, formatDateTime, formatPercent } from "@/lib/utils";
-import { SectionHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { SettlementLifecycle } from "@/components/ops/settlement-lifecycle";
 import { StatusBadge } from "@/components/ops/status-badge";
@@ -54,22 +52,29 @@ function humanizeAuditAction(action: string): string {
     "settlement.create": "Settlement created",
     "settlement.transition": "Settlement status updated",
     "reconciliation.create": "Reconciliation record created",
-    "reconciliation.auto_match": "Settlement reconciled automatically",
-    "reconciliation.confirm_match": "Reconciliation match confirmed",
+    "reconciliation.auto_match": "Reconciliation matched",
+    "reconciliation.confirm_match": "Reconciliation matched",
     "reconciliation.reject_match": "Reconciliation match rejected",
     "reconciliation.resolve_exception": "Reconciliation exception resolved",
     "pontis.payout.created": "Pontis payout submitted",
-    "pontis.payout.settled": "Pontis payout completed",
+    "pontis.payout.settled": "Provider payout completed",
     "pontis.payout.status_updated": "Provider status updated",
     "pontis.payout.failed": "Pontis payout failed",
     "pontis.payout.failed_submit": "Pontis payout submission failed",
     "remitquickly.payout.created": "RemitQuickly payout submitted",
-    "remitquickly.payout.settled": "RemitQuickly payout completed",
+    "remitquickly.payout.settled": "Provider payout completed",
     "remitquickly.payout.failed": "RemitQuickly payout failed",
     "settings.update": "Settings updated",
     "auth.login": "User signed in",
   };
   return map[action] ?? action.replaceAll(".", " · ").replaceAll("_", " ");
+}
+
+function streamEventCode(action: string): string | null {
+  if (NOISE_EVENT_ACTIONS.has(action)) return null;
+  const human = humanizeAuditAction(action);
+  if (human === action.replaceAll(".", " · ").replaceAll("_", " ")) return action;
+  return null;
 }
 
 const RECENT_PROOF_MS = 6 * 60 * 60 * 1000;
@@ -84,6 +89,11 @@ function isRecentlyCompleted(
   return elapsed >= 0 && elapsed < RECENT_PROOF_MS;
 }
 
+function truncateTx(id: string, max = 14) {
+  if (id.length <= max) return id;
+  return `${id.slice(0, 6)}…${id.slice(-4)}`;
+}
+
 function reconciliationLabel(
   status: SettlementStatus,
   records: { status: string }[],
@@ -96,52 +106,15 @@ function reconciliationLabel(
   return "—";
 }
 
-function auditStatusLabel(status: SettlementStatus): string {
-  if (status === SettlementStatus.RECONCILED) return "Recorded";
-  if (status === SettlementStatus.SETTLED) return "In progress";
-  return "Pending";
-}
-
-function proofSummaryCopy(status: SettlementStatus): string {
-  if (status === SettlementStatus.RECONCILED) {
-    return "Provider payout completed, reconciliation matched, and audit trail recorded.";
-  }
-  if (status === SettlementStatus.SETTLED) {
-    return "Provider payout completed. Reconciliation and audit trail in progress.";
-  }
-  return "Settlement proof will appear once provider execution completes.";
-}
-
-type OperationFlowStep = { label: string; done: boolean };
-
-function buildOperationFlowSteps(settlement: {
-  status: SettlementStatus;
-  providerTransactionId: string | null;
-  reconciliation: { status: string }[];
-}): OperationFlowStep[] {
-  const isSettled =
-    settlement.status === SettlementStatus.SETTLED || settlement.status === SettlementStatus.RECONCILED;
-  const isReconciled = settlement.status === SettlementStatus.RECONCILED;
-  const hasProviderTx = Boolean(settlement.providerTransactionId);
-  const autoMatched =
-    isReconciled ||
-    settlement.reconciliation.some((record) =>
-      ["AUTO_MATCHED", "MATCHED", "MANUAL_MATCHED"].includes(record.status),
-    );
-
+function proofMilestones(status: SettlementStatus) {
+  const settled =
+    status === SettlementStatus.SETTLED || status === SettlementStatus.RECONCILED;
+  const reconciled = status === SettlementStatus.RECONCILED;
   return [
-    { label: "Provider payout created", done: hasProviderTx || isSettled },
-    { label: "Provider status completed", done: isSettled },
-    { label: "Settlement marked settled", done: isSettled },
-    { label: "Reconciliation auto-matched", done: autoMatched },
-    { label: "Audit trail recorded", done: isReconciled },
+    { label: "Provider payout completed", done: settled },
+    { label: "Reconciliation matched", done: reconciled },
+    { label: "Audit trail recorded", done: reconciled },
   ];
-}
-
-function flowStatusLabel(status: SettlementStatus): string {
-  if (status === SettlementStatus.RECONCILED) return "Reconciled";
-  if (status === SettlementStatus.SETTLED) return "Completed";
-  return "In progress";
 }
 
 function isSummaryActivity(action: string) {
@@ -187,7 +160,7 @@ export default async function DashboardPage() {
     prisma.auditLog.findMany({
       where: { organizationId: organization.id },
       orderBy: { createdAt: "desc" },
-      take: 8,
+      take: 12,
       include: { user: true },
     }),
     prisma.quote.count({
@@ -213,93 +186,76 @@ export default async function DashboardPage() {
     statusCount(SettlementStatus.APPROVED) + statusCount(SettlementStatus.EXECUTING);
   const reconciledRate = completedCount ? Math.round((reconciledCount / completedCount) * 100) : 0;
 
-  const secondaryActivity = auditLogs
-    .filter((log) => isSummaryActivity(log.action))
-    .slice(0, 3);
+  const operationsStream = auditLogs.filter((log) => isSummaryActivity(log.action)).slice(0, 4);
 
-  const operationFlowSteps = latestProof ? buildOperationFlowSteps(latestProof) : [];
-
-  const alerts = [
+  const primaryAlert =
     reconExceptions > 0
       ? {
           title: `${reconExceptions} reconciliation exception${reconExceptions === 1 ? "" : "s"}`,
-          description: "Unmatched records need treasury review before close of day.",
           action: "Open reconciliation",
           href: "/reconciliation?status=EXCEPTION",
           tone: "danger" as const,
         }
-      : null,
-    pendingApprovals > 0
-      ? {
-          title: `${pendingApprovals} settlement${pendingApprovals === 1 ? "" : "s"} awaiting approval`,
-          description: "Approve in-flight requests to keep the rail moving.",
-          action: "Review queue",
-          href: "/settlements?status=REQUESTED",
-          tone: "warning" as const,
-        }
-      : null,
-    expiredQuotes > 0
-      ? {
-          title: `${expiredQuotes} expired quote${expiredQuotes === 1 ? "" : "s"}`,
-          description: "Refresh quote inventory before creating new settlements.",
-          action: "Open quotes",
-          href: "/quotes?tab=expired",
-          tone: "info" as const,
-        }
-      : null,
-  ].filter((alert): alert is NonNullable<typeof alert> => Boolean(alert));
+      : pendingApprovals > 0
+        ? {
+            title: `${pendingApprovals} settlement${pendingApprovals === 1 ? "" : "s"} awaiting approval`,
+            action: "Review queue",
+            href: "/settlements?status=REQUESTED",
+            tone: "warning" as const,
+          }
+        : expiredQuotes > 0
+          ? {
+              title: `${expiredQuotes} expired quote${expiredQuotes === 1 ? "" : "s"}`,
+              action: "Open quotes",
+              href: "/quotes?tab=expired",
+              tone: "info" as const,
+            }
+          : null;
 
   const latestCompletedAt = latestProof
     ? latestProof.reconciledAt ?? latestProof.settledAt ?? latestProof.createdAt
     : null;
 
   return (
-    <div className="space-y-3">
+    <div className="overview-page space-y-2">
       <section className="mission-control">
-        <div className="mission-control__hero-glow pointer-events-none absolute inset-x-0 top-0 h-28" aria-hidden="true" />
+        <div className="mission-control__hero-glow pointer-events-none absolute inset-x-0 top-0 h-36" aria-hidden="true" />
         <div className="mission-control__scanline pointer-events-none absolute inset-0" aria-hidden="true" />
 
-        <header className="mission-control__bar relative flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
+        <header className="mission-control__bar relative flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 sm:px-6">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#42d5b7]/90">Mission Control</p>
-            <h1 className="text-lg font-semibold tracking-tight text-white sm:text-[1.35rem]">Treasury Operations</h1>
-            <p className="mt-0.5 max-w-2xl text-[11.5px] leading-snug text-slate-300/90">
-              Live settlement rails, provider execution, reconciliation, and audit.
-            </p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#42d5b7]/80">Mission Control</p>
+            <h1 className="text-lg font-semibold tracking-tight text-white sm:text-[1.25rem]">Treasury Operations</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="overview-live-badge inline-flex items-center gap-1.5 rounded-full border border-[#00c79d]/35 bg-[#00c79d]/12 px-2.5 py-1 text-[10px] font-semibold text-[#42d5b7]">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="overview-live-badge inline-flex items-center gap-1.5 rounded-full border border-[#00c79d]/30 bg-[#00c79d]/10 px-2.5 py-1 text-[10px] font-semibold text-[#42d5b7]">
               <span className="ops-pulse" aria-hidden="true" />
-              Rails live
+              Settlement rails live
             </span>
             {pontisConnected ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0bb4c4]/35 bg-[#0bb4c4]/10 px-2.5 py-1 text-[10px] font-semibold text-[#5dd4e0]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#0bb4c4]" aria-hidden="true" />
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0bb4c4]/28 bg-[#0bb4c4]/8 px-2.5 py-1 text-[10px] font-semibold text-[#5dd4e0]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#0bb4c4] shadow-[0_0_8px_rgba(11,180,196,0.55)]" aria-hidden="true" />
                 PontisGlobe connected
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-slate-400">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold text-slate-400">
                 PontisGlobe offline
               </span>
             )}
-            <span className="overview-monitoring-badge inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/5 px-2.5 py-1 text-[10px] font-medium text-slate-300">
-              <span className="ops-pulse ops-pulse--subtle" aria-hidden="true" />
-              Live monitoring
-            </span>
           </div>
         </header>
 
         <div className="mission-control__telemetry relative">
           <MetricCard
             variant="telemetry"
-            label="Completed settlements"
+            label="Completed"
             value={completedCount}
             tone="success"
             icon={CheckCircle2}
           />
           <MetricCard
             variant="telemetry"
-            label="Auto-reconciled rate"
+            label="Auto-reconciled"
             value={formatPercent(reconciledRate)}
             tone="info"
             icon={TrendingUp}
@@ -320,7 +276,7 @@ export default async function DashboardPage() {
           />
         </div>
 
-        <div className="mission-control__cockpit relative grid gap-3 p-3 sm:p-4 lg:grid-cols-12">
+        <div className="mission-control__cockpit relative grid gap-3 p-4 sm:p-5 lg:grid-cols-12">
           <div className="lg:col-span-8">
             {latestProof ? (
               <div
@@ -331,75 +287,65 @@ export default async function DashboardPage() {
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400/80">
                       Latest settlement proof
                     </p>
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      <p className="font-mono text-base font-semibold tracking-tight text-slate-950 sm:text-lg">
+                      <p className="font-mono text-sm font-semibold tracking-tight text-white/90 sm:text-base">
                         {latestProof.publicId}
                       </p>
                       <StatusBadge status={latestProof.status} />
                     </div>
                   </div>
                   {latestCompletedAt ? (
-                    <p className="shrink-0 text-[11px] text-slate-500">{formatDateTime(latestCompletedAt)}</p>
+                    <p className="shrink-0 text-[11px] text-slate-400/90">{formatDateTime(latestCompletedAt)}</p>
                   ) : null}
                 </div>
 
                 <p
-                  className="mt-3 text-3xl font-semibold tracking-tight tabular-nums text-slate-900 sm:text-[2rem]"
+                  className="proof-hero-amount mt-3"
                   title={formatCurrencyFull(String(latestProof.sourceAmount), latestProof.sourceCurrency)}
                 >
                   {formatCurrencyFull(String(latestProof.sourceAmount), latestProof.sourceCurrency)}
                 </p>
 
-                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px]">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   {latestProof.provider ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">Provider</span>
-                      <span className="font-medium text-slate-800">{latestProof.provider}</span>
-                    </div>
+                    <span className="proof-provider-chip">{latestProof.provider}</span>
                   ) : null}
                   {latestProof.providerTransactionId ? (
-                    <span className="proof-tx-pill truncate" title={latestProof.providerTransactionId}>
-                      {latestProof.providerTransactionId}
+                    <span className="proof-tx-pill" title={latestProof.providerTransactionId}>
+                      {truncateTx(latestProof.providerTransactionId)}
                     </span>
                   ) : null}
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
-                      Reconciliation
-                    </span>
-                    <StatusBadge
-                      status={reconciliationLabel(latestProof.status, latestProof.reconciliation)}
-                      dot={false}
-                    />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
-                      Audit trail
-                    </span>
-                    <StatusBadge status={auditStatusLabel(latestProof.status)} dot={false} />
-                  </div>
                 </div>
 
-                <div className="mt-4 rounded-xl border border-[var(--ops-line-soft)] bg-white/60 px-3 py-3">
+                <ul className="proof-milestones mt-4">
+                  {proofMilestones(latestProof.status).map((item, index) => (
+                    <li
+                      key={item.label}
+                      className={cn("proof-milestone", item.done && "proof-milestone--done")}
+                      style={{ animationDelay: `${0.08 + index * 0.06}s` }}
+                    >
+                      <span className="proof-milestone__icon" aria-hidden="true">
+                        {item.done ? <CheckCircle2 className="h-3 w-3" /> : null}
+                      </span>
+                      <span className="proof-milestone__label">{item.label}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="proof-lifecycle-wrap mt-3.5">
                   <SettlementLifecycle status={latestProof.status} proofRail />
                 </div>
 
-                <p className="mt-3 text-[12.5px] leading-relaxed text-slate-600">
-                  {proofSummaryCopy(latestProof.status)}
-                </p>
-
-                <Link
-                  href="/settlements"
-                  className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-brand-emerald-ink transition-colors hover:text-[#065f4d]"
-                >
+                <Link href="/settlements" className="proof-cta mt-4">
                   View proof
-                  <ArrowRight className="h-3.5 w-3.5" />
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                 </Link>
               </div>
             ) : (
-              <div className="proof-card rounded-xl border border-dashed border-[var(--ops-line)] p-5">
+              <div className="proof-card proof-card--empty p-5">
                 <EmptyState
                   title="No completed settlements yet"
                   description="Execute your first settlement to see provider proof here."
@@ -409,27 +355,27 @@ export default async function DashboardPage() {
             )}
           </div>
 
-          <div className="flex flex-col gap-3 lg:col-span-4">
-            <div className="mission-control__actions mission-action-card rounded-xl border border-[var(--ops-line-soft)] bg-white/75 p-2.5">
+          <div className="flex flex-col gap-2.5 lg:col-span-4">
+            <div className="mission-control__actions mission-action-card p-2.5">
               <Button asChild variant="primary" size="sm" className="ops-btn-navy mb-1.5 w-full justify-center">
                 <Link href="/quotes">
                   <Plus className="h-3.5 w-3.5" />
                   Create quote
                 </Link>
               </Button>
-              <Button asChild variant="outline" size="sm" className="mb-1.5 w-full justify-center">
+              <Button asChild variant="outline" size="sm" className="mb-1.5 w-full justify-center border-white/12 bg-white/[0.03] text-slate-200 hover:bg-white/[0.06]">
                 <Link href="/settlements">
                   <Landmark className="h-3.5 w-3.5" />
                   Create settlement
                 </Link>
               </Button>
-              <Button asChild variant="outline" size="sm" className="mb-1.5 w-full justify-center">
+              <Button asChild variant="outline" size="sm" className="mb-1.5 w-full justify-center border-white/12 bg-white/[0.03] text-slate-200 hover:bg-white/[0.06]">
                 <Link href="/reconciliation">
                   <RefreshCw className="h-3.5 w-3.5" />
                   Run reconciliation
                 </Link>
               </Button>
-              <Button asChild variant="ghost" size="sm" className="w-full justify-center">
+              <Button asChild variant="ghost" size="sm" className="w-full justify-center text-slate-300 hover:bg-white/[0.05] hover:text-white">
                 <Link href="/audit-logs">
                   <FileText className="h-3.5 w-3.5" />
                   View audit trail
@@ -438,160 +384,88 @@ export default async function DashboardPage() {
             </div>
 
             <div className="flex-1">
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">Needs attention</p>
-              <div className="space-y-1.5">
-                {alerts.length ? (
-                  alerts.map((alert) => (
-                    <Link key={alert.title} href={alert.href} className="group block">
-                      <div
-                        className={cn(
-                          "overview-alert mission-action-card rounded-xl border px-3 py-2.5",
-                          alert.tone === "danger" && "border-rose-200 bg-rose-50/80",
-                          alert.tone === "warning" && "border-[#f2ad23]/30 bg-[#fff8e8]/80",
-                          alert.tone === "info" && "border-[#0bb4c4]/25 bg-[#e7f7fb]/70",
-                        )}
-                      >
-                        <p className="text-[12px] font-semibold tracking-tight text-slate-900">{alert.title}</p>
-                        <p className="mt-0.5 text-[11px] leading-snug text-slate-600">{alert.description}</p>
-                        <span className="overview-alert__action mt-1.5 inline-flex items-center gap-0.5 text-[10px] font-semibold text-brand-emerald-ink group-hover:underline">
-                          {alert.action}
-                          <ArrowRight className="overview-alert__arrow h-3 w-3" aria-hidden="true" />
-                        </span>
-                      </div>
-                    </Link>
-                  ))
-                ) : (
-                  <div className="flex items-center gap-2.5 rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-3 py-2.5">
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#e7faf4] text-brand-emerald-ink ring-1 ring-[#00c79d]/25">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Needs attention</p>
+              {primaryAlert ? (
+                <Link href={primaryAlert.href} className="group block">
+                  <div
+                    className={cn(
+                      "overview-alert mission-action-card px-3.5 py-2.5",
+                      primaryAlert.tone === "danger" && "overview-alert--danger",
+                      primaryAlert.tone === "warning" && "overview-alert--warning",
+                      primaryAlert.tone === "info" && "overview-alert--info",
+                    )}
+                  >
+                    <p className="text-[12px] font-semibold tracking-tight text-slate-100">{primaryAlert.title}</p>
+                    <span className="overview-alert__action mt-1 inline-flex items-center gap-0.5 text-[10px] font-semibold text-[#42d5b7] group-hover:underline">
+                      {primaryAlert.action}
+                      <ArrowRight className="overview-alert__arrow h-3 w-3" aria-hidden="true" />
                     </span>
-                    <div className="min-w-0">
-                      <p className="text-[12px] font-semibold text-slate-900">All clear</p>
-                      <p className="text-[11px] text-slate-500">Rails operating normally.</p>
-                    </div>
                   </div>
-                )}
-              </div>
+                </Link>
+              ) : (
+                <div className="overview-all-clear flex items-center gap-2.5 px-3.5 py-2.5">
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-[#00c79d]/12 text-[#42d5b7]">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-semibold text-slate-100">All clear</p>
+                    <p className="text-[11px] text-slate-400">Settlement rails operating normally.</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </section>
 
-      <div className="grid gap-3 lg:grid-cols-12">
-        <section className="lg:col-span-7">
-          <SectionHeader
-            title="Latest operation flow"
-            description="High-level summary of the most recent completed settlement"
-            action={
-              <Link href="/audit-logs" className="text-xs font-medium text-slate-500 hover:text-slate-800">
-                Full audit trail
-              </Link>
-            }
-          />
-          {latestProof ? (
-            <div className="operation-flow-card p-3.5 sm:p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[var(--ops-line-soft)] pb-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-mono text-[13px] font-semibold text-slate-950">{latestProof.publicId}</p>
-                    <StatusBadge status={flowStatusLabel(latestProof.status)} dot={false} />
-                  </div>
-                  <p
-                    className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-slate-900"
-                    title={formatCurrencyFull(String(latestProof.sourceAmount), latestProof.sourceCurrency)}
-                  >
-                    {formatCurrencyFull(String(latestProof.sourceAmount), latestProof.sourceCurrency)}
-                  </p>
-                </div>
-                {latestCompletedAt ? (
-                  <p className="shrink-0 text-[11px] text-slate-500">{formatDateTime(latestCompletedAt)}</p>
-                ) : null}
-              </div>
-
-              <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px]">
-                {latestProof.provider ? (
-                  <span className="text-slate-600">
-                    <span className="text-slate-400">Provider · </span>
-                    {latestProof.provider}
-                  </span>
-                ) : null}
-                {latestProof.providerTransactionId ? (
-                  <span className="proof-tx-pill truncate" title={latestProof.providerTransactionId}>
-                    {latestProof.providerTransactionId}
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="operation-flow-checklist operation-flow-checklist--horizontal mt-3.5">
-                {operationFlowSteps.map((step) => (
-                  <div key={step.label} className="operation-flow-check-item">
-                    <span
-                      className={cn(
-                        "operation-flow-check-icon",
-                        step.done && "operation-flow-check-icon--done",
-                      )}
-                      aria-hidden="true"
-                    >
-                      {step.done ? <Check className="h-3 w-3" strokeWidth={2.5} /> : null}
-                    </span>
-                    <span
-                      className={cn(
-                        "operation-flow-check-label",
-                        step.done && "operation-flow-check-label--done",
-                      )}
-                    >
-                      {step.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="operation-flow-card p-4">
-              <EmptyState
-                title="No completed flows yet"
-                description="Once a settlement completes, you'll see the end-to-end operation summary here."
-                action={{ label: "Create settlement", href: "/settlements" }}
-              />
-            </div>
-          )}
-
-          {secondaryActivity.length ? (
-            <div className="secondary-activity mt-2.5 rounded-xl border border-[var(--ops-line-soft)] bg-white/60 px-3 py-2">
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Recent activity</p>
-                <Link href="/audit-logs" className="text-[10px] font-medium text-slate-500 hover:text-slate-800">
-                  View all
-                </Link>
-              </div>
-              <ul className="space-y-1">
-                {secondaryActivity.map((log, index) => (
+      <div className="overview-compact-grid">
+        <section className="overview-compact-panel">
+          <div className="overview-compact-panel__head">
+            <h2 className="overview-compact-panel__title">Operations stream</h2>
+            <Link href="/audit-logs" className="overview-compact-panel__link">
+              Full trail
+            </Link>
+          </div>
+          {operationsStream.length ? (
+            <ul className="ops-stream">
+              {operationsStream.map((log, index) => {
+                const code = streamEventCode(log.action);
+                return (
                   <li
                     key={log.id}
-                    className="secondary-activity-item flex items-baseline justify-between gap-2 py-0.5"
+                    className={cn("ops-stream-item", index === 0 && "ops-stream-item--latest")}
                     style={{ animationDelay: `${0.04 + index * 0.04}s` }}
                   >
-                    <span className="truncate text-[11.5px] text-slate-600">{humanizeAuditAction(log.action)}</span>
-                    <span className="shrink-0 text-[10px] text-slate-400">{formatDateTime(log.createdAt)}</span>
+                    <div className="ops-stream-item__head">
+                      <p className="ops-stream-title">{humanizeAuditAction(log.action)}</p>
+                      {code ? <span className="ops-stream-event-code">{code}</span> : null}
+                      {index === 0 ? (
+                        <span className="ops-stream-live">
+                          <span className="ops-pulse ops-pulse--subtle" aria-hidden="true" />
+                          Live
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="ops-stream-time">{formatDateTime(log.createdAt)}</p>
                   </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="overview-compact-empty">No recent operations yet.</p>
+          )}
         </section>
 
-        <section className="lg:col-span-5">
-          <SectionHeader
-            title="Recent settlement proofs"
-            action={
-              <Link href="/settlements" className="text-xs font-medium text-slate-600 hover:text-slate-950">
-                View all
-              </Link>
-            }
-          />
+        <section className="overview-compact-panel">
+          <div className="overview-compact-panel__head">
+            <h2 className="overview-compact-panel__title">Recent proofs</h2>
+            <Link href="/settlements" className="overview-compact-panel__link">
+              View all
+            </Link>
+          </div>
           {recentSettlements.length ? (
-            <div className="proof-summary-panel divide-y divide-[var(--ops-line-soft)] px-1 py-0.5">
-              {recentSettlements.slice(0, 5).map((settlement) => {
+            <div className="proof-feed">
+              {recentSettlements.slice(0, 4).map((settlement, index) => {
                 const when = settlement.reconciledAt
                   ? formatDateTime(settlement.reconciledAt)
                   : settlement.settledAt
@@ -602,30 +476,27 @@ export default async function DashboardPage() {
                   <Link
                     key={settlement.id}
                     href="/settlements"
-                    className="proof-summary-row flex items-center gap-2.5 px-2.5 py-2"
+                    className="proof-feed-item"
+                    style={{ animationDelay: `${0.03 + index * 0.04}s` }}
                   >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <p className="truncate font-mono text-[11.5px] font-semibold text-slate-900">
-                          {settlement.publicId}
-                        </p>
-                        <StatusBadge status={settlement.status} />
-                      </div>
-                      <p className="mt-0.5 truncate text-[10.5px] text-slate-500">
-                        {settlement.provider ?? "No provider"}
-                        {settlement.providerTransactionId
-                          ? ` · ${settlement.providerTransactionId.slice(0, 8)}…`
-                          : ""}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p
-                        className="text-[11.5px] font-semibold tabular-nums text-slate-800"
+                    <div className="proof-feed-item__primary">
+                      <span className="proof-feed-item__id">{settlement.publicId}</span>
+                      <StatusBadge status={settlement.status} />
+                      <span
+                        className="proof-feed-item__amount"
                         title={formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
                       >
                         {formatCurrencyCompact(String(settlement.sourceAmount), settlement.sourceCurrency)}
-                      </p>
-                      <p className="mt-0.5 text-[10px] text-slate-400">{when}</p>
+                      </span>
+                    </div>
+                    <div className="proof-feed-item__meta">
+                      <span className="proof-feed-item__provider">{settlement.provider ?? "No provider"}</span>
+                      {settlement.providerTransactionId ? (
+                        <span className="proof-feed-tx" title={settlement.providerTransactionId}>
+                          {truncateTx(settlement.providerTransactionId)}
+                        </span>
+                      ) : null}
+                      <span className="proof-feed-item__time">{when}</span>
                     </div>
                   </Link>
                 );
