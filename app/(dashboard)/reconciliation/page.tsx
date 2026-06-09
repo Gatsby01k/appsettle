@@ -22,14 +22,14 @@ import {
   MATCH_LABEL,
 } from "@/lib/reconciliation";
 import { prisma } from "@/lib/prisma";
-import { formatCurrencyFull, formatPercent } from "@/lib/utils";
+import { cn, formatCurrencyFull, formatPercent } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { FlashMessage } from "@/components/ops/flash-message";
 import { FilterBar } from "@/components/ops/filter-bar";
 import { AddRecordForm } from "@/components/dashboard/add-record-form";
+import { ReconciliationCommandBar } from "@/components/dashboard/reconciliation-command-bar";
 import { ReconciliationWorkspace } from "@/components/dashboard/reconciliation-workspace";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 async function submitRecord(formData: FormData) {
@@ -229,6 +229,7 @@ export default async function ReconciliationPage({
   const suggestedCount = records.filter((r) => !r.settlement && r.status !== "EXCEPTION" && suggestionFor(r)).length;
   const exceptions = records.filter((r) => r.status === "EXCEPTION").length;
   const matchRate = records.length ? Math.round((matchedCount / records.length) * 100) : 0;
+  const metricsRefresh = Boolean(params.success);
 
   const workspaceRows = filteredRecords.map((record) => {
     const confidence = confidenceFor(record);
@@ -267,11 +268,8 @@ export default async function ReconciliationPage({
   });
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Reconciliation"
-        description="Capture external records, run the auto-match engine, review suggestions, and resolve exceptions."
-      />
+    <div className="space-y-4">
+      <PageHeader title="Reconciliation" className="gap-3" />
 
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {params.success === "created" ? (
@@ -301,95 +299,109 @@ export default async function ReconciliationPage({
         <FlashMessage message="Exception record created — sent to the operations queue for manual review." />
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Matched" value={matchedCount} hint="Linked & reconciled" tone="success" />
-        <MetricCard
-          label="Manual review"
-          value={manualReview}
-          hint={`${suggestedCount} with suggestions`}
-          tone={manualReview ? "warning" : "neutral"}
-        />
-        <MetricCard label="Exceptions" value={exceptions} hint="Operations queue" tone={exceptions ? "danger" : "neutral"} />
-        <MetricCard label="Match rate" value={formatPercent(matchRate)} hint="Reconciled records" tone="info" />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Add external record</CardTitle>
-            <CardDescription>
-              Capture a bank, chain, or PSP record. It is saved as OPEN — reconcile it with the auto-match engine or an
-              optional manual match.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AddRecordForm
-              action={submitRecord}
-              settlements={settlements.map((s) => ({ value: s.id, label: `${s.publicId} · ${s.reference}` }))}
-            />
-          </CardContent>
-        </Card>
-
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Auto-match engine</CardTitle>
-              <CardDescription>
-                Scans every OPEN/UNMATCHED record and reconciles only exact 100% matches against SETTLED settlements
-                (same amount, currency, and value date). 80–99% candidates become suggestions for review.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form action={runAutoMatch}>
-                <SubmitButton variant="primary" pendingText="Matching...">
-                  Run auto-match
-                </SubmitButton>
-              </form>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick create</CardTitle>
-              <CardDescription>
-                Generate demo external records in one click. Matching records are saved as OPEN — run auto-match to
-                reconcile them.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-2">
-              <form action={createMatchingBankRecord}>
-                <SubmitButton variant="outline" pendingText="Creating..." className="w-full justify-start">
-                  Create matching bank record
-                </SubmitButton>
-              </form>
-              <form action={createMatchingChainRecord}>
-                <SubmitButton variant="outline" pendingText="Creating..." className="w-full justify-start">
-                  Create matching chain record
-                </SubmitButton>
-              </form>
-              <form action={createExceptionRecord}>
-                <SubmitButton variant="outline" pendingText="Creating..." className="w-full justify-start">
-                  Create exception record
-                </SubmitButton>
-              </form>
-            </CardContent>
-          </Card>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className={cn("reconciliation-metric-enter", metricsRefresh && "reconciliation-metric-value-pulse")}>
+          <MetricCard label="Matched" value={matchedCount} hint="Linked & reconciled" tone="success" />
+        </div>
+        <div
+          className={cn(
+            "reconciliation-metric-enter reconciliation-metric-enter-delay-1",
+            metricsRefresh && "reconciliation-metric-value-pulse",
+          )}
+        >
+          <MetricCard
+            label="Manual review"
+            value={manualReview}
+            hint={`${suggestedCount} with suggestions`}
+            tone={manualReview ? "warning" : "neutral"}
+          />
+        </div>
+        <div
+          className={cn(
+            "reconciliation-metric-enter reconciliation-metric-enter-delay-2",
+            metricsRefresh && "reconciliation-metric-value-pulse",
+          )}
+        >
+          <MetricCard label="Exceptions" value={exceptions} hint="Operations queue" tone={exceptions ? "danger" : "neutral"} />
+        </div>
+        <div
+          className={cn(
+            "reconciliation-metric-enter reconciliation-metric-enter-delay-3",
+            metricsRefresh && "reconciliation-metric-value-pulse",
+          )}
+        >
+          <MetricCard
+            label="Match rate"
+            value={formatPercent(matchRate)}
+            hint="Reconciled records"
+            tone="info"
+          />
         </div>
       </div>
 
-      <Suspense fallback={null}>
-        <FilterBar
-          searchPlaceholder="Search reference, source, settlement..."
-          statusOptions={["OPEN", "MATCHED", "PARTIALLY_MATCHED", "UNMATCHED", "EXCEPTION", "RESOLVED"]}
-        />
-      </Suspense>
-
-      <ReconciliationWorkspace
-        records={workspaceRows}
-        confirmAction={confirmMatch}
-        rejectAction={rejectSuggestion}
-        resolveAction={resolveException}
+      <ReconciliationCommandBar
+        addRecordForm={
+          <AddRecordForm
+            action={submitRecord}
+            compact
+            settlements={settlements.map((s) => ({ value: s.id, label: `${s.publicId} · ${s.reference}` }))}
+          />
+        }
+        autoMatchForm={
+          <form action={runAutoMatch}>
+            <SubmitButton variant="primary" size="sm" pendingText="Matching...">
+              Run auto-match
+            </SubmitButton>
+          </form>
+        }
+        demoForms={
+          <div className="flex flex-wrap items-center gap-1.5">
+            <form action={createMatchingBankRecord}>
+              <SubmitButton variant="outline" size="sm" pendingText="Creating...">
+                Bank demo
+              </SubmitButton>
+            </form>
+            <form action={createMatchingChainRecord}>
+              <SubmitButton variant="outline" size="sm" pendingText="Creating...">
+                Chain demo
+              </SubmitButton>
+            </form>
+            <form action={createExceptionRecord}>
+              <SubmitButton variant="outline" size="sm" pendingText="Creating...">
+                Exception demo
+              </SubmitButton>
+            </form>
+          </div>
+        }
       />
+
+      <div className="ops-panel ops-panel-accent reconciliation-console overflow-hidden">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--ops-line-soft)] px-3 py-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Reconciliation console</p>
+            <p className="truncate text-xs text-slate-400">Queue on the left · resolution console on the right</p>
+          </div>
+          <p className="hidden shrink-0 text-[10px] font-medium uppercase tracking-[0.07em] text-slate-400 sm:block">
+            Select a record
+          </p>
+        </div>
+
+        <Suspense fallback={null}>
+          <FilterBar
+            embedded
+            searchPlaceholder="Search reference, source, settlement..."
+            statusOptions={["OPEN", "MATCHED", "PARTIALLY_MATCHED", "UNMATCHED", "EXCEPTION", "RESOLVED"]}
+          />
+        </Suspense>
+
+        <ReconciliationWorkspace
+          embedded
+          records={workspaceRows}
+          confirmAction={confirmMatch}
+          rejectAction={rejectSuggestion}
+          resolveAction={resolveException}
+        />
+      </div>
     </div>
   );
 }

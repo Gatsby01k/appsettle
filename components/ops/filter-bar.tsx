@@ -10,9 +10,11 @@ import { cn } from "@/lib/utils";
 export function FilterBar({
   statusOptions = [],
   searchPlaceholder = "Search...",
+  embedded = false,
 }: {
   statusOptions?: string[];
   searchPlaceholder?: string;
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -35,7 +37,12 @@ export function FilterBar({
   const activeQuery = searchParams.get("q") ?? "";
 
   return (
-    <div className="ops-panel flex flex-col gap-3 p-3 lg:flex-row lg:items-center lg:justify-between">
+    <div
+      className={cn(
+        "flex flex-col gap-2.5 p-2.5 lg:flex-row lg:items-center lg:justify-between",
+        embedded ? "border-b border-[var(--ops-line-soft)] bg-slate-50/50" : "ops-panel gap-3 p-3",
+      )}
+    >
       <form
         className="relative w-full min-w-0 lg:max-w-sm"
         onSubmit={(event) => {

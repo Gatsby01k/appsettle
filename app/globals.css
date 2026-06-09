@@ -524,6 +524,306 @@ body {
   animation: submitSpin 0.65s linear infinite;
 }
 
+/* Reconciliation command center — viewport-aware split console */
+.reconciliation-console {
+  --reconciliation-console-offset: 17.5rem;
+}
+
+.reconciliation-console-grid {
+  min-height: min(28rem, calc(100vh - var(--reconciliation-console-offset)));
+}
+
+.reconciliation-console-scroll {
+  max-height: min(28rem, calc(100vh - var(--reconciliation-console-offset) - 3.5rem));
+}
+
+.reconciliation-live-dot {
+  position: relative;
+}
+.reconciliation-live-dot::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  animation: settlementLivePing 1.6s ease-out infinite;
+}
+
+.reconciliation-queue-item {
+  position: relative;
+  border-left: 2px solid transparent;
+  transition:
+    background-color 0.15s var(--ease),
+    border-color 0.15s var(--ease);
+}
+.reconciliation-queue-item:hover {
+  background-color: rgba(0, 199, 157, 0.04);
+}
+.reconciliation-queue-item-active {
+  background-color: rgba(0, 199, 157, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(0, 199, 157, 0.1);
+}
+.reconciliation-queue-item-active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(0, 199, 157, 0.1);
+  animation: reconciliationQueueSelect 0.38s var(--ease) forwards;
+}
+.reconciliation-queue-accent-success.reconciliation-queue-item-active {
+  border-left-color: #00c79d;
+}
+.reconciliation-queue-accent-info.reconciliation-queue-item-active {
+  border-left-color: #0bb4c4;
+  background-color: rgba(11, 180, 196, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(11, 180, 196, 0.12);
+}
+.reconciliation-queue-accent-warning.reconciliation-queue-item-active {
+  border-left-color: #f2ad23;
+  background-color: rgba(242, 173, 35, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(242, 173, 35, 0.14);
+}
+.reconciliation-queue-accent-danger.reconciliation-queue-item-active {
+  border-left-color: #f43f5e;
+  background-color: rgba(244, 63, 94, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.12);
+}
+.reconciliation-queue-accent-neutral.reconciliation-queue-item-active {
+  border-left-color: #94a3b8;
+  background-color: rgba(148, 163, 184, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.14);
+}
+
+.reconciliation-panel-success {
+  border-color: rgba(0, 199, 157, 0.25);
+  background: linear-gradient(135deg, rgba(231, 250, 244, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%);
+}
+.reconciliation-panel-matched {
+  animation: settlementConsoleGlow 3s ease-in-out infinite;
+}
+.reconciliation-panel-info {
+  border-color: rgba(11, 180, 196, 0.22);
+  background: linear-gradient(135deg, rgba(231, 247, 251, 0.9) 0%, rgba(255, 255, 255, 0.85) 100%);
+}
+.reconciliation-panel-warning {
+  border-color: rgba(242, 173, 35, 0.28);
+  background: linear-gradient(135deg, rgba(255, 245, 222, 0.85) 0%, rgba(255, 255, 255, 0.9) 100%);
+}
+.reconciliation-panel-danger {
+  border-color: rgba(244, 63, 94, 0.22);
+  background: linear-gradient(135deg, rgba(255, 241, 242, 0.9) 0%, rgba(255, 255, 255, 0.88) 100%);
+}
+.reconciliation-panel-neutral {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.95) 0%, rgba(255, 255, 255, 0.9) 100%);
+}
+
+.reconciliation-matched-settlement {
+  animation: settlementProofIn 0.28s var(--ease) both;
+}
+
+/* Reconciliation microinteractions — queue, detail panel, metrics */
+@keyframes reconciliationQueueSelect {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes reconciliationDetailEnter {
+  from {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes reconciliationBadgePop {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.88);
+  }
+  65% {
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes reconciliationConfidenceGrow {
+  from {
+    transform: scaleX(0.06);
+    opacity: 0.65;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+@keyframes reconciliationBlockIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes reconciliationMetricEnter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes reconciliationMetricValuePulse {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.035);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes reconciliationFormReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes reconciliationBtnPending {
+  0%,
+  100% {
+    opacity: 0.92;
+  }
+  50% {
+    opacity: 0.78;
+  }
+}
+
+@keyframes reconciliationSpinnerIn {
+  from {
+    opacity: 0;
+    transform: scale(0.7) rotate(-30deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.reconciliation-detail-enter {
+  animation: reconciliationDetailEnter 0.32s var(--ease) both;
+}
+
+.reconciliation-badge-pop {
+  animation: reconciliationBadgePop 0.28s var(--ease) both;
+}
+
+.reconciliation-confidence-track {
+  contain: layout style;
+}
+
+.reconciliation-confidence-fill {
+  transform-origin: left center;
+  transition:
+    width 0.65s var(--ease),
+    background-color 0.35s var(--ease);
+  animation: reconciliationConfidenceGrow 0.55s var(--ease) both;
+}
+
+.reconciliation-block-enter {
+  animation: reconciliationBlockIn 0.3s var(--ease) both;
+}
+
+.reconciliation-block-enter-delay-1 {
+  animation-delay: 0.05s;
+}
+
+.reconciliation-block-enter-delay-2 {
+  animation-delay: 0.1s;
+}
+
+.reconciliation-block-enter-delay-3 {
+  animation-delay: 0.15s;
+}
+
+.reconciliation-metric-enter {
+  animation: reconciliationMetricEnter 0.42s var(--ease) both;
+}
+
+.reconciliation-metric-enter-delay-1 {
+  animation-delay: 0.06s;
+}
+
+.reconciliation-metric-enter-delay-2 {
+  animation-delay: 0.12s;
+}
+
+.reconciliation-metric-enter-delay-3 {
+  animation-delay: 0.18s;
+}
+
+.reconciliation-metric-value-pulse {
+  display: inline-block;
+  animation: reconciliationMetricValuePulse 0.55s var(--ease) both;
+}
+
+.reconciliation-form-reveal {
+  animation: reconciliationFormReveal 0.28s var(--ease) both;
+}
+
+.reconciliation-manual-hint-pop {
+  animation: reconciliationBadgePop 0.26s var(--ease) both;
+}
+
+.reconciliation-btn-pending {
+  animation: reconciliationBtnPending 1.4s ease-in-out infinite;
+  transition:
+    opacity 0.2s var(--ease),
+    transform 0.2s var(--ease);
+}
+
+.reconciliation-btn-content {
+  transition: opacity 0.15s var(--ease);
+}
+
+.reconciliation-spinner-enter {
+  animation: reconciliationSpinnerIn 0.22s var(--ease) both;
+}
+
+.reconciliation-details-content {
+  animation: none;
+}
+
+details[open] > .reconciliation-details-content {
+  animation: reconciliationFormReveal 0.26s var(--ease) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ops-pulse::after {
     animation: none;
@@ -547,9 +847,29 @@ body {
   .settlement-step-active,
   .settlement-connector-active,
   .settlement-live-dot::after,
+  .reconciliation-live-dot::after,
+  .reconciliation-panel-matched,
+  .reconciliation-matched-settlement,
+  .reconciliation-queue-item-active,
+  .reconciliation-detail-enter,
+  .reconciliation-badge-pop,
+  .reconciliation-confidence-fill,
+  .reconciliation-block-enter,
+  .reconciliation-metric-enter,
+  .reconciliation-metric-value-pulse,
+  .reconciliation-form-reveal,
+  .reconciliation-manual-hint-pop,
+  .reconciliation-btn-pending,
+  .reconciliation-spinner-enter,
+  .reconciliation-details-content,
   .settlement-proof-enter,
   .settlement-complete-icon,
   .ops-submit-spinner {
     animation: none;
+  }
+  .reconciliation-confidence-fill,
+  .reconciliation-btn-pending,
+  .reconciliation-btn-content {
+    transition: none;
   }
 }

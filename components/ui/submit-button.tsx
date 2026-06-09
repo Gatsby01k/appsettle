@@ -41,14 +41,15 @@ export function SubmitButton({
       aria-busy={showPending}
       className={cn(
         className,
-        showPending && "cursor-wait opacity-90",
+        "reconciliation-btn-content",
+        showPending && "reconciliation-btn-pending cursor-wait",
         disabled && !showPending && "cursor-not-allowed opacity-55",
       )}
     >
       {showPending ? (
         <span className="inline-flex items-center gap-1.5">
           <span
-            className="ops-submit-spinner inline-block h-3 w-3 rounded-full border-2 border-current/30 border-t-current"
+            className="ops-submit-spinner reconciliation-spinner-enter inline-block h-3 w-3 rounded-full border-2 border-current/30 border-t-current"
             aria-hidden="true"
           />
           <span className="font-medium">{label}</span>

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { HelperText } from "@/components/ui/helper-text";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { cn } from "@/lib/utils";
 
 const NO_SETTLEMENT = "_none";
 
@@ -47,9 +48,11 @@ function yesterdayISO(): string {
 export function AddRecordForm({
   action,
   settlements,
+  compact = false,
 }: {
   action: (formData: FormData) => Promise<void>;
   settlements: SettlementOption[];
+  compact?: boolean;
 }) {
   const [manualSettlementId, setManualSettlementId] = useState(NO_SETTLEMENT);
   const [source, setSource] = useState("bank_statement");
@@ -60,40 +63,63 @@ export function AddRecordForm({
   const valueDate = dateMode === "today" ? todayISO() : dateMode === "yesterday" ? yesterdayISO() : customDate;
 
   return (
-    <form action={action} className="grid gap-4">
+    <form action={action} className={compact ? "grid gap-2.5" : "grid gap-4"}>
       <input type="hidden" name="source" value={source} />
       <input type="hidden" name="valueDate" value={valueDate} />
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className={cn("grid gap-2", compact ? "sm:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-2")}>
         <div className="grid gap-1.5">
           <Label htmlFor="externalRef">External reference</Label>
           <Input id="externalRef" name="externalRef" placeholder="BANK-AUTO-001" />
-          <HelperText>Leave blank to auto-generate.</HelperText>
+          {!compact ? <HelperText>Leave blank to auto-generate.</HelperText> : null}
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="amount">Amount</Label>
           <Input id="amount" name="amount" type="number" min="1" step="0.01" required />
         </div>
+        {compact ? (
+          <div className="grid gap-1.5 sm:col-span-2 lg:col-span-1">
+            <Label>Source</Label>
+            <Segmented ariaLabel="Source" options={SOURCES} value={source} onChange={setSource} />
+          </div>
+        ) : null}
+        {compact ? (
+          <div className="grid gap-1.5 sm:col-span-2 lg:col-span-1">
+            <Label>Currency</Label>
+            <FormSelect
+              name="currency"
+              defaultValue="INR"
+              options={[
+                { value: "INR", label: "INR" },
+                { value: "USDT", label: "USDT" },
+              ]}
+            />
+          </div>
+        ) : null}
       </div>
 
-      <div className="grid gap-1.5">
-        <Label>Source</Label>
-        <Segmented ariaLabel="Source" options={SOURCES} value={source} onChange={setSource} />
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
+      {!compact ? (
         <div className="grid gap-1.5">
-          <Label>Currency</Label>
-          <FormSelect
-            name="currency"
-            defaultValue="INR"
-            options={[
-              { value: "INR", label: "INR" },
-              { value: "USDT", label: "USDT" },
-            ]}
-          />
+          <Label>Source</Label>
+          <Segmented ariaLabel="Source" options={SOURCES} value={source} onChange={setSource} />
         </div>
-        <div className="grid gap-1.5">
+      ) : null}
+
+      <div className={cn("grid gap-2", compact ? "sm:grid-cols-2" : "md:grid-cols-2")}>
+        {!compact ? (
+          <div className="grid gap-1.5">
+            <Label>Currency</Label>
+            <FormSelect
+              name="currency"
+              defaultValue="INR"
+              options={[
+                { value: "INR", label: "INR" },
+                { value: "USDT", label: "USDT" },
+              ]}
+            />
+          </div>
+        ) : null}
+        <div className={cn("grid gap-1.5", compact && "sm:col-span-2")}>
           <Label>Value date</Label>
           <Segmented
             ariaLabel="Value date"
@@ -117,14 +143,19 @@ export function AddRecordForm({
         </div>
       </div>
 
-      <details className="group rounded-xl border border-dashed border-[var(--ops-line)] bg-slate-50/60 p-3">
+      <details
+        className={cn(
+          "group rounded-xl border border-dashed border-[var(--ops-line)] bg-slate-50/60",
+          compact ? "p-2.5" : "p-3",
+        )}
+      >
         <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wide text-slate-500 marker:hidden">
           <span className="inline-flex items-center gap-1.5">
             <span className="transition-transform group-open:rotate-90">›</span>
             Manual match / exception handling
           </span>
         </summary>
-        <div className="mt-3 grid gap-2">
+        <div className="mt-3 grid gap-2 reconciliation-details-content">
           <p className="text-xs text-slate-500">
             Leave as <span className="font-medium">Unmatched</span> to let the auto-match engine reconcile this record.
             Pick a settlement only to reconcile it manually right now.
@@ -145,7 +176,7 @@ export function AddRecordForm({
             </div>
           </div>
           {isManualMatch ? (
-            <p className="text-xs font-medium text-[#0a7d86]">
+            <p className="reconciliation-manual-hint-pop text-xs font-medium text-[#0a7d86]">
               This will link the record and reconcile the settlement.
             </p>
           ) : null}
@@ -153,7 +184,7 @@ export function AddRecordForm({
       </details>
 
       <div className="flex items-center">
-        <SubmitButton type="submit" variant="primary" pendingText="Saving...">
+        <SubmitButton type="submit" variant="primary" size={compact ? "sm" : "default"} pendingText="Saving...">
           {isManualMatch ? "Confirm manual match" : "Add external record"}
         </SubmitButton>
       </div>
