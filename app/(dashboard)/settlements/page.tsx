@@ -119,6 +119,21 @@ function successMatchesRow(success: string | undefined, status: SettlementStatus
   return map[success] === status;
 }
 
+function demoSettlementWhere(organizationId: string) {
+  return {
+    organizationId,
+    OR: [{ publicId: { startsWith: "SET-DEMO" } }, { reference: { startsWith: "DEMO-" } }],
+  };
+}
+
+function DemoFocusBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-amber-800">
+      Demo focus mode
+    </span>
+  );
+}
+
 type SettlementRow = Awaited<
   ReturnType<
     typeof prisma.settlement.findMany<{
@@ -303,10 +318,15 @@ export default async function SettlementsPage({
     q?: string;
     status?: string;
     reconcileRequired?: string;
+    demo?: string;
   }>;
 }) {
   const { organization, membership } = await requireSession();
   const params = await searchParams;
+  const demoFocus = params.demo === "1";
+  const settlementWhere = demoFocus
+    ? demoSettlementWhere(organization.id)
+    : { organizationId: organization.id };
   const flashMessage = pageFlashMessage(params.success);
   const justCompleted =
     params.success === "reconciled" || params.success === "matched";
@@ -318,7 +338,7 @@ export default async function SettlementsPage({
       orderBy: { createdAt: "desc" },
     }),
     prisma.settlement.findMany({
-      where: { organizationId: organization.id },
+      where: settlementWhere,
       orderBy: { createdAt: "desc" },
       take: 100,
       include: {
@@ -354,7 +374,11 @@ export default async function SettlementsPage({
   return (
     <SettlementActionsProvider>
     <div className="space-y-4">
-      <PageHeader title="Settlements" className="gap-3" />
+      <PageHeader
+        title="Settlements"
+        className="gap-3"
+        actions={demoFocus ? <DemoFocusBadge /> : undefined}
+      />
 
       <SettlementAutoRefresh enabled={autoRefreshSettlements} />
 

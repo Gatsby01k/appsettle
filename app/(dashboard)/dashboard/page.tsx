@@ -104,10 +104,45 @@ function proofSummaryCopy(status: SettlementStatus) {
   return "Settlement in progress.";
 }
 
-export default async function DashboardPage() {
+function demoSettlementWhere(organizationId: string) {
+  return {
+    organizationId,
+    OR: [{ publicId: { startsWith: "SET-DEMO" } }, { reference: { startsWith: "DEMO-" } }],
+  };
+}
+
+function demoAuditWhere(organizationId: string) {
+  return {
+    organizationId,
+    OR: [{ action: { startsWith: "DEMO." } }, { resourceId: { startsWith: "SET-DEMO" } }],
+  };
+}
+
+function DemoFocusBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-amber-800">
+      Demo focus mode
+    </span>
+  );
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ demo?: string }>;
+}) {
   const { user, organization } = await requireSession();
+  const params = await searchParams;
+  const demoFocus = params.demo === "1";
+  const demoQuery = demoFocus ? "?demo=1" : "";
   const now = new Date();
   const pontisConnected = isPontisEnabled();
+  const settlementWhere = demoFocus
+    ? demoSettlementWhere(organization.id)
+    : { organizationId: organization.id };
+  const auditWhere = demoFocus
+    ? demoAuditWhere(organization.id)
+    : { organizationId: organization.id };
 
   try {
     await autoMatchReconciliation(user.id, organization.id);
@@ -115,9 +150,13 @@ export default async function DashboardPage() {
     // Non-fatal: dashboard still renders current state if matching fails transiently.
   }
 
+  const proofInclude = { reconciliation: { take: 1, orderBy: { createdAt: "desc" as const } } };
+  const completedStatus = { in: [SettlementStatus.SETTLED, SettlementStatus.RECONCILED] };
+
   const [
     recentSettlements,
-    latestProof,
+    latestProofPreferred,
+    latestProofFallback,
     reconExceptions,
     auditLogs,
     expiredQuotes,
@@ -127,58 +166,74 @@ export default async function DashboardPage() {
     reconciledCount,
   ] = await Promise.all([
       prisma.settlement.findMany({
-        where: { organizationId: organization.id },
+        where: settlementWhere,
         orderBy: { createdAt: "desc" },
         take: 6,
-        include: { reconciliation: { take: 1, orderBy: { createdAt: "desc" } } },
+        include: proofInclude,
       }),
+      demoFocus
+        ? prisma.settlement.findFirst({
+            where: {
+              organizationId: organization.id,
+              publicId: "SET-DEMO-001",
+              status: completedStatus,
+            },
+            include: proofInclude,
+          })
+        : Promise.resolve(null),
       prisma.settlement.findFirst({
-        where: {
-          organizationId: organization.id,
-          status: { in: [SettlementStatus.SETTLED, SettlementStatus.RECONCILED] },
-        },
+        where: { ...settlementWhere, status: completedStatus },
         orderBy: [{ reconciledAt: "desc" }, { settledAt: "desc" }],
-        include: { reconciliation: { take: 1, orderBy: { createdAt: "desc" } } },
+        include: proofInclude,
       }),
       prisma.reconciliationRecord.count({
-        where: { organizationId: organization.id, status: "EXCEPTION" },
+        where: demoFocus
+          ? {
+              organizationId: organization.id,
+              status: "EXCEPTION",
+              externalRef: { startsWith: "DEMO-" },
+            }
+          : { organizationId: organization.id, status: "EXCEPTION" },
       }),
       prisma.auditLog.findMany({
-        where: { organizationId: organization.id },
+        where: auditWhere,
         orderBy: { createdAt: "desc" },
-        take: 16,
+        take: demoFocus ? 8 : 16,
         include: { user: true },
       }),
-      prisma.quote.count({
-        where: {
-          organizationId: organization.id,
-          OR: [{ status: "EXPIRED" }, { status: "ACTIVE", expiresAt: { lt: now } }],
-        },
+      demoFocus
+        ? Promise.resolve(0)
+        : prisma.quote.count({
+            where: {
+              organizationId: organization.id,
+              OR: [{ status: "EXPIRED" }, { status: "ACTIVE", expiresAt: { lt: now } }],
+            },
+          }),
+      prisma.settlement.count({
+        where: { ...settlementWhere, status: SettlementStatus.REQUESTED },
       }),
       prisma.settlement.count({
-        where: { organizationId: organization.id, status: SettlementStatus.REQUESTED },
+        where: { ...settlementWhere, status: completedStatus },
       }),
       prisma.settlement.count({
         where: {
-          organizationId: organization.id,
-          status: { in: [SettlementStatus.SETTLED, SettlementStatus.RECONCILED] },
-        },
-      }),
-      prisma.settlement.count({
-        where: {
-          organizationId: organization.id,
+          ...settlementWhere,
           status: { in: [SettlementStatus.APPROVED, SettlementStatus.EXECUTING] },
         },
       }),
       prisma.settlement.count({
-        where: { organizationId: organization.id, status: SettlementStatus.RECONCILED },
+        where: { ...settlementWhere, status: SettlementStatus.RECONCILED },
       }),
     ]);
+
+  const latestProof = demoFocus ? (latestProofPreferred ?? latestProofFallback) : latestProofFallback;
 
   const autoReconciledRate =
     completedCount > 0 ? Math.round((reconciledCount / completedCount) * 100) : null;
 
-  const operationsStream = auditLogs.filter((log) => isStreamActivity(log)).slice(0, 4);
+  const operationsStream = demoFocus
+    ? auditLogs.slice(0, 4)
+    : auditLogs.filter((log) => isStreamActivity(log)).slice(0, 4);
 
   const proofFeed = recentSettlements
     .filter((settlement) => settlement.id !== latestProof?.id)
@@ -189,14 +244,14 @@ export default async function DashboardPage() {
       ? {
           title: `${reconExceptions} reconciliation exception${reconExceptions === 1 ? "" : "s"}`,
           action: "Review",
-          href: "/reconciliation?status=EXCEPTION",
+          href: `/reconciliation?status=EXCEPTION${demoFocus ? "&demo=1" : ""}`,
           tone: "danger" as const,
         }
       : pendingApprovals > 0
         ? {
             title: `${pendingApprovals} awaiting approval`,
             action: "Review queue",
-            href: "/settlements?status=REQUESTED",
+            href: `/settlements?status=REQUESTED${demoFocus ? "&demo=1" : ""}`,
             tone: "warning" as const,
           }
         : expiredQuotes > 0
@@ -204,7 +259,7 @@ export default async function DashboardPage() {
               title: `${expiredQuotes} expired quote${expiredQuotes === 1 ? "" : "s"}`,
               body: "Refresh or archive stale quotes before the next settlement run.",
               action: "Open quotes",
-              href: "/quotes?tab=expired",
+              href: `/quotes?tab=expired${demoFocus ? "&demo=1" : ""}`,
               tone: "warning" as const,
             }
           : null;
@@ -225,6 +280,7 @@ export default async function DashboardPage() {
             <h1 className="mission-control__title">Treasury Operations</h1>
           </div>
           <div className="mission-control__status">
+            {demoFocus ? <DemoFocusBadge /> : null}
             <span className="overview-live-badge mission-control__pill mission-control__pill--live">
               <span className="ops-pulse ops-pulse--subtle" aria-hidden="true" />
               Live
@@ -301,7 +357,7 @@ export default async function DashboardPage() {
                   <MetricCard label="In flight" value={inFlightCount} tone="neutral" variant="telemetry" />
                 </div>
 
-                <Link href="/settlements" className="mission-control__proof-link">
+                <Link href={`/settlements${demoQuery}`} className="mission-control__proof-link">
                   Open proof
                   <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                 </Link>
@@ -311,7 +367,7 @@ export default async function DashboardPage() {
                 <EmptyState
                   title="No completed settlements yet"
                   description="Execute your first settlement to see provider proof here."
-                  action={{ label: "Create settlement", href: "/settlements" }}
+                  action={{ label: "Create settlement", href: `/settlements${demoQuery}` }}
                 />
               </div>
             )}
@@ -325,20 +381,20 @@ export default async function DashboardPage() {
                 size="sm"
                 className="mission-control__action-primary mission-control__action-primary--premium"
               >
-                <Link href="/quotes">
+                <Link href={`/quotes${demoQuery}`}>
                   <Plus className="h-3.5 w-3.5" />
                   Create quote
                 </Link>
               </Button>
-              <Link href="/settlements" className="mission-control__action mission-action-card">
+              <Link href={`/settlements${demoQuery}`} className="mission-control__action mission-action-card">
                 <Landmark className="h-3.5 w-3.5" aria-hidden="true" />
                 Create settlement
               </Link>
-              <Link href="/reconciliation" className="mission-control__action mission-action-card">
+              <Link href={`/reconciliation${demoQuery}`} className="mission-control__action mission-action-card">
                 <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                 Run reconciliation
               </Link>
-              <Link href="/audit-logs" className="mission-control__action mission-action-card">
+              <Link href={`/audit-logs${demoQuery}`} className="mission-control__action mission-action-card">
                 <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                 Audit trail
               </Link>
@@ -416,7 +472,7 @@ export default async function DashboardPage() {
         <section className="overview-section">
           <div className="overview-section__head">
             <h2 className="overview-section__title">Recent proofs</h2>
-            <Link href="/settlements" className="overview-section__link">
+            <Link href={`/settlements${demoQuery}`} className="overview-section__link">
               View all
             </Link>
           </div>
@@ -432,7 +488,7 @@ export default async function DashboardPage() {
                 return (
                   <Link
                     key={settlement.id}
-                    href="/settlements"
+                    href={`/settlements${demoQuery}`}
                     className="proof-feed-item"
                     style={{ animationDelay: `${0.02 + index * 0.03}s` }}
                   >

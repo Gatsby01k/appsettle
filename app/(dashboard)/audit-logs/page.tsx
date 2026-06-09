@@ -57,11 +57,31 @@ function auditTone(action: string): "neutral" | "success" | "warning" | "danger"
   return "neutral";
 }
 
-export default async function AuditLogsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+function demoAuditWhere(organizationId: string) {
+  return {
+    organizationId,
+    OR: [{ action: { startsWith: "DEMO." } }, { resourceId: { startsWith: "SET-DEMO" } }],
+  };
+}
+
+function DemoFocusBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-amber-800">
+      Demo focus mode
+    </span>
+  );
+}
+
+export default async function AuditLogsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; demo?: string }>;
+}) {
   const { organization } = await requireSession();
   const params = await searchParams;
+  const demoFocus = params.demo === "1";
   const logs = await prisma.auditLog.findMany({
-    where: { organizationId: organization.id },
+    where: demoFocus ? demoAuditWhere(organization.id) : { organizationId: organization.id },
     orderBy: { createdAt: "desc" },
     take: 100,
     include: { user: true },
@@ -83,7 +103,11 @@ export default async function AuditLogsPage({ searchParams }: { searchParams: Pr
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Audit logs" description="Immutable evidence trail for settlement, reconciliation, and configuration changes." />
+      <PageHeader
+        title="Audit logs"
+        description="Immutable evidence trail for settlement, reconciliation, and configuration changes."
+        actions={demoFocus ? <DemoFocusBadge /> : undefined}
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <MetricCard label="Total events" value={logs.length} hint="Latest 100" />

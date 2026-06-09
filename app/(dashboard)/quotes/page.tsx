@@ -126,6 +126,31 @@ function settlementWindowLabel(window: string) {
   return window;
 }
 
+function isDemoQuote(quote: {
+  corridor: string;
+  status: string;
+  sourceAmount: unknown;
+  settlements: { publicId: string }[];
+}) {
+  if (quote.settlements.some((s) => s.publicId.startsWith("SET-DEMO"))) return true;
+  if (
+    quote.status === "ACTIVE" &&
+    quote.corridor === "USDT_INR" &&
+    Number(quote.sourceAmount) === 5000
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function DemoFocusBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-amber-800">
+      Demo focus mode
+    </span>
+  );
+}
+
 function formatExpiryCountdown(expiresAt: Date) {
   const ms = expiresAt.getTime() - Date.now();
   if (ms <= 0) return null;
@@ -326,12 +351,13 @@ function CompactQuoteMetrics({
 export default async function QuotesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string; q?: string; tab?: string }>;
+  searchParams: Promise<{ error?: string; success?: string; q?: string; tab?: string; demo?: string }>;
 }) {
   const { organization } = await requireSession();
   const params = await searchParams;
+  const demoFocus = params.demo === "1";
   const tab = params.tab ?? "active";
-  const quotes = await prisma.quote.findMany({
+  const allQuotes = await prisma.quote.findMany({
     where: { organizationId: organization.id },
     orderBy: { createdAt: "desc" },
     take: 100,
@@ -343,6 +369,8 @@ export default async function QuotesPage({
       },
     },
   });
+
+  const quotes = demoFocus ? allQuotes.filter(isDemoQuote) : allQuotes;
 
   const query = params.q?.toLowerCase().trim() ?? "";
   const filtered = quotes.filter((quote) => quoteTab(quote, tab)).filter((quote) => {
@@ -383,6 +411,7 @@ export default async function QuotesPage({
         title="Quotes"
         description="Lock executable terms before settlement creation."
         className="gap-2"
+        actions={demoFocus ? <DemoFocusBadge /> : undefined}
       />
 
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
@@ -470,7 +499,10 @@ export default async function QuotesPage({
           <TabLinks
             basePath="/quotes"
             active={tab}
-            preserve={params.q ? { q: params.q } : undefined}
+            preserve={{
+              ...(params.q ? { q: params.q } : {}),
+              ...(demoFocus ? { demo: "1" } : {}),
+            }}
             tabs={[
               { id: "active", label: "Active", count: activeCount },
               { id: "accepted", label: "Accepted", count: acceptedCount },
@@ -691,7 +723,7 @@ export default async function QuotesPage({
                                 </span>
                               </div>
                               <Link
-                                href={`/settlements?q=${encodeURIComponent(linkedSettlement.publicId)}`}
+                                href={`/settlements?q=${encodeURIComponent(linkedSettlement.publicId)}${demoFocus ? "&demo=1" : ""}`}
                                 className="quote-settlement-link inline-flex h-8 items-center rounded-lg border px-3 text-xs font-semibold text-[#0a7d86]"
                               >
                                 Open settlement

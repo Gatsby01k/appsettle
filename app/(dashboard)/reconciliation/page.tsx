@@ -151,13 +151,42 @@ async function resolveException(formData: FormData) {
   redirect("/reconciliation?success=resolved");
 }
 
+function demoSettlementWhere(organizationId: string) {
+  return {
+    organizationId,
+    OR: [{ publicId: { startsWith: "SET-DEMO" } }, { reference: { startsWith: "DEMO-" } }],
+  };
+}
+
+function demoReconciliationWhere(organizationId: string) {
+  return {
+    organizationId,
+    OR: [
+      { externalRef: { startsWith: "DEMO-" } },
+      { settlement: { publicId: { startsWith: "SET-DEMO" } } },
+    ],
+  };
+}
+
+function DemoFocusBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-amber-800">
+      Demo focus mode
+    </span>
+  );
+}
+
 export default async function ReconciliationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string; q?: string; status?: string; matched?: string; scanned?: string }>;
+  searchParams: Promise<{ error?: string; success?: string; q?: string; status?: string; matched?: string; scanned?: string; demo?: string }>;
 }) {
   const { organization } = await requireSession();
   const params = await searchParams;
+  const demoFocus = params.demo === "1";
+  const settlementWhere = demoFocus
+    ? demoSettlementWhere(organization.id)
+    : { organizationId: organization.id };
 
   // Auto-match is an explicit operator action (the "Run auto-match" button), never a
   // side effect of opening the page or saving a record. Saving an external record
@@ -165,18 +194,18 @@ export default async function ReconciliationPage({
 
   const [records, settlements, settledCandidates] = await Promise.all([
     prisma.reconciliationRecord.findMany({
-      where: { organizationId: organization.id },
+      where: demoFocus ? demoReconciliationWhere(organization.id) : { organizationId: organization.id },
       orderBy: { createdAt: "desc" },
       take: 100,
       include: { settlement: true },
     }),
     prisma.settlement.findMany({
-      where: { organizationId: organization.id },
+      where: settlementWhere,
       orderBy: { createdAt: "desc" },
       take: 50,
     }),
     prisma.settlement.findMany({
-      where: { organizationId: organization.id, status: "SETTLED" },
+      where: { ...settlementWhere, status: "SETTLED" },
       orderBy: { settledAt: "desc" },
     }),
   ]);
@@ -269,7 +298,11 @@ export default async function ReconciliationPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Reconciliation" className="gap-3" />
+      <PageHeader
+        title="Reconciliation"
+        className="gap-3"
+        actions={demoFocus ? <DemoFocusBadge /> : undefined}
+      />
 
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {params.success === "created" ? (
