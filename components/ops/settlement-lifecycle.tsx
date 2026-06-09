@@ -23,19 +23,30 @@ export function SettlementLifecycle({ status, compact }: { status: string; compa
           const done = index < current || (terminalComplete && index === current);
           const active = index === current && !terminalComplete;
           const future = index > current;
+          const connectorDone = index < current || (terminalComplete && index === current);
+          const connectorActive = index === current && !terminalComplete;
 
           return (
             <div key={step} className="flex flex-1 items-center last:flex-none">
-              <div className="flex flex-col items-center gap-1.5">
+              <div
+                className="flex flex-col items-center gap-1.5"
+                style={{ animationDelay: `${index * 60}ms` }}
+              >
                 <div
                   className={cn(
                     "grid h-7 w-7 place-items-center rounded-full border text-xs font-semibold transition-colors",
-                    done && "border-[#42d5b7] bg-[#42d5b7] text-[#07132b]",
-                    active && "border-[#07132b] bg-[#07132b] text-white ring-4 ring-[#42d5b7]/25",
+                    done && "border-[#42d5b7] bg-[#42d5b7] text-[#07132b] settlement-step-complete",
+                    active &&
+                      "border-[#07132b] bg-[#07132b] text-white ring-4 ring-[#42d5b7]/25 settlement-step-active",
                     future && "border-slate-200 bg-white text-slate-400",
                   )}
+                  style={done ? { animationDelay: `${index * 80}ms` } : undefined}
                 >
-                  {done ? <Check className="h-3.5 w-3.5" /> : index + 1}
+                  {done ? (
+                    <Check className="h-3.5 w-3.5 settlement-step-check" style={{ animationDelay: `${index * 80 + 120}ms` }} />
+                  ) : (
+                    index + 1
+                  )}
                 </div>
                 {!compact ? (
                   <span
@@ -49,7 +60,14 @@ export function SettlementLifecycle({ status, compact }: { status: string; compa
                 ) : null}
               </div>
               {index < SETTLEMENT_LIFECYCLE.length - 1 ? (
-                <div className={cn("mx-1 h-0.5 flex-1", index < current ? "bg-[#42d5b7]" : "bg-slate-200")} />
+                <div
+                  className={cn(
+                    "mx-1 h-0.5 flex-1 rounded-full transition-colors",
+                    connectorDone && "bg-[#42d5b7]",
+                    connectorActive && "settlement-connector-active",
+                    !connectorDone && !connectorActive && "bg-slate-200",
+                  )}
+                />
               ) : null}
             </div>
           );

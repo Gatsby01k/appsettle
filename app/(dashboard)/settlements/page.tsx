@@ -13,7 +13,7 @@ import { friendlyErrorMessage } from "@/lib/errors";
 import { canApproveSettlement } from "@/lib/permissions";
 import { counterpartyForCorridor } from "@/lib/treasury";
 import { prisma } from "@/lib/prisma";
-import { formatCurrencyCompact, formatCurrencyFull, formatDateTime } from "@/lib/utils";
+import { cn, formatCurrencyCompact, formatCurrencyFull, formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
@@ -76,7 +76,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 function pageFlashMessage(value?: string) {
   if (value === "created") return "Settlement created.";
   if (value === "reconciled" || value === "matched") {
-    return "Settlement complete — payout, reconciliation and audit trail recorded.";
+    return "Settlement complete — provider payout, reconciliation and audit trail recorded.";
   }
   return null;
 }
@@ -95,6 +95,28 @@ function isInFlight(status: SettlementStatus) {
 
 function isCompleted(status: SettlementStatus) {
   return new Set<SettlementStatus>([SettlementStatus.SETTLED, SettlementStatus.RECONCILED]).has(status);
+}
+
+function rowShowsConsole(status: SettlementStatus) {
+  return new Set<SettlementStatus>([
+    SettlementStatus.APPROVED,
+    SettlementStatus.EXECUTING,
+    SettlementStatus.SETTLED,
+    SettlementStatus.RECONCILED,
+  ]).has(status);
+}
+
+function successMatchesRow(success: string | undefined, status: SettlementStatus) {
+  if (!success) return false;
+  const map: Partial<Record<string, SettlementStatus>> = {
+    approved: SettlementStatus.APPROVED,
+    executing: SettlementStatus.EXECUTING,
+    settled: SettlementStatus.SETTLED,
+    reconciled: SettlementStatus.RECONCILED,
+    matched: SettlementStatus.RECONCILED,
+    checked: SettlementStatus.EXECUTING,
+  };
+  return map[success] === status;
 }
 
 type SettlementRow = Awaited<
@@ -397,15 +419,22 @@ export default async function SettlementsPage({
                   );
                 const settlementDetail = toSettlementDetail(settlement);
 
+                const showConsole = rowShowsConsole(settlement.status);
+                const rowJustUpdated = successMatchesRow(params.success, settlement.status);
+
                 return (
                 <Fragment key={settlement.id}>
-                <DataGridRow>
+                <DataGridRow
+                  className={cn(
+                    showConsole && "settlement-row-active",
+                    rowJustUpdated && "settlement-row-highlight",
+                  )}
+                >
                   <DataGridTd>
                     <p className="font-medium text-slate-950">{settlement.publicId}</p>
                     <p className="text-xs text-slate-500">{settlement.reference}</p>
                     <SettlementRowStatusSubtext
                       status={settlement.status}
-                      hasReconciliation={settlement.reconciliation.length > 0}
                       settlementId={settlement.id}
                     />
                   </DataGridTd>
@@ -505,6 +534,9 @@ export default async function SettlementsPage({
                       <SettlementDetailSheet
                         key={`${settlement.id}-${settlement.status}-${settlement.providerTransactionId ?? ""}-${settlement.events.length}`}
                         settlement={settlementDetail}
+                        triggerLabel={
+                          isCompleted(settlement.status) ? "View proof" : "Details"
+                        }
                       />
                       {settlement.status === SettlementStatus.RECONCILED ? (
                         <SettlementDetailSheet

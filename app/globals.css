@@ -327,6 +327,203 @@ body {
   outline-offset: 2px;
 }
 
+/* ============================================================
+   Settlement motion — row glow, lifecycle, console, buttons
+   ============================================================ */
+@keyframes settlementRowGlow {
+  0% {
+    background-color: rgba(0, 199, 157, 0.12);
+    box-shadow: inset 3px 0 0 rgba(0, 199, 157, 0.55);
+  }
+  100% {
+    background-color: rgba(0, 199, 157, 0.03);
+    box-shadow: inset 3px 0 0 rgba(0, 199, 157, 0.18);
+  }
+}
+
+@keyframes settlementStepComplete {
+  0% {
+    transform: scale(0.82);
+    opacity: 0.5;
+  }
+  65% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes settlementStepCheck {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes settlementStepPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(66, 213, 183, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(66, 213, 183, 0);
+  }
+}
+
+@keyframes settlementConnectorShine {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes settlementConsoleIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes settlementConsoleGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 199, 157, 0);
+  }
+  50% {
+    box-shadow: 0 0 10px 1px rgba(0, 199, 157, 0.12);
+  }
+}
+
+@keyframes settlementLivePing {
+  0% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  75%,
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@keyframes settlementProofIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes settlementCompleteIcon {
+  0% {
+    transform: scale(0.55) rotate(-10deg);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.08) rotate(0deg);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes submitSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.settlement-row-active {
+  background-color: rgba(0, 199, 157, 0.03);
+}
+
+.settlement-row-highlight {
+  animation: settlementRowGlow 2.2s var(--ease) forwards;
+}
+
+.settlement-console-enter {
+  animation: settlementConsoleIn 0.32s var(--ease) both;
+}
+
+.settlement-console-glow {
+  animation: settlementConsoleGlow 3s ease-in-out infinite;
+}
+
+.settlement-step-complete {
+  animation: settlementStepComplete 0.38s var(--ease) both;
+}
+
+.settlement-step-check {
+  animation: settlementStepCheck 0.32s var(--ease) both;
+}
+
+.settlement-step-active {
+  animation: settlementStepPulse 2.4s ease-in-out infinite;
+}
+
+.settlement-connector-active {
+  background: linear-gradient(
+    90deg,
+    #42d5b7 0%,
+    #42d5b7 35%,
+    rgba(66, 213, 183, 0.25) 50%,
+    #42d5b7 65%,
+    #42d5b7 100%
+  );
+  background-size: 220% 100%;
+  animation: settlementConnectorShine 2.8s linear infinite;
+}
+
+.settlement-live-dot {
+  position: relative;
+}
+.settlement-live-dot::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  animation: settlementLivePing 1.6s ease-out infinite;
+}
+
+.settlement-proof-enter {
+  animation: settlementProofIn 0.28s var(--ease) both;
+}
+
+.settlement-complete-icon {
+  animation: settlementCompleteIcon 0.48s var(--ease) both;
+}
+
+.settlement-tx-pill {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: -0.02em;
+}
+
+.ops-submit-spinner {
+  animation: submitSpin 0.65s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ops-pulse::after {
     animation: none;
@@ -340,6 +537,19 @@ body {
   .ops-animate-overlay,
   .ops-animate-sheet,
   .ops-animate-pop {
+    animation: none;
+  }
+  .settlement-row-highlight,
+  .settlement-console-enter,
+  .settlement-console-glow,
+  .settlement-step-complete,
+  .settlement-step-check,
+  .settlement-step-active,
+  .settlement-connector-active,
+  .settlement-live-dot::after,
+  .settlement-proof-enter,
+  .settlement-complete-icon,
+  .ops-submit-spinner {
     animation: none;
   }
 }

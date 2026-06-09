@@ -1,7 +1,8 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, CircleCheckBig, Copy, XCircle } from "lucide-react";
 import {
   SettlementActionForm,
   useSettlementActionsOptional,
@@ -29,12 +30,61 @@ const EXECUTING_STEPS = [
   "Auto-reconciliation",
 ];
 
+type ConsoleMode = "approved" | "executing" | "settled" | "reconcile_required" | "reconciled";
+
 function MetadataChip({ label, value }: { label: string; value: string }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600">
       <span className="text-slate-400">{label}</span>
       <span className="font-medium text-slate-700">{value}</span>
     </span>
+  );
+}
+
+function TransactionIdPill({ value }: { value: string }) {
+  return (
+    <button
+      type="button"
+      className="settlement-tx-pill group inline-flex max-w-full items-center gap-1 rounded-md border border-emerald-200/80 bg-emerald-50/60 px-2 py-0.5 text-emerald-800 transition-colors hover:border-emerald-300 hover:bg-emerald-50"
+      title="Copy transaction id"
+      onClick={() => void navigator.clipboard.writeText(value)}
+    >
+      <span className="truncate">{value}</span>
+      <Copy className="h-2.5 w-2.5 shrink-0 opacity-40 transition-opacity group-hover:opacity-80" />
+    </button>
+  );
+}
+
+const CONSOLE_GLOW: Record<ConsoleMode, string> = {
+  approved: "border-amber-200/80",
+  executing: "border-cyan-200/80 settlement-console-glow",
+  settled: "border-emerald-200/80",
+  reconcile_required: "border-amber-200/80",
+  reconciled: "border-emerald-300/90 settlement-console-glow",
+};
+
+function ConsolePanel({
+  mode,
+  children,
+}: {
+  mode: ConsoleMode;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "settlement-console-enter rounded-lg border px-3 py-2.5",
+        CONSOLE_GLOW[mode],
+        mode === "approved" && "bg-amber-50/40",
+        mode === "executing" && "bg-cyan-50/30",
+        (mode === "settled" || mode === "reconciled") && "bg-emerald-50/30",
+        mode === "reconcile_required" && "bg-amber-50/30",
+      )}
+      role="status"
+      aria-live="polite"
+    >
+      {children}
+    </div>
   );
 }
 
@@ -47,20 +97,26 @@ function CompactStepper({ steps, activeIndex }: { steps: string[]; activeIndex: 
         const stateLabel = isDone ? "completed" : isActive ? "active" : "upcoming";
 
         return (
-          <li key={step} className="flex items-center gap-1">
+          <li
+            key={step}
+            className="flex items-center gap-1 settlement-proof-enter"
+            style={{ animationDelay: `${index * 50}ms` }}
+          >
             <div
-              className={`flex min-w-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${
-                isActive
-                  ? "border-cyan-200 bg-cyan-50 text-cyan-800"
-                  : isDone
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-slate-200 bg-white text-slate-400"
-              }`}
+              className={cn(
+                "flex min-w-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors",
+                isActive && "border-cyan-200 bg-cyan-50 text-cyan-800 settlement-step-active",
+                isDone && "border-emerald-200 bg-emerald-50 text-emerald-700",
+                !isActive && !isDone && "border-slate-200 bg-white text-slate-400",
+              )}
             >
               <span
-                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                  isActive ? "animate-pulse bg-cyan-500" : isDone ? "bg-emerald-500" : "bg-slate-300"
-                }`}
+                className={cn(
+                  "h-1.5 w-1.5 shrink-0 rounded-full",
+                  isActive && "bg-cyan-500 settlement-live-dot text-cyan-500",
+                  isDone && "bg-emerald-500",
+                  !isActive && !isDone && "bg-slate-300",
+                )}
               />
               <span className={isActive ? "font-medium" : undefined}>{step}</span>
               <span className="hidden text-[10px] uppercase tracking-wide opacity-70 sm:inline">
@@ -68,9 +124,13 @@ function CompactStepper({ steps, activeIndex }: { steps: string[]; activeIndex: 
               </span>
             </div>
             {index < steps.length - 1 ? (
-              <span className="hidden text-slate-300 sm:inline" aria-hidden="true">
-                →
-              </span>
+              <span
+                className={cn(
+                  "hidden h-px w-2 sm:inline",
+                  isDone ? "bg-emerald-300" : isActive ? "settlement-connector-active" : "bg-slate-200",
+                )}
+                aria-hidden="true"
+              />
             ) : null}
           </li>
         );
@@ -79,16 +139,31 @@ function CompactStepper({ steps, activeIndex }: { steps: string[]; activeIndex: 
   );
 }
 
-function ProofItem({ label, value }: { label: string; value: string }) {
+function ProofItem({
+  label,
+  value,
+  index = 0,
+  mono,
+}: {
+  label: string;
+  value: string;
+  index?: number;
+  mono?: boolean;
+}) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-emerald-100 bg-white px-2.5 py-1.5 text-[11px]">
-      <span className="text-slate-500">{label}</span>
-      <span className="font-medium text-emerald-700">{value}</span>
+    <div
+      className="settlement-proof-enter flex items-center justify-between gap-2 rounded-md border border-emerald-100/90 bg-white/90 px-2 py-1 text-[11px]"
+      style={{ animationDelay: `${index * 45}ms` }}
+    >
+      <span className="shrink-0 text-slate-500">{label}</span>
+      {mono ? (
+        <TransactionIdPill value={value} />
+      ) : (
+        <span className="truncate text-right font-medium text-emerald-700">{value}</span>
+      )}
     </div>
   );
 }
-
-type ConsoleMode = "approved" | "executing" | "settled" | "reconcile_required" | "reconciled";
 
 function resolveConsoleMode(
   settlement: SettlementOperationConsoleData,
@@ -121,11 +196,9 @@ function resolveConsoleMode(
 
 export function SettlementRowStatusSubtext({
   status,
-  hasReconciliation,
   settlementId,
 }: {
   status: string;
-  hasReconciliation: boolean;
   settlementId: string;
 }) {
   const actions = useSettlementActionsOptional();
@@ -134,8 +207,7 @@ export function SettlementRowStatusSubtext({
   let hint: string | null = null;
   if (status === "APPROVED") hint = "Ready to execute";
   else if (status === "EXECUTING") hint = "Tracking via PontisGlobe";
-  else if (status === "SETTLED" && !hasReconciliation) hint = "Ready for reconciliation";
-  else if (status === "SETTLED") hint = "Payout completed";
+  else if (status === "SETTLED") hint = "Ready for reconciliation";
   else if (status === "RECONCILED") hint = "Reconciled automatically";
 
   if (!hint) return null;
@@ -188,15 +260,27 @@ function ReconciliationProofGrid({
   settlement: SettlementOperationConsoleData;
   providerStatus: string;
 }) {
+  const items = [
+    { label: "Provider", value: settlement.provider ?? providerLabel("live") },
+    { label: "Provider status", value: providerStatus },
+    ...(settlement.providerTransactionId
+      ? [{ label: "Provider transaction id", value: settlement.providerTransactionId, mono: true }]
+      : []),
+    { label: "Settlement status", value: "settled" },
+    { label: "Audit trail", value: settlement.hasAuditEvents ? "Recorded" : "Pending" },
+  ];
+
   return (
-    <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-      <ProofItem label="Provider" value={settlement.provider ?? providerLabel("live")} />
-      <ProofItem label="Provider status" value={providerStatus} />
-      {settlement.providerTransactionId ? (
-        <ProofItem label="Provider transaction id" value={settlement.providerTransactionId} />
-      ) : null}
-      <ProofItem label="Settlement status" value="settled" />
-      <ProofItem label="Audit trail" value={settlement.hasAuditEvents ? "Recorded" : "Pending"} />
+    <div className="mt-2 grid gap-1 sm:grid-cols-2">
+      {items.map((item, index) => (
+        <ProofItem
+          key={item.label}
+          label={item.label}
+          value={item.value}
+          index={index}
+          mono={"mono" in item ? item.mono : undefined}
+        />
+      ))}
     </div>
   );
 }
@@ -208,16 +292,28 @@ function ReconciledProofGrid({
   settlement: SettlementOperationConsoleData;
   providerStatus: string;
 }) {
+  const items = [
+    { label: "Provider", value: settlement.provider ?? providerLabel("live") },
+    { label: "Provider status", value: providerStatus },
+    ...(settlement.providerTransactionId
+      ? [{ label: "Provider transaction id", value: settlement.providerTransactionId, mono: true }]
+      : []),
+    { label: "Settlement", value: "Settled" },
+    { label: "Reconciliation", value: "Matched" },
+    { label: "Audit trail", value: "Recorded" },
+  ];
+
   return (
     <div className="mt-1.5 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
-      <ProofItem label="Provider" value={settlement.provider ?? providerLabel("live")} />
-      <ProofItem label="Provider status" value={providerStatus} />
-      {settlement.providerTransactionId ? (
-        <ProofItem label="Provider transaction id" value={settlement.providerTransactionId} />
-      ) : null}
-      <ProofItem label="Settlement" value="Settled" />
-      <ProofItem label="Reconciliation" value="Matched" />
-      <ProofItem label="Audit trail" value="Recorded" />
+      {items.map((item, index) => (
+        <ProofItem
+          key={item.label}
+          label={item.label}
+          value={item.value}
+          index={index}
+          mono={"mono" in item ? item.mono : undefined}
+        />
+      ))}
     </div>
   );
 }
@@ -271,11 +367,7 @@ export function SettlementOperationConsoleRow({
     <tr className="text-sm">
       <td colSpan={colSpan} className="px-4 pb-2 pt-0 first:pl-5 last:pr-5">
         {mode === "approved" ? (
-          <div
-            className="rounded-lg border border-amber-200/80 bg-amber-50/40 px-3 py-2.5"
-            role="status"
-            aria-live="polite"
-          >
+          <ConsolePanel mode="approved">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-slate-900">Ready for provider execution</p>
@@ -290,50 +382,46 @@ export function SettlementOperationConsoleRow({
               <MetadataChip label="Amount" value={settlement.amount} />
               {settlement.corridor ? <MetadataChip label="Route" value={settlement.corridor} /> : null}
             </div>
-          </div>
+          </ConsolePanel>
         ) : null}
 
         {mode === "executing" ? (
-          <div
-            className="rounded-lg border border-cyan-200/80 bg-cyan-50/30 px-3 py-2.5"
-            role="status"
-            aria-live="polite"
-          >
+          <ConsolePanel mode="executing">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-slate-900">Provider execution in progress</p>
                 <p className="mt-0.5 text-[11px] text-slate-600">
-                  INRSettle is tracking the payout status from PontisGlobe.
+                  Payout submitted via PontisGlobe. INRSettle is tracking provider status automatically.
                 </p>
               </div>
               {autoRefresh ? (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-cyan-200 bg-white px-2 py-0.5 text-[10px] font-medium text-cyan-700">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-500" />
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-cyan-200/90 bg-white px-2 py-0.5 text-[10px] font-medium text-cyan-700">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="settlement-live-dot absolute inset-0 rounded-full bg-cyan-500 text-cyan-500" />
+                    <span className="relative h-1.5 w-1.5 rounded-full bg-cyan-500" />
+                  </span>
                   Live refresh
                 </span>
               ) : null}
             </div>
-            <div className="mt-2">
+            <div className="mt-1.5">
               <CompactStepper steps={EXECUTING_STEPS} activeIndex={executingActiveIndex} />
             </div>
             {settlement.providerTransactionId ? (
-              <div className="mt-2 flex flex-wrap gap-1.5 border-t border-cyan-100/80 pt-2">
-                <MetadataChip label="Transaction" value={settlement.providerTransactionId} />
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 border-t border-cyan-100/80 pt-1.5">
+                <span className="text-[10px] text-slate-500">Transaction</span>
+                <TransactionIdPill value={settlement.providerTransactionId} />
               </div>
             ) : null}
-          </div>
+          </ConsolePanel>
         ) : null}
 
         {mode === "settled" ? (
-          <div
-            className="rounded-lg border border-emerald-200/80 bg-emerald-50/30 px-3 py-2.5"
-            role="status"
-            aria-live="polite"
-          >
+          <ConsolePanel mode="settled">
             <div>
               <p className="text-xs font-semibold text-slate-900">Payout completed — ready for reconciliation</p>
               <p className="mt-0.5 text-[11px] text-slate-600">
-                Provider execution completed. Match this settlement with the bank record to close the workflow.
+                Provider execution completed. Match this settlement with a bank record to close the workflow.
               </p>
             </div>
             <ReconciliationProofGrid settlement={settlement} providerStatus={providerStatus} />
@@ -364,15 +452,11 @@ export function SettlementOperationConsoleRow({
                 Open reconciliation
               </Link>
             </div>
-          </div>
+          </ConsolePanel>
         ) : null}
 
         {mode === "reconcile_required" ? (
-          <div
-            className="rounded-lg border border-amber-200/80 bg-amber-50/30 px-3 py-2.5"
-            role="status"
-            aria-live="polite"
-          >
+          <ConsolePanel mode="reconcile_required">
             <div>
               <p className="text-xs font-semibold text-slate-900">Reconciliation record required</p>
               <p className="mt-0.5 text-[11px] text-slate-600">
@@ -415,18 +499,22 @@ export function SettlementOperationConsoleRow({
                 Open reconciliation
               </Link>
             </div>
-          </div>
+          </ConsolePanel>
         ) : null}
 
         {mode === "reconciled" ? (
-          <div
-            className="rounded-lg border border-emerald-200/80 bg-emerald-50/30 px-3 py-2"
-            role="status"
-            aria-live="polite"
-          >
-            <p className="text-xs font-semibold text-slate-900">Settlement complete</p>
+          <ConsolePanel mode="reconciled">
+            <div className="flex items-start gap-2">
+              <CircleCheckBig className="settlement-complete-icon mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-emerald-900">Settlement complete</p>
+                <p className="mt-0.5 text-[11px] text-emerald-700/85">
+                  Provider payout, settlement update, reconciliation and audit trail are complete.
+                </p>
+              </div>
+            </div>
             <ReconciledProofGrid settlement={settlement} providerStatus={providerStatus} />
-          </div>
+          </ConsolePanel>
         ) : null}
       </td>
     </tr>

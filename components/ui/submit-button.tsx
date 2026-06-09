@@ -2,6 +2,7 @@
 
 import { useFormStatus } from "react-dom";
 import { Button, type ButtonProps } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   type SettlementAction,
   useSettlementActionStep,
@@ -20,6 +21,7 @@ export function SubmitButton({
   pendingText = "Working...",
   settlementId,
   action,
+  className,
   ...props
 }: SubmitButtonProps) {
   const { pending } = useFormStatus();
@@ -33,11 +35,23 @@ export function SubmitButton({
   const label = showPending && currentStep ? `${currentStep}...` : pendingText;
 
   return (
-    <Button {...props} disabled={disabled || showPending} aria-busy={showPending}>
+    <Button
+      {...props}
+      disabled={disabled || showPending}
+      aria-busy={showPending}
+      className={cn(
+        className,
+        showPending && "cursor-wait opacity-90",
+        disabled && !showPending && "cursor-not-allowed opacity-55",
+      )}
+    >
       {showPending ? (
-        <span className="inline-flex items-center gap-2">
-          <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-          <span>{label}</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="ops-submit-spinner inline-block h-3 w-3 rounded-full border-2 border-current/30 border-t-current"
+            aria-hidden="true"
+          />
+          <span className="font-medium">{label}</span>
         </span>
       ) : (
         children
