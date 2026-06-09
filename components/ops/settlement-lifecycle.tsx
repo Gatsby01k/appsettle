@@ -10,7 +10,15 @@ const LABELS: Record<string, string> = {
   RECONCILED: "Reconciled",
 };
 
-export function SettlementLifecycle({ status, compact }: { status: string; compact?: boolean }) {
+export function SettlementLifecycle({
+  status,
+  compact,
+  spotlight,
+}: {
+  status: string;
+  compact?: boolean;
+  spotlight?: boolean;
+}) {
   const current = settlementStepIndex(status);
   // When fully reconciled, the lifecycle is complete — every step, including the
   // final RECONCILED step, should render as done rather than "in progress".
@@ -34,7 +42,8 @@ export function SettlementLifecycle({ status, compact }: { status: string; compa
               >
                 <div
                   className={cn(
-                    "grid h-7 w-7 place-items-center rounded-full border text-xs font-semibold transition-colors",
+                    "grid place-items-center rounded-full border font-semibold transition-colors",
+                    spotlight ? "h-9 w-9 text-sm" : "h-7 w-7 text-xs",
                     done && "border-[#42d5b7] bg-[#42d5b7] text-[#07132b] settlement-step-complete",
                     active &&
                       "border-[#07132b] bg-[#07132b] text-white ring-4 ring-[#42d5b7]/25 settlement-step-active",
@@ -43,7 +52,10 @@ export function SettlementLifecycle({ status, compact }: { status: string; compa
                   style={done ? { animationDelay: `${index * 80}ms` } : undefined}
                 >
                   {done ? (
-                    <Check className="h-3.5 w-3.5 settlement-step-check" style={{ animationDelay: `${index * 80 + 120}ms` }} />
+                    <Check
+                      className={cn("settlement-step-check", spotlight ? "h-4 w-4" : "h-3.5 w-3.5")}
+                      style={{ animationDelay: `${index * 80 + 120}ms` }}
+                    />
                   ) : (
                     index + 1
                   )}
@@ -51,7 +63,8 @@ export function SettlementLifecycle({ status, compact }: { status: string; compa
                 {!compact ? (
                   <span
                     className={cn(
-                      "text-[10px] font-medium uppercase tracking-wide",
+                      "font-medium uppercase tracking-wide",
+                      spotlight ? "text-[11px]" : "text-[10px]",
                       active ? "text-[#07132b]" : done ? "text-teal-700" : "text-slate-400",
                     )}
                   >

@@ -1,12 +1,14 @@
 import Link from "next/link";
 import {
+  Activity,
+  AlertTriangle,
   ArrowRight,
-  Check,
   CheckCircle2,
   FileText,
   Landmark,
   Plus,
   RefreshCw,
+  TrendingUp,
 } from "lucide-react";
 import { SettlementStatus } from "@prisma/client";
 import { requireSession } from "@/lib/auth";
@@ -15,7 +17,9 @@ import { prisma } from "@/lib/prisma";
 import { isPontisConfigured } from "@/lib/providers/pontis/client";
 import { isPontisGatewayConfigured } from "@/lib/providers/pontis/gateway";
 import { cn, formatCurrencyCompact, formatCurrencyFull, formatDateTime, formatPercent } from "@/lib/utils";
-import { PageHeader, SectionHeader } from "@/components/ops/page-header";
+import { SectionHeader } from "@/components/ops/page-header";
+import { MetricCard } from "@/components/ops/metric-card";
+import { SettlementLifecycle } from "@/components/ops/settlement-lifecycle";
 import { StatusBadge } from "@/components/ops/status-badge";
 import { EmptyState } from "@/components/ops/empty-state";
 import { Button } from "@/components/ui/button";
@@ -30,88 +34,6 @@ import {
 
 function isPontisEnabled() {
   return isPontisGatewayConfigured() || isPontisConfigured();
-}
-
-const PROOF_LIFECYCLE = ["Approved", "Executed", "Provider", "Settled", "Reconciled"] as const;
-
-function proofStepIndex(settlement: {
-  status: SettlementStatus;
-  approvedAt: Date | null;
-  executedAt: Date | null;
-  providerTransactionId: string | null;
-  settledAt: Date | null;
-}) {
-  if (settlement.status === SettlementStatus.RECONCILED) return 4;
-  if (settlement.settledAt || settlement.status === SettlementStatus.SETTLED) return 3;
-  if (settlement.providerTransactionId) return 2;
-  if (settlement.executedAt || settlement.status === SettlementStatus.EXECUTING) return 1;
-  if (settlement.approvedAt || settlement.status === SettlementStatus.APPROVED) return 0;
-  return -1;
-}
-
-function ProofLifecycle({ settlement }: { settlement: Parameters<typeof proofStepIndex>[0] }) {
-  const current = proofStepIndex(settlement);
-  const terminal = settlement.status === SettlementStatus.RECONCILED;
-
-  return (
-    <div className="flex items-center gap-0.5">
-      {PROOF_LIFECYCLE.map((label, index) => {
-        const done = index < current || (terminal && index === current);
-        const active = index === current && !terminal;
-        return (
-          <div key={label} className="flex flex-1 items-center last:flex-none">
-            <div
-              className="overview-proof-step flex min-w-0 flex-col items-center gap-1"
-              style={{ animationDelay: `${0.12 + index * 0.07}s` }}
-            >
-              <div
-                className={cn(
-                  "grid h-5 w-5 place-items-center rounded-full border text-[9px] font-bold",
-                  done && "border-[#42d5b7] bg-[#42d5b7] text-[#07132b] overview-proof-check",
-                  active && "border-[#07132b] bg-[#07132b] text-white overview-proof-step-active",
-                  !done && !active && "border-slate-200 bg-white text-slate-300",
-                )}
-              >
-                {done ? <Check className="h-2.5 w-2.5" /> : index + 1}
-              </div>
-              <span
-                className={cn(
-                  "max-w-[52px] truncate text-center text-[9px] font-medium uppercase tracking-wide",
-                  active ? "text-[#07132b]" : done ? "text-teal-700" : "text-slate-400",
-                )}
-              >
-                {label}
-              </span>
-            </div>
-            {index < PROOF_LIFECYCLE.length - 1 ? (
-              <div className={cn("mx-0.5 h-px flex-1", done ? "bg-[#42d5b7]" : "bg-slate-200")} />
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function settlementLifecycleDots(status: SettlementStatus) {
-  const steps = ["REQUESTED", "APPROVED", "EXECUTING", "SETTLED", "RECONCILED"];
-  const index = steps.indexOf(status);
-  const current = index >= 0 ? index : 0;
-  const terminal = status === SettlementStatus.RECONCILED;
-
-  return (
-    <div className="flex items-center gap-0.5" title={status.replaceAll("_", " ")}>
-      {steps.map((_, i) => (
-        <span
-          key={i}
-          className={cn(
-            "h-1.5 w-1.5 rounded-full",
-            i < current || (terminal && i === current) ? "bg-[#42d5b7]" : i === current ? "bg-[#07132b]" : "bg-slate-200",
-          )}
-        />
-      ))}
-    </div>
-  );
 }
 
 function auditTone(action: string): "neutral" | "success" | "warning" | "danger" | "info" {
@@ -283,235 +205,241 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-3">
-      <PageHeader
-        title="Treasury Operations"
-        description="Mission control for settlement rails, provider execution, reconciliation, and audit."
-      />
+      {/* Mission Control — first viewport cockpit */}
+      <section className="mission-control">
+        <div className="mission-control__scanline pointer-events-none absolute inset-0" aria-hidden="true" />
 
-      {/* Hero command panel */}
-      <section className="overview-command-panel ops-panel ops-panel-accent overflow-hidden">
-        <div className="overview-command-panel__glow pointer-events-none absolute inset-0" aria-hidden="true" />
-        <div className="relative flex flex-col gap-3 p-4 sm:p-4">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="overview-live-badge inline-flex items-center gap-2 rounded-full border border-[#00c79d]/25 bg-[#e7faf4]/80 px-2.5 py-1 text-[11px] font-semibold text-brand-emerald-ink">
-                <span className="ops-pulse" aria-hidden="true" />
-                Settlement rails live
-              </span>
-              {pontisConnected ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0bb4c4]/25 bg-[#e7f7fb]/80 px-2.5 py-1 text-[11px] font-semibold text-[#0a7d86]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#0bb4c4]" aria-hidden="true" />
-                  PontisGlobe sandbox connected
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
-                  PontisGlobe sandbox offline
-                </span>
-              )}
-              <span className="overview-monitoring-badge inline-flex items-center gap-1.5 rounded-full border border-[var(--ops-line-soft)] bg-white/80 px-2.5 py-1 text-[11px] font-medium text-slate-600">
-                <span className="ops-pulse ops-pulse--subtle" aria-hidden="true" />
-                Live monitoring
-              </span>
-            </div>
-            <p className="max-w-2xl text-[12.5px] leading-snug text-slate-600">
+        <header className="mission-control__bar relative flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#42d5b7]/90">Mission Control</p>
+            <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">Treasury Operations</h1>
+            <p className="mt-0.5 max-w-xl text-[11.5px] leading-snug text-slate-300/90">
               {pontisConnected
-                ? "INRSettle is tracking payout status, reconciliation, and audit events across your sandbox treasury rail."
-                : "Connect PontisGlobe sandbox execution to unlock live payout tracking, reconciliation, and audit events."}
+                ? "Live settlement rails, provider execution, and reconciliation."
+                : "Connect PontisGlobe sandbox to unlock live payout tracking."}
             </p>
           </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="overview-live-badge inline-flex items-center gap-1.5 rounded-full border border-[#00c79d]/35 bg-[#00c79d]/12 px-2.5 py-1 text-[10px] font-semibold text-[#42d5b7]">
+              <span className="ops-pulse" aria-hidden="true" />
+              Rails live
+            </span>
+            {pontisConnected ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0bb4c4]/35 bg-[#0bb4c4]/10 px-2.5 py-1 text-[10px] font-semibold text-[#5dd4e0]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#0bb4c4]" aria-hidden="true" />
+                PontisGlobe connected
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-slate-400">
+                PontisGlobe offline
+              </span>
+            )}
+            <span className="overview-monitoring-badge inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/5 px-2.5 py-1 text-[10px] font-medium text-slate-300">
+              <span className="ops-pulse ops-pulse--subtle" aria-hidden="true" />
+              Monitoring
+            </span>
+          </div>
+        </header>
 
-          <div className="overview-hero-metrics grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="overview-hero-metric ops-card-hover rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">
-                Completed settlements
-              </p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-brand-emerald-ink">{completedCount}</p>
-            </div>
-            <div className="overview-hero-metric ops-card-hover rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">
-                Auto-reconciled rate
-              </p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-[#0a7d86]">{formatPercent(reconciledRate)}</p>
-            </div>
-            <div className="overview-hero-metric ops-card-hover rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">Exceptions</p>
-              <p
-                className={cn(
-                  "mt-0.5 text-lg font-semibold tabular-nums",
-                  reconExceptions ? "text-rose-700" : "text-slate-800",
-                )}
-              >
-                {reconExceptions}
-              </p>
-            </div>
-            <div className="overview-hero-metric ops-card-hover rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">In flight</p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-slate-800">{inFlightCount}</p>
-            </div>
+        <div className="mission-control__cockpit relative grid gap-3 p-3 sm:p-4 lg:grid-cols-12">
+          {/* Metric rail */}
+          <div className="mission-control__metrics flex flex-row gap-2 lg:col-span-3 lg:flex-col">
+            <MetricCard
+              variant="mission"
+              label="Completed"
+              value={completedCount}
+              hint="Settled + reconciled"
+              tone="success"
+              icon={CheckCircle2}
+            />
+            <MetricCard
+              variant="mission"
+              label="Auto-reconciled"
+              value={formatPercent(reconciledRate)}
+              hint="Of completed volume"
+              tone="info"
+              icon={TrendingUp}
+            />
+            <MetricCard
+              variant="mission"
+              label="Exceptions"
+              value={reconExceptions}
+              hint={reconExceptions ? "Needs review" : "All matched"}
+              tone={reconExceptions ? "danger" : "neutral"}
+              icon={AlertTriangle}
+            />
+            <MetricCard
+              variant="mission"
+              label="In flight"
+              value={inFlightCount}
+              hint="Approved + executing"
+              tone="warning"
+              icon={Activity}
+            />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-[var(--ops-line-soft)] pt-3">
-            <Button asChild variant="primary" size="sm">
-              <Link href="/quotes">
-                <Plus className="h-3.5 w-3.5" />
-                Create quote
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/settlements">
-                <Landmark className="h-3.5 w-3.5" />
-                Create settlement
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/reconciliation">
-                <RefreshCw className="h-3.5 w-3.5" />
-                Run reconciliation
-              </Link>
-            </Button>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/audit-logs">
-                <FileText className="h-3.5 w-3.5" />
-                View audit trail
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
-        {/* Latest settlement proof */}
-        <section>
-          <SectionHeader
-            title="Latest settlement proof"
-            description="End-to-end proof of provider payout, reconciliation, and audit trail."
-          />
-          {latestProof ? (
-            <div
-              className={cn(
-                "overview-proof-card ops-panel ops-panel-accent ops-card-hover overflow-hidden p-3.5",
-                isRecentlyCompleted(latestProof, now) && "overview-proof-recent",
-              )}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[14px] font-semibold tracking-tight text-slate-950">{latestProof.publicId}</p>
-                    <StatusBadge status={latestProof.status} />
-                  </div>
-                  <p
-                    className="mt-0.5 text-base font-semibold tabular-nums text-slate-900"
-                    title={formatCurrencyFull(String(latestProof.sourceAmount), latestProof.sourceCurrency)}
-                  >
-                    {formatCurrencyFull(String(latestProof.sourceAmount), latestProof.sourceCurrency)}
-                  </p>
-                </div>
-                <div className="text-right text-[11px] text-slate-500">
+          {/* Proof spotlight */}
+          <div className="lg:col-span-6">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">Latest settlement proof</p>
+              {latestProof ? (
+                <span className="text-[10px] text-slate-400">
                   {latestProof.reconciledAt
                     ? formatDateTime(latestProof.reconciledAt)
                     : latestProof.settledAt
                       ? formatDateTime(latestProof.settledAt)
                       : formatDateTime(latestProof.createdAt)}
-                </div>
-              </div>
-
-              <dl className="mt-2.5 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-                {latestProof.provider ? (
-                  <div className="rounded-lg border border-[var(--ops-line-soft)] bg-slate-50/60 px-2.5 py-1.5">
-                    <dt className="text-[9px] font-semibold uppercase tracking-[0.07em] text-slate-500">Provider</dt>
-                    <dd className="mt-0.5 text-[12px] font-medium text-slate-800">{latestProof.provider}</dd>
+                </span>
+              ) : null}
+            </div>
+            {latestProof ? (
+              <div
+                className={cn(
+                  "mission-control__spotlight-enter mission-control__spotlight ops-grid-faint overflow-hidden rounded-xl border border-[var(--ops-line)] p-3.5",
+                  isRecentlyCompleted(latestProof, now) && "mission-control__spotlight-recent",
+                )}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-mono text-[15px] font-semibold tracking-tight text-slate-950">
+                        {latestProof.publicId}
+                      </p>
+                      <StatusBadge status={latestProof.status} />
+                    </div>
+                    <p
+                      className="mt-1 text-2xl font-semibold tracking-tight tabular-nums text-slate-900"
+                      title={formatCurrencyFull(String(latestProof.sourceAmount), latestProof.sourceCurrency)}
+                    >
+                      {formatCurrencyFull(String(latestProof.sourceAmount), latestProof.sourceCurrency)}
+                    </p>
                   </div>
-                ) : null}
-                {latestProof.providerTransactionId ? (
-                  <div className="rounded-lg border border-[var(--ops-line-soft)] bg-slate-50/60 px-2.5 py-1.5">
-                    <dt className="text-[9px] font-semibold uppercase tracking-[0.07em] text-slate-500">
-                      Provider transaction
-                    </dt>
-                    <dd className="mt-0.5 truncate font-mono text-[11px] text-slate-700">
-                      {latestProof.providerTransactionId}
+                  <Link
+                    href="/settlements"
+                    className="inline-flex items-center gap-1 rounded-lg border border-[var(--ops-line-soft)] bg-white/80 px-2 py-1 text-[10px] font-semibold text-brand-emerald-ink transition-colors hover:bg-[#e7faf4]"
+                  >
+                    View detail
+                    <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
+
+                <div className="mt-3 rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-3 py-3">
+                  <SettlementLifecycle status={latestProof.status} spotlight />
+                </div>
+
+                <dl className="mt-2.5 grid gap-1.5 sm:grid-cols-2">
+                  {latestProof.provider ? (
+                    <div className="rounded-lg border border-[var(--ops-line-soft)] bg-white/60 px-2.5 py-1.5">
+                      <dt className="text-[9px] font-semibold uppercase tracking-[0.07em] text-slate-500">Provider</dt>
+                      <dd className="mt-0.5 text-[12px] font-medium text-slate-800">{latestProof.provider}</dd>
+                    </div>
+                  ) : null}
+                  {latestProof.providerTransactionId ? (
+                    <div className="rounded-lg border border-[var(--ops-line-soft)] bg-white/60 px-2.5 py-1.5">
+                      <dt className="text-[9px] font-semibold uppercase tracking-[0.07em] text-slate-500">
+                        Provider transaction
+                      </dt>
+                      <dd className="mt-0.5 truncate font-mono text-[11px] text-slate-700">
+                        {latestProof.providerTransactionId}
+                      </dd>
+                    </div>
+                  ) : null}
+                  <div className="rounded-lg border border-[var(--ops-line-soft)] bg-white/60 px-2.5 py-1.5">
+                    <dt className="text-[9px] font-semibold uppercase tracking-[0.07em] text-slate-500">Reconciliation</dt>
+                    <dd className="mt-0.5">
+                      <StatusBadge
+                        status={reconciliationLabel(latestProof.status, latestProof.reconciliation)}
+                        dot={false}
+                      />
                     </dd>
                   </div>
-                ) : null}
-                <div className="rounded-lg border border-[var(--ops-line-soft)] bg-slate-50/60 px-2.5 py-1.5">
-                  <dt className="text-[9px] font-semibold uppercase tracking-[0.07em] text-slate-500">
-                    Reconciliation
-                  </dt>
-                  <dd className="mt-0.5">
-                    <StatusBadge
-                      status={reconciliationLabel(latestProof.status, latestProof.reconciliation)}
-                      dot={false}
-                    />
-                  </dd>
-                </div>
-                <div className="rounded-lg border border-[var(--ops-line-soft)] bg-slate-50/60 px-2.5 py-1.5">
-                  <dt className="text-[9px] font-semibold uppercase tracking-[0.07em] text-slate-500">Audit status</dt>
-                  <dd className="mt-0.5">
-                    <StatusBadge status={auditStatusLabel(latestProof.status)} dot={false} />
-                  </dd>
-                </div>
-              </dl>
-
-              <div className="overview-proof-lifecycle mt-2.5 rounded-xl border border-[var(--ops-line-soft)] bg-slate-50/50 px-2.5 py-2.5">
-                <ProofLifecycle settlement={latestProof} />
-              </div>
-
-              <Link
-                href="/settlements"
-                className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-emerald-ink hover:underline"
-              >
-                View settlement detail
-                <ArrowRight className="h-3 w-3" />
-              </Link>
-            </div>
-          ) : (
-            <EmptyState
-              title="No completed settlements yet"
-              description="Execute your first settlement to see provider proof and reconciliation here."
-              action={{ label: "Create settlement", href: "/settlements" }}
-            />
-          )}
-        </section>
-
-        {/* Operational alerts */}
-        <section>
-          <SectionHeader title="Operational alerts" description="Items requiring operator attention" />
-          <div className="space-y-1.5">
-            {alerts.length ? (
-              alerts.map((alert) => (
-                <Link key={alert.title} href={alert.href} className="group block">
-                  <div
-                    className={cn(
-                      "overview-alert flex items-center gap-3 rounded-xl border px-3 py-2.5",
-                      alert.tone === "danger" && "border-rose-200 bg-rose-50/80",
-                      alert.tone === "warning" && "border-[#f2ad23]/30 bg-[#fff8e8]/80",
-                      alert.tone === "info" && "border-[#0bb4c4]/25 bg-[#e7f7fb]/70",
-                    )}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-semibold tracking-tight text-slate-900">{alert.title}</p>
-                      <p className="mt-0.5 text-[12px] leading-snug text-slate-600">{alert.description}</p>
-                    </div>
-                    <span className="overview-alert__action shrink-0 text-[11px] font-semibold text-brand-emerald-ink group-hover:underline">
-                      {alert.action}
-                      <ArrowRight className="overview-alert__arrow h-3 w-3" aria-hidden="true" />
-                    </span>
+                  <div className="rounded-lg border border-[var(--ops-line-soft)] bg-white/60 px-2.5 py-1.5">
+                    <dt className="text-[9px] font-semibold uppercase tracking-[0.07em] text-slate-500">Audit status</dt>
+                    <dd className="mt-0.5">
+                      <StatusBadge status={auditStatusLabel(latestProof.status)} dot={false} />
+                    </dd>
                   </div>
-                </Link>
-              ))
+                </dl>
+              </div>
             ) : (
-              <div className="ops-panel flex items-center gap-3 px-3.5 py-4">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#e7faf4] text-brand-emerald-ink ring-1 ring-[#00c79d]/25">
-                  <CheckCircle2 className="h-4 w-4" />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[13px] font-semibold tracking-tight text-slate-900">All clear</p>
-                  <p className="text-[12px] text-slate-500">No active alerts. Rails are operating normally.</p>
-                </div>
+              <div className="mission-control__spotlight ops-grid-faint rounded-xl border border-dashed border-[var(--ops-line)] p-4">
+                <EmptyState
+                  title="No completed settlements yet"
+                  description="Execute your first settlement to see provider proof here."
+                  action={{ label: "Create settlement", href: "/settlements" }}
+                />
               </div>
             )}
           </div>
-        </section>
-      </div>
+
+          {/* Actions + alerts */}
+          <div className="flex flex-col gap-3 lg:col-span-3">
+            <div className="mission-control__actions flex flex-col gap-1.5">
+              <Button asChild variant="primary" size="sm" className="ops-btn-navy w-full justify-center">
+                <Link href="/quotes">
+                  <Plus className="h-3.5 w-3.5" />
+                  Create quote
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm" className="w-full justify-center">
+                <Link href="/settlements">
+                  <Landmark className="h-3.5 w-3.5" />
+                  Create settlement
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm" className="w-full justify-center">
+                <Link href="/reconciliation">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Run reconciliation
+                </Link>
+              </Button>
+              <Button asChild variant="ghost" size="sm" className="w-full justify-center">
+                <Link href="/audit-logs">
+                  <FileText className="h-3.5 w-3.5" />
+                  View audit trail
+                </Link>
+              </Button>
+            </div>
+
+            <div className="flex-1">
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">Alerts</p>
+              <div className="space-y-1.5">
+                {alerts.length ? (
+                  alerts.map((alert) => (
+                    <Link key={alert.title} href={alert.href} className="group block">
+                      <div
+                        className={cn(
+                          "overview-alert rounded-xl border px-2.5 py-2",
+                          alert.tone === "danger" && "border-rose-200 bg-rose-50/80",
+                          alert.tone === "warning" && "border-[#f2ad23]/30 bg-[#fff8e8]/80",
+                          alert.tone === "info" && "border-[#0bb4c4]/25 bg-[#e7f7fb]/70",
+                        )}
+                      >
+                        <p className="text-[12px] font-semibold tracking-tight text-slate-900">{alert.title}</p>
+                        <p className="mt-0.5 text-[11px] leading-snug text-slate-600">{alert.description}</p>
+                        <span className="overview-alert__action mt-1 inline-flex items-center gap-0.5 text-[10px] font-semibold text-brand-emerald-ink group-hover:underline">
+                          {alert.action}
+                          <ArrowRight className="overview-alert__arrow h-3 w-3" aria-hidden="true" />
+                        </span>
+                      </div>
+                    </Link>
+                  ))
+                ) : (
+                  <div className="flex items-center gap-2.5 rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-2.5 py-2.5">
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#e7faf4] text-brand-emerald-ink ring-1 ring-[#00c79d]/25">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-semibold text-slate-900">All clear</p>
+                      <p className="text-[11px] text-slate-500">Rails operating normally.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div className="grid gap-3 lg:grid-cols-2">
         {/* Recent activity */}
@@ -589,10 +517,7 @@ export default async function DashboardPage() {
                         {formatCurrencyCompact(String(settlement.sourceAmount), settlement.sourceCurrency)}
                       </DataGridTd>
                       <DataGridTd className="py-2">
-                        <div className="flex items-center gap-1.5">
-                          <StatusBadge status={settlement.status} />
-                          {settlementLifecycleDots(settlement.status)}
-                        </div>
+                        <StatusBadge status={settlement.status} />
                       </DataGridTd>
                       <DataGridTd className="py-2 text-[11px] text-slate-600">
                         {settlement.providerTransactionId ? (

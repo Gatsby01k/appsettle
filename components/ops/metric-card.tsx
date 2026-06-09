@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Tone = "neutral" | "success" | "warning" | "danger" | "info";
+type Variant = "default" | "mission";
 
 export function MetricCard({
   label,
@@ -10,6 +11,7 @@ export function MetricCard({
   hint,
   tone = "neutral",
   icon: Icon,
+  variant = "default",
 }: {
   label: string;
   value: string | number;
@@ -18,6 +20,7 @@ export function MetricCard({
   hint?: string;
   tone?: Tone;
   icon?: LucideIcon;
+  variant?: Variant;
 }) {
   const valueTone: Record<Tone, string> = {
     neutral: "text-brand-ink",
@@ -42,6 +45,32 @@ export function MetricCard({
     danger: "bg-rose-50 text-rose-600 ring-rose-200/70",
     info: "bg-[#e7f7fb] text-[#0a7d86] ring-[#0bb4c4]/22",
   };
+
+  if (variant === "mission") {
+    return (
+      <div className="mission-metric relative overflow-hidden rounded-xl border border-[var(--ops-line-soft)] bg-white/72 px-3 py-2.5 backdrop-blur-sm transition-[transform,box-shadow,border-color] duration-[220ms] hover:-translate-y-px hover:border-[rgba(0,199,157,0.22)] hover:shadow-[var(--ops-shadow-sm)]">
+        <span className={cn("absolute inset-y-2 left-0 w-[3px] rounded-full", rail[tone])} />
+        <div className="flex items-center justify-between gap-2 pl-1">
+          <p className="min-w-0 truncate text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">{label}</p>
+          {Icon ? (
+            <span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-md ring-1", iconWrap[tone])}>
+              <Icon className="h-3 w-3" />
+            </span>
+          ) : null}
+        </div>
+        <p
+          title={valueTitle ?? (typeof value === "string" ? value : undefined)}
+          className={cn(
+            "mt-1 min-w-0 truncate whitespace-nowrap pl-1 text-[22px] font-semibold leading-none tracking-tight tabular-nums",
+            valueTone[tone],
+          )}
+        >
+          {value}
+        </p>
+        {hint ? <p className="mt-1 truncate pl-1 text-[11px] text-slate-500">{hint}</p> : null}
+      </div>
+    );
+  }
 
   return (
     <div className="ops-panel ops-card-hover relative overflow-hidden p-[18px] pl-5">
