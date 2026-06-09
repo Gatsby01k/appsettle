@@ -70,7 +70,7 @@ export function buildPayoutRequest(
   overrides?: PontisPayoutOverrides,
 ): PontisPayoutRequest {
   return {
-    idempotency_key: settlement.publicId,
+    idempotency_key: globalThis.crypto.randomUUID(),
     country_code: overrides?.country_code ?? "IN",
     currency_code: overrides?.currency_code ?? "INR",
     payment_method: overrides?.payment_method ?? "bank_local",
