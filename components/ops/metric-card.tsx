@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Tone = "neutral" | "success" | "warning" | "danger" | "info";
-type Variant = "default" | "mission";
+type Variant = "default" | "mission" | "telemetry";
 
 export function MetricCard({
   label,
@@ -45,6 +45,28 @@ export function MetricCard({
     danger: "bg-rose-50 text-rose-600 ring-rose-200/70",
     info: "bg-[#e7f7fb] text-[#0a7d86] ring-[#0bb4c4]/22",
   };
+
+  if (variant === "telemetry") {
+    return (
+      <div className="mission-telemetry-item flex min-w-0 flex-1 items-baseline gap-2 px-3 py-2 sm:px-4">
+        {Icon ? (
+          <Icon className={cn("mt-0.5 h-3 w-3 shrink-0 opacity-60", valueTone[tone])} aria-hidden="true" />
+        ) : null}
+        <div className="min-w-0">
+          <p className="truncate text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</p>
+          <p
+            title={valueTitle ?? (typeof value === "string" ? value : undefined)}
+            className={cn(
+              "mt-0.5 truncate whitespace-nowrap text-lg font-semibold leading-none tracking-tight tabular-nums sm:text-xl",
+              valueTone[tone],
+            )}
+          >
+            {value}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (variant === "mission") {
     return (
