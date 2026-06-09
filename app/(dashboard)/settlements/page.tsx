@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { SettlementStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth";
 import { createSettlement, transitionSettlement } from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
@@ -43,6 +44,11 @@ import {
  */
 function isPontisEnabled() {
   return isPontisGatewayConfigured() || isPontisConfigured();
+}
+
+function revalidateSettlementsPage() {
+  revalidatePath("/settlements");
+  revalidatePath("/dashboard/settlements");
 }
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -91,6 +97,7 @@ async function submitSettlement(formData: FormData) {
   } catch (error) {
     redirect(`/settlements?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
   }
+  revalidateSettlementsPage();
   redirect("/settlements?success=created");
 }
 
@@ -120,8 +127,10 @@ async function transition(formData: FormData) {
     redirect(`/settlements?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
   }
   if (finalStatus === SettlementStatus.FAILED) {
+    revalidateSettlementsPage();
     redirect(`/settlements?error=${encodeURIComponent("PontisGlobe reported the payout failed.")}`);
   }
+  revalidateSettlementsPage();
   redirect(`/settlements?success=${finalStatus.toLowerCase()}`);
 }
 
@@ -136,10 +145,15 @@ async function checkStatus(formData: FormData) {
   } catch (error) {
     redirect(`/settlements?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
   }
-  if (result.outcome === "success") redirect("/settlements?success=settled");
+  if (result.outcome === "success") {
+    revalidateSettlementsPage();
+    redirect("/settlements?success=settled");
+  }
   if (result.outcome === "failed") {
+    revalidateSettlementsPage();
     redirect(`/settlements?error=${encodeURIComponent(`PontisGlobe payout failed (${result.status ?? "failed"}).`)}`);
   }
+  revalidateSettlementsPage();
   redirect("/settlements?success=checked");
 }
 
