@@ -53,6 +53,20 @@ function humanizeStreamAction(action: string): string {
   return map[action] ?? action.replaceAll(".", " · ").replaceAll("_", " ");
 }
 
+function streamDotTone(action: string): "success" | "info" | "neutral" {
+  if (
+    action.includes("settled") ||
+    action.includes("reconcil") ||
+    action === "settlement.transition"
+  ) {
+    return "success";
+  }
+  if (action.includes("created") || action.includes("status_updated")) {
+    return "info";
+  }
+  return "neutral";
+}
+
 function isStreamActivity(log: { action: string; after: unknown }) {
   if (isAuthEvent(log.action)) return false;
   if (STREAM_EVENT_ACTIONS.has(log.action)) return true;
@@ -211,8 +225,8 @@ export default async function DashboardPage() {
             <h1 className="mission-control__title">Treasury Operations</h1>
           </div>
           <div className="mission-control__status">
-            <span className="overview-live-badge mission-control__pill">
-              <span className="ops-pulse" aria-hidden="true" />
+            <span className="overview-live-badge mission-control__pill mission-control__pill--live">
+              <span className="ops-pulse ops-pulse--subtle" aria-hidden="true" />
               Live
             </span>
             <span
@@ -268,11 +282,14 @@ export default async function DashboardPage() {
 
                 <p className="mission-control__proof-summary">{proofSummaryCopy(latestProof.status)}</p>
 
-                <div className="proof-lifecycle-wrap">
+                <div className="proof-lifecycle-wrap proof-rail--hero">
                   <SettlementLifecycle status={latestProof.status} proofRail compact />
                 </div>
 
-                <div className="mission-control__telemetry mission-control__telemetry--inline" aria-label="Operations telemetry">
+                <div
+                  className="mission-control__telemetry mission-control__telemetry--chips"
+                  aria-label="Operations telemetry"
+                >
                   <MetricCard label="Completed" value={completedCount} tone="success" variant="telemetry" />
                   <MetricCard
                     label="Auto-reconciled"
@@ -374,13 +391,20 @@ export default async function DashboardPage() {
                 <li
                   key={log.id}
                   className={cn("ops-stream-item", index === 0 && "ops-stream-item--latest")}
-                  style={{ animationDelay: `${0.03 + index * 0.03}s` }}
+                  style={{ animationDelay: `${0.04 + index * 0.045}s` }}
                 >
                   <div className="ops-stream-item__head">
-                    {index === 0 ? <span className="ops-pulse ops-pulse--subtle" aria-hidden="true" /> : null}
+                    <span
+                      className={cn(
+                        "ops-stream-dot",
+                        index === 0 && "ops-stream-dot--live",
+                        index !== 0 && `ops-stream-dot--${streamDotTone(log.action)}`,
+                      )}
+                      aria-hidden="true"
+                    />
                     <p className="ops-stream-title">{humanizeStreamAction(log.action)}</p>
+                    <time className="ops-stream-time">{formatDateTime(log.createdAt)}</time>
                   </div>
-                  <p className="ops-stream-time">{formatDateTime(log.createdAt)}</p>
                 </li>
               ))}
             </ul>
