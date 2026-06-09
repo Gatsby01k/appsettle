@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Fragment, Suspense } from "react";
 import { SettlementStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -13,7 +13,6 @@ import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
 import { EmptyState } from "@/components/ops/empty-state";
-import { FlashMessage } from "@/components/ops/flash-message";
 import { FilterBar } from "@/components/ops/filter-bar";
 import { FormSelect } from "@/components/ops/form-select";
 import { SettlementLifecycle } from "@/components/ops/settlement-lifecycle";
@@ -27,12 +26,15 @@ import {
 } from "@/components/ops/data-grid";
 import { SettlementDetailSheet } from "@/components/dashboard/settlement-detail-sheet";
 import {
+  SettlementOperationConsoleRow,
+  SettlementPageFlash,
+  type SettlementOperationConsoleData,
+} from "@/components/dashboard/settlement-operation-console";
+import {
   SettlementActionForm,
   SettlementActionsProvider,
   SettlementAutoRefresh,
-  SettlementOperationPanel,
   SettlementRowStatusHint,
-  type OperationPanelSettlement,
 } from "@/components/dashboard/settlement-auto-refresh";
 import { RemitQuicklyTestButton } from "@/components/providers/remitquickly-test-button";
 import { isRemitQuicklyConfigured } from "@/lib/providers/remitquickly/client";
@@ -63,13 +65,27 @@ import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/helper-text";
 import { SubmitButton } from "@/components/ui/submit-button";
 
-function successMessage(value?: string) {
-  if (value === "created") return "Settlement created and quote marked as accepted.";
-  if (value === "approved") return "Settlement approved and ready for execution.";
-  if (value === "executing") return "Payout submitted via PontisGlobe. Tracking transaction status.";
-  if (value === "settled") return "Settlement settled successfully.";
-  if (value === "checked") return "Provider status checked. Payout is still in progress.";
+function pageFlashMessage(value?: string) {
+  if (value === "created") return "Settlement created.";
   return null;
+}
+
+function pickHighlightSettlementId(
+  settlements: Array<{ id: string; status: SettlementStatus }>,
+  success?: string,
+) {
+  if (success === "settled") {
+    return settlements.find(
+      (s) => s.status === SettlementStatus.SETTLED || s.status === SettlementStatus.RECONCILED,
+    )?.id;
+  }
+  if (success === "approved") {
+    return settlements.find((s) => s.status === SettlementStatus.APPROVED)?.id;
+  }
+  if (success === "executing" || success === "checked") {
+    return settlements.find((s) => s.status === SettlementStatus.EXECUTING)?.id;
+  }
+  return undefined;
 }
 
 function hasWorkflowAction(status: SettlementStatus) {
@@ -88,41 +104,18 @@ function isCompleted(status: SettlementStatus) {
   return new Set<SettlementStatus>([SettlementStatus.SETTLED, SettlementStatus.RECONCILED]).has(status);
 }
 
-function pickFocusSettlement(
-  settlements: Array<{
-    publicId: string;
-    status: SettlementStatus;
-    corridor: string;
-    sourceAmount: unknown;
-    sourceCurrency: string;
-    provider: string | null;
-    providerStatus: string | null;
-    providerTransactionId: string | null;
-    events: unknown[];
-    reconciliation: unknown[];
-  }>,
-  success?: string,
-) {
-  const executing = settlements.find((s) => s.status === SettlementStatus.EXECUTING);
-  if (executing) return executing;
-
-  const approved = settlements.find((s) => s.status === SettlementStatus.APPROVED);
-  if (approved) return approved;
-
-  if (success === "settled") {
-    return settlements.find(
-      (s) => s.status === SettlementStatus.SETTLED || s.status === SettlementStatus.RECONCILED,
-    );
-  }
-
-  return undefined;
-}
-
-function toOperationPanelSettlement(
-  settlement: NonNullable<ReturnType<typeof pickFocusSettlement>>,
-): OperationPanelSettlement {
+function toOperationConsoleData(settlement: {
+  status: SettlementStatus;
+  corridor: string;
+  sourceAmount: unknown;
+  sourceCurrency: string;
+  provider: string | null;
+  providerStatus: string | null;
+  providerTransactionId: string | null;
+  events: unknown[];
+  reconciliation: unknown[];
+}): SettlementOperationConsoleData {
   return {
-    publicId: settlement.publicId,
     status: settlement.status,
     corridor: settlement.corridor.replace("_", " → "),
     amount: formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency),
@@ -218,7 +211,7 @@ export default async function SettlementsPage({
 }) {
   const { organization, membership } = await requireSession();
   const params = await searchParams;
-  const message = successMessage(params.success);
+  const flashMessage = pageFlashMessage(params.success);
   const canApprove = canApproveSettlement(membership.role);
 
   const [quotes, settlements] = await Promise.all([
@@ -236,6 +229,8 @@ export default async function SettlementsPage({
       },
     }),
   ]);
+
+  const highlightSettlementId = pickHighlightSettlementId(settlements, params.success);
 
   const query = params.q?.toLowerCase().trim() ?? "";
   const filteredSettlements = settlements.filter((settlement) => {
@@ -259,8 +254,6 @@ export default async function SettlementsPage({
   );
   const showSandboxTest = isSandboxTestEnabled();
   const pontisConfigured = isPontisEnabled();
-  const focusSettlementRaw = pickFocusSettlement(settlements, params.success);
-  const focusSettlement = focusSettlementRaw ? toOperationPanelSettlement(focusSettlementRaw) : null;
 
   return (
     <SettlementActionsProvider>
@@ -269,14 +262,8 @@ export default async function SettlementsPage({
 
       <SettlementAutoRefresh enabled={autoRefreshSettlements} />
 
-      {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
-      {message ? <FlashMessage message={message} /> : null}
-
-      <SettlementOperationPanel
-        autoRefresh={autoRefreshSettlements}
-        focusSettlement={focusSettlement}
-        successHint={params.success}
-      />
+      {params.error ? <SettlementPageFlash message={params.error} tone="error" /> : null}
+      {flashMessage ? <SettlementPageFlash message={flashMessage} /> : null}
 
       {showSandboxTest ? (
         <Card>
@@ -299,59 +286,6 @@ export default async function SettlementsPage({
         <MetricCard label="Completed" value={settled} hint="Settled or reconciled" tone="success" />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Create settlement</CardTitle>
-          <CardDescription>Only ACTIVE, unexpired quotes appear. The quote becomes ACCEPTED after creation.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <SettlementActionForm
-            settlementId="__create__"
-            action="create"
-            serverAction={submitSettlement}
-            className="grid gap-4 md:grid-cols-2 lg:grid-cols-5"
-          >
-            <Field label="Quote" hint="Only ACTIVE, unexpired quotes appear." required className="lg:col-span-2">
-              <FormSelect
-                name="quoteId"
-                placeholder="Select quote"
-                required
-                disabled={quotes.length === 0}
-                options={
-                  quotes.length
-                    ? quotes.map((quote) => ({
-                        value: quote.id,
-                        label: `${quote.corridor.replace("_", " → ")} · ${formatCurrencyCompact(String(quote.sourceAmount), quote.sourceCurrency)}`,
-                      }))
-                    : [{ value: "_none", label: "No active quotes" }]
-                }
-              />
-            </Field>
-            <Field label="Reference" htmlFor="reference" hint="Your internal batch identifier." required>
-              <Input id="reference" name="reference" placeholder="psp_batch_1842" required />
-            </Field>
-            <Field label="Source account" htmlFor="sourceAccount" hint="Account to debit." required>
-              <Input id="sourceAccount" name="sourceAccount" required />
-            </Field>
-            <Field label="Target account" htmlFor="targetAccount" hint="Account to credit." required>
-              <Input id="targetAccount" name="targetAccount" required />
-            </Field>
-            <div className="flex items-end md:col-span-2 lg:col-span-5">
-              <SubmitButton
-                type="submit"
-                variant="primary"
-                disabled={quotes.length === 0}
-                pendingText="Creating..."
-                settlementId="__create__"
-                action="create"
-              >
-                Create settlement
-              </SubmitButton>
-            </div>
-          </SettlementActionForm>
-        </CardContent>
-      </Card>
-
       <Suspense fallback={null}>
         <FilterBar
           searchPlaceholder="Search ID or reference..."
@@ -370,8 +304,20 @@ export default async function SettlementsPage({
               <DataGridTh className="text-right">Actions</DataGridTh>
             </DataGridHead>
             <DataGridBody>
-              {filteredSettlements.map((settlement) => (
-                <DataGridRow key={settlement.id}>
+              {filteredSettlements.map((settlement) => {
+                const rowAutoRefresh =
+                  settlement.status === SettlementStatus.EXECUTING ||
+                  Boolean(
+                    settlement.provider &&
+                      settlement.providerStatus &&
+                      !["completed", "failed", "settled", "reconciled"].includes(
+                        settlement.providerStatus.toLowerCase(),
+                      ),
+                  );
+
+                return (
+                <Fragment key={settlement.id}>
+                <DataGridRow>
                   <DataGridTd>
                     <p className="font-medium text-slate-950">{settlement.publicId}</p>
                     <p className="text-xs text-slate-500">{settlement.reference}</p>
@@ -510,7 +456,15 @@ export default async function SettlementsPage({
                     </div>
                   </DataGridTd>
                 </DataGridRow>
-              ))}
+                <SettlementOperationConsoleRow
+                  settlementId={settlement.id}
+                  settlement={toOperationConsoleData(settlement)}
+                  autoRefresh={rowAutoRefresh}
+                  highlightCompleted={highlightSettlementId === settlement.id}
+                />
+                </Fragment>
+                );
+              })}
             </DataGridBody>
           </table>
         </DataGrid>
@@ -521,6 +475,59 @@ export default async function SettlementsPage({
           action={{ label: "View quotes", href: "/quotes" }}
         />
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Create settlement</CardTitle>
+          <CardDescription>Only ACTIVE, unexpired quotes appear. The quote becomes ACCEPTED after creation.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SettlementActionForm
+            settlementId="__create__"
+            action="create"
+            serverAction={submitSettlement}
+            className="grid gap-4 md:grid-cols-2 lg:grid-cols-5"
+          >
+            <Field label="Quote" hint="Only ACTIVE, unexpired quotes appear." required className="lg:col-span-2">
+              <FormSelect
+                name="quoteId"
+                placeholder="Select quote"
+                required
+                disabled={quotes.length === 0}
+                options={
+                  quotes.length
+                    ? quotes.map((quote) => ({
+                        value: quote.id,
+                        label: `${quote.corridor.replace("_", " → ")} · ${formatCurrencyCompact(String(quote.sourceAmount), quote.sourceCurrency)}`,
+                      }))
+                    : [{ value: "_none", label: "No active quotes" }]
+                }
+              />
+            </Field>
+            <Field label="Reference" htmlFor="reference" hint="Your internal batch identifier." required>
+              <Input id="reference" name="reference" placeholder="psp_batch_1842" required />
+            </Field>
+            <Field label="Source account" htmlFor="sourceAccount" hint="Account to debit." required>
+              <Input id="sourceAccount" name="sourceAccount" required />
+            </Field>
+            <Field label="Target account" htmlFor="targetAccount" hint="Account to credit." required>
+              <Input id="targetAccount" name="targetAccount" required />
+            </Field>
+            <div className="flex items-end md:col-span-2 lg:col-span-5">
+              <SubmitButton
+                type="submit"
+                variant="primary"
+                disabled={quotes.length === 0}
+                pendingText="Creating..."
+                settlementId="__create__"
+                action="create"
+              >
+                Create settlement
+              </SubmitButton>
+            </div>
+          </SettlementActionForm>
+        </CardContent>
+      </Card>
     </div>
     </SettlementActionsProvider>
   );
