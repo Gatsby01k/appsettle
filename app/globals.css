@@ -303,14 +303,14 @@ body {
 .mission-control__cockpit {
   display: grid;
   gap: 0;
-  padding: 1rem 1.25rem 1.25rem;
+  padding: 0.875rem 1.25rem 1.125rem;
 }
 
 @media (min-width: 1024px) {
   .mission-control__cockpit {
     grid-template-columns: minmax(0, 1fr) 11.5rem;
-    gap: 1.5rem;
-    padding: 1.125rem 1.5rem 1.375rem;
+    gap: 1.25rem;
+    padding: 1rem 1.5rem 1.25rem;
   }
 }
 
@@ -368,8 +368,8 @@ body {
 }
 
 .mission-control__proof-amount {
-  margin-top: 0.75rem;
-  font-size: clamp(2.15rem, 5vw, 2.85rem);
+  margin-top: 0.55rem;
+  font-size: clamp(1.95rem, 4.5vw, 2.65rem);
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.035em;
@@ -383,7 +383,16 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
-  margin-top: 0.65rem;
+  margin-top: 0.5rem;
+}
+
+.mission-control__proof-summary {
+  margin-top: 0.55rem;
+  max-width: 36rem;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: rgba(203, 213, 225, 0.88);
 }
 
 .mission-control__proof-chip {
@@ -444,7 +453,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  margin-top: 1rem;
+  margin-top: 0.65rem;
   font-size: 12px;
   font-weight: 600;
   color: #42d5b7;
@@ -486,8 +495,32 @@ body {
 .mission-control__action-primary {
   width: 100%;
   justify-content: center;
-  margin-bottom: 0.25rem;
-  box-shadow: 0 8px 20px rgba(7, 17, 31, 0.22);
+  margin-bottom: 0.35rem;
+}
+
+.mission-control__action-primary--premium {
+  border: 1px solid rgba(0, 199, 157, 0.35);
+  background: linear-gradient(135deg, #0bb4c4 0%, #00c79d 52%, #24ddb6 100%);
+  color: #04222a;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 10px 24px rgba(0, 199, 157, 0.28),
+    0 0 32px rgba(0, 199, 157, 0.12);
+  transition:
+    transform 0.22s var(--ease),
+    box-shadow 0.22s var(--ease),
+    border-color 0.22s var(--ease);
+}
+
+.mission-control__action-primary--premium:hover {
+  transform: translateY(-1px);
+  border-color: rgba(0, 199, 157, 0.5);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 14px 30px rgba(0, 199, 157, 0.34),
+    0 0 40px rgba(0, 199, 157, 0.16);
 }
 
 .mission-control__action {
@@ -495,26 +528,33 @@ body {
   align-items: center;
   gap: 0.45rem;
   border-radius: 8px;
-  padding: 0.4rem 0.5rem;
+  padding: 0.42rem 0.55rem;
   font-size: 11.5px;
   font-weight: 500;
-  color: #cbd5e1;
+  color: #e2e8f0;
   transition:
     color 0.18s var(--ease),
-    background-color 0.18s var(--ease);
+    background-color 0.18s var(--ease),
+    transform 0.22s var(--ease),
+    border-color 0.22s var(--ease),
+    box-shadow 0.22s var(--ease);
 }
 
 .mission-control__action:hover {
   color: #fff;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 
-.mission-control__action--muted {
-  color: #64748b;
+.mission-control__rail .mission-action-card {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.03);
 }
 
-.mission-control__action--muted:hover {
-  color: #94a3b8;
+.mission-control__rail .mission-action-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(0, 199, 157, 0.22);
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
 }
 
 .mission-control__alert-slot {
@@ -527,10 +567,55 @@ body {
   gap: 0.5rem;
   border-radius: 12px;
   padding: 0.55rem 0.65rem;
+  transition:
+    transform 0.22s var(--ease),
+    box-shadow 0.22s var(--ease),
+    border-color 0.22s var(--ease);
+}
+
+.mission-control__alert:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
 .mission-control__alert--clear {
   background: rgba(255, 255, 255, 0.03);
+}
+
+.mission-control .overview-alert--warning {
+  border-color: rgba(242, 173, 35, 0.42);
+  background: linear-gradient(135deg, rgba(242, 173, 35, 0.18), rgba(242, 173, 35, 0.1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.mission-control .overview-alert--warning .mission-control__alert-icon {
+  color: #fbbf24;
+}
+
+.mission-control .overview-alert--warning .mission-control__alert-title {
+  color: #fef3c7;
+}
+
+.mission-control .overview-alert--warning .mission-control__alert-body {
+  color: rgba(254, 243, 199, 0.82);
+}
+
+.mission-control .overview-alert--warning .mission-control__alert-cta {
+  color: #fde68a;
+  font-weight: 600;
+}
+
+.mission-control .overview-alert--danger {
+  border-color: rgba(251, 113, 133, 0.38);
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.16), rgba(244, 63, 94, 0.08));
+}
+
+.mission-control .overview-alert--danger .mission-control__alert-title {
+  color: #fecdd3;
+}
+
+.mission-control .overview-alert--danger .mission-control__alert-cta {
+  color: #fda4af;
 }
 
 .mission-control__alert-icon {
@@ -552,15 +637,19 @@ body {
   color: #e2e8f0;
 }
 
-.mission-control__alert-sub {
-  margin-top: 0.1rem;
-  font-size: 10px;
-  color: #64748b;
+.mission-control__alert-sub,
+.mission-control__alert-body {
+  margin-top: 0.15rem;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: #94a3b8;
 }
 
 .mission-control__alert-cta {
-  margin-top: 0.15rem;
-  font-size: 10px;
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .mission-control__telemetry {
@@ -572,6 +661,17 @@ body {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
 }
 
+.mission-control__telemetry--inline {
+  margin-top: 0.75rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top-color: rgba(0, 199, 157, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
 @media (min-width: 640px) {
   .mission-control__telemetry {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -581,6 +681,25 @@ body {
 .mission-control__telemetry > .mission-telemetry-item {
   padding-top: 0.625rem;
   padding-bottom: 0.625rem;
+}
+
+.mission-control__telemetry--inline > .mission-telemetry-item {
+  padding-top: 0.45rem;
+  padding-bottom: 0.45rem;
+}
+
+.mission-control__telemetry--inline > .mission-telemetry-item:not(:last-child) {
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.mission-control__telemetry--inline .mission-telemetry-item p:last-child {
+  font-size: 1rem !important;
+}
+
+@media (min-width: 640px) {
+  .mission-control__telemetry--inline .mission-telemetry-item p:last-child {
+    font-size: 1.125rem !important;
+  }
 }
 
 .mission-control__telemetry > .mission-telemetry-item:not(:last-child) {
@@ -782,7 +901,8 @@ body {
 }
 
 .proof-lifecycle-wrap {
-  padding: 0.5rem 0.25rem 0.125rem;
+  margin-top: 0.55rem;
+  padding: 0.35rem 0.15rem 0;
 }
 
 .mission-control .proof-lifecycle-wrap .proof-rail-step > div:first-child {
@@ -1126,6 +1246,13 @@ body {
   opacity: 0.82;
 }
 
+.ops-stream-item__head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
 .ops-stream-item--latest .ops-stream-title {
   font-weight: 600;
   color: #0f172a;
@@ -1153,9 +1280,14 @@ body {
 .proof-feed-item {
   animation: overviewActivityIn 0.34s var(--ease) both;
   display: block;
-  padding: 0.5rem 0;
+  padding: 0.5rem 0.55rem;
+  margin: 0 -0.55rem;
+  border-radius: 10px;
   border-bottom: 1px solid var(--ops-line-soft);
-  transition: opacity 0.18s var(--ease);
+  transition:
+    background-color 0.2s var(--ease),
+    box-shadow 0.2s var(--ease),
+    transform 0.2s var(--ease);
 }
 
 .proof-feed-item:last-child {
@@ -1163,7 +1295,9 @@ body {
 }
 
 .proof-feed-item:hover {
-  opacity: 0.78;
+  background-color: rgba(0, 199, 157, 0.045);
+  box-shadow: inset 3px 0 0 rgba(0, 199, 157, 0.35);
+  transform: translateX(1px);
 }
 
 .proof-feed-item__primary {
@@ -1211,6 +1345,16 @@ body {
   font-size: 9.5px;
   letter-spacing: -0.02em;
   color: #94a3b8;
+}
+
+.proof-feed-tx--pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 199, 157, 0.18);
+  background: rgba(231, 250, 244, 0.65);
+  padding: 0.1rem 0.45rem;
+  color: #1e4d42;
 }
 
 .proof-feed-item__time {
@@ -2613,6 +2757,11 @@ details[open] > .reconciliation-details-content {
 @media (prefers-reduced-motion: reduce) {
   .mission-control .mission-control__scanline,
   .mission-control__hero-glow,
+  .mission-control__action-primary--premium,
+  .mission-control__action-primary--premium:hover,
+  .mission-control__rail .mission-action-card:hover,
+  .mission-control__alert:hover,
+  .proof-feed-item:hover,
   .mission-control__telemetry > .mission-telemetry-item,
   .mission-control__proof,
   .mission-control__milestone,

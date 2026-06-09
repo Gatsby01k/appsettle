@@ -15,6 +15,8 @@ import { prisma } from "@/lib/prisma";
 import { isPontisConfigured } from "@/lib/providers/pontis/client";
 import { isPontisGatewayConfigured } from "@/lib/providers/pontis/gateway";
 import { cn, formatCurrencyCompact, formatCurrencyFull, formatDateTime } from "@/lib/utils";
+import { MetricCard } from "@/components/ops/metric-card";
+import { SettlementLifecycle } from "@/components/ops/settlement-lifecycle";
 import { StatusBadge } from "@/components/ops/status-badge";
 import { EmptyState } from "@/components/ops/empty-state";
 import { Button } from "@/components/ui/button";
@@ -23,26 +25,14 @@ function isPontisEnabled() {
   return isPontisGatewayConfigured() || isPontisConfigured();
 }
 
-const NOISE_EVENT_ACTIONS = new Set([
-  "auth.login",
-  "settlement.transition",
-  "reconciliation.create",
+const STREAM_EVENT_ACTIONS = new Set([
+  "pontis.payout.created",
+  "remitquickly.payout.created",
   "pontis.payout.status_updated",
-  "settings.update",
-]);
-
-const PROOF_DUPLICATE_ACTIONS = new Set([
   "pontis.payout.settled",
   "remitquickly.payout.settled",
   "reconciliation.auto_match",
   "reconciliation.confirm_match",
-]);
-
-const SUMMARY_EVENT_ACTIONS = new Set([
-  "pontis.payout.created",
-  "settlement.create",
-  "quote.create",
-  "remitquickly.payout.created",
 ]);
 
 function isAuthEvent(action: string) {
@@ -51,24 +41,26 @@ function isAuthEvent(action: string) {
 
 function humanizeStreamAction(action: string): string {
   const map: Record<string, string> = {
-    "quote.create": "Quote drafted",
-    "settlement.create": "Settlement initiated",
-    "pontis.payout.created": "Payout submitted to provider",
-    "pontis.payout.failed": "Provider payout failed",
-    "pontis.payout.failed_submit": "Payout submission failed",
-    "remitquickly.payout.created": "Payout submitted to provider",
-    "remitquickly.payout.failed": "Provider payout failed",
-    "reconciliation.reject_match": "Match review opened",
-    "reconciliation.resolve_exception": "Exception cleared",
+    "pontis.payout.created": "Provider payout submitted",
+    "remitquickly.payout.created": "Provider payout submitted",
+    "pontis.payout.status_updated": "Provider status updated",
+    "pontis.payout.settled": "Provider payout completed",
+    "remitquickly.payout.settled": "Provider payout completed",
+    "reconciliation.auto_match": "Settlement reconciled automatically",
+    "reconciliation.confirm_match": "Settlement reconciled",
+    "settlement.transition": "Audit trail recorded",
   };
   return map[action] ?? action.replaceAll(".", " · ").replaceAll("_", " ");
 }
 
-function isStreamActivity(action: string) {
-  if (isAuthEvent(action) || NOISE_EVENT_ACTIONS.has(action) || PROOF_DUPLICATE_ACTIONS.has(action)) {
-    return false;
+function isStreamActivity(log: { action: string; after: unknown }) {
+  if (isAuthEvent(log.action)) return false;
+  if (STREAM_EVENT_ACTIONS.has(log.action)) return true;
+  if (log.action === "settlement.transition") {
+    const after = log.after as { toStatus?: string } | null;
+    return after?.toStatus === SettlementStatus.RECONCILED;
   }
-  return SUMMARY_EVENT_ACTIONS.has(action);
+  return false;
 }
 
 const RECENT_PROOF_MS = 6 * 60 * 60 * 1000;
@@ -88,15 +80,14 @@ function truncateTx(id: string, max = 14) {
   return `${id.slice(0, 6)}…${id.slice(-4)}`;
 }
 
-function proofMilestones(status: SettlementStatus) {
-  const settled =
-    status === SettlementStatus.SETTLED || status === SettlementStatus.RECONCILED;
-  const reconciled = status === SettlementStatus.RECONCILED;
-  return [
-    { label: "Payout confirmed", done: settled },
-    { label: "Reconciled", done: reconciled },
-    { label: "Proof recorded", done: reconciled },
-  ];
+function proofSummaryCopy(status: SettlementStatus) {
+  if (status === SettlementStatus.RECONCILED) {
+    return "Provider payout completed. Settlement reconciled. Audit trail recorded.";
+  }
+  if (status === SettlementStatus.SETTLED) {
+    return "Provider payout completed. Awaiting reconciliation.";
+  }
+  return "Settlement in progress.";
 }
 
 export default async function DashboardPage() {
@@ -110,8 +101,17 @@ export default async function DashboardPage() {
     // Non-fatal: dashboard still renders current state if matching fails transiently.
   }
 
-  const [recentSettlements, latestProof, reconExceptions, auditLogs, expiredQuotes, pendingApprovals] =
-    await Promise.all([
+  const [
+    recentSettlements,
+    latestProof,
+    reconExceptions,
+    auditLogs,
+    expiredQuotes,
+    pendingApprovals,
+    completedCount,
+    inFlightCount,
+    reconciledCount,
+  ] = await Promise.all([
       prisma.settlement.findMany({
         where: { organizationId: organization.id },
         orderBy: { createdAt: "desc" },
@@ -144,9 +144,27 @@ export default async function DashboardPage() {
       prisma.settlement.count({
         where: { organizationId: organization.id, status: SettlementStatus.REQUESTED },
       }),
+      prisma.settlement.count({
+        where: {
+          organizationId: organization.id,
+          status: { in: [SettlementStatus.SETTLED, SettlementStatus.RECONCILED] },
+        },
+      }),
+      prisma.settlement.count({
+        where: {
+          organizationId: organization.id,
+          status: { in: [SettlementStatus.APPROVED, SettlementStatus.EXECUTING] },
+        },
+      }),
+      prisma.settlement.count({
+        where: { organizationId: organization.id, status: SettlementStatus.RECONCILED },
+      }),
     ]);
 
-  const operationsStream = auditLogs.filter((log) => isStreamActivity(log.action)).slice(0, 4);
+  const autoReconciledRate =
+    completedCount > 0 ? Math.round((reconciledCount / completedCount) * 100) : null;
+
+  const operationsStream = auditLogs.filter((log) => isStreamActivity(log)).slice(0, 4);
 
   const proofFeed = recentSettlements
     .filter((settlement) => settlement.id !== latestProof?.id)
@@ -170,9 +188,10 @@ export default async function DashboardPage() {
         : expiredQuotes > 0
           ? {
               title: `${expiredQuotes} expired quote${expiredQuotes === 1 ? "" : "s"}`,
+              body: "Refresh or archive stale quotes before the next settlement run.",
               action: "Open quotes",
               href: "/quotes?tab=expired",
-              tone: "info" as const,
+              tone: "warning" as const,
             }
           : null;
 
@@ -247,21 +266,23 @@ export default async function DashboardPage() {
                   ) : null}
                 </div>
 
-                <ul className="mission-control__milestones">
-                  {proofMilestones(latestProof.status).map((item, index) => (
-                    <li
-                      key={item.label}
-                      className={cn(
-                        "mission-control__milestone",
-                        item.done && "mission-control__milestone--done",
-                      )}
-                      style={{ animationDelay: `${0.06 + index * 0.05}s` }}
-                    >
-                      {item.done ? <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> : null}
-                      <span>{item.label}</span>
-                    </li>
-                  ))}
-                </ul>
+                <p className="mission-control__proof-summary">{proofSummaryCopy(latestProof.status)}</p>
+
+                <div className="proof-lifecycle-wrap">
+                  <SettlementLifecycle status={latestProof.status} proofRail compact />
+                </div>
+
+                <div className="mission-control__telemetry mission-control__telemetry--inline" aria-label="Operations telemetry">
+                  <MetricCard label="Completed" value={completedCount} tone="success" variant="telemetry" />
+                  <MetricCard
+                    label="Auto-reconciled"
+                    value={autoReconciledRate !== null ? `${autoReconciledRate}%` : "—"}
+                    tone="info"
+                    variant="telemetry"
+                  />
+                  <MetricCard label="Exceptions" value={reconExceptions} tone="danger" variant="telemetry" />
+                  <MetricCard label="In flight" value={inFlightCount} tone="neutral" variant="telemetry" />
+                </div>
 
                 <Link href="/settlements" className="mission-control__proof-link">
                   Open proof
@@ -281,21 +302,26 @@ export default async function DashboardPage() {
 
           <aside className="mission-control__rail">
             <nav className="mission-control__actions" aria-label="Quick actions">
-              <Button asChild variant="primary" size="sm" className="ops-btn-navy mission-control__action-primary">
+              <Button
+                asChild
+                variant="primary"
+                size="sm"
+                className="mission-control__action-primary mission-control__action-primary--premium"
+              >
                 <Link href="/quotes">
                   <Plus className="h-3.5 w-3.5" />
                   Create quote
                 </Link>
               </Button>
-              <Link href="/settlements" className="mission-control__action">
+              <Link href="/settlements" className="mission-control__action mission-action-card">
                 <Landmark className="h-3.5 w-3.5" aria-hidden="true" />
                 Create settlement
               </Link>
-              <Link href="/reconciliation" className="mission-control__action">
+              <Link href="/reconciliation" className="mission-control__action mission-action-card">
                 <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                 Run reconciliation
               </Link>
-              <Link href="/audit-logs" className="mission-control__action mission-control__action--muted">
+              <Link href="/audit-logs" className="mission-control__action mission-action-card">
                 <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                 Audit trail
               </Link>
@@ -309,15 +335,16 @@ export default async function DashboardPage() {
                       "overview-alert mission-control__alert",
                       primaryAlert.tone === "danger" && "overview-alert--danger",
                       primaryAlert.tone === "warning" && "overview-alert--warning",
-                      primaryAlert.tone === "info" && "overview-alert--info",
                     )}
                   >
                     <AlertTriangle className="mission-control__alert-icon" aria-hidden="true" />
                     <div className="min-w-0">
                       <p className="mission-control__alert-title">{primaryAlert.title}</p>
+                      {"body" in primaryAlert && primaryAlert.body ? (
+                        <p className="mission-control__alert-body">{primaryAlert.body}</p>
+                      ) : null}
                       <span className="overview-alert__action mission-control__alert-cta">
-                        {primaryAlert.action}
-                        <ArrowRight className="overview-alert__arrow h-3 w-3" aria-hidden="true" />
+                        {primaryAlert.action} →
                       </span>
                     </div>
                   </div>
@@ -349,7 +376,10 @@ export default async function DashboardPage() {
                   className={cn("ops-stream-item", index === 0 && "ops-stream-item--latest")}
                   style={{ animationDelay: `${0.03 + index * 0.03}s` }}
                 >
-                  <p className="ops-stream-title">{humanizeStreamAction(log.action)}</p>
+                  <div className="ops-stream-item__head">
+                    {index === 0 ? <span className="ops-pulse ops-pulse--subtle" aria-hidden="true" /> : null}
+                    <p className="ops-stream-title">{humanizeStreamAction(log.action)}</p>
+                  </div>
                   <p className="ops-stream-time">{formatDateTime(log.createdAt)}</p>
                 </li>
               ))}
@@ -395,7 +425,7 @@ export default async function DashboardPage() {
                     <div className="proof-feed-item__meta">
                       <span className="proof-feed-item__provider">{settlement.provider ?? "—"}</span>
                       {settlement.providerTransactionId ? (
-                        <span className="proof-feed-tx" title={settlement.providerTransactionId}>
+                        <span className="proof-feed-tx proof-feed-tx--pill" title={settlement.providerTransactionId}>
                           {truncateTx(settlement.providerTransactionId)}
                         </span>
                       ) : null}
