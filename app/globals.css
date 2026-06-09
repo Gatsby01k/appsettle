@@ -386,6 +386,129 @@ body {
   transform: translateX(1px);
 }
 
+/* Latest operation flow — high-level summary card */
+.operation-flow-card {
+  animation: overviewProofSlideIn 0.42s var(--ease) both;
+  border-radius: 16px;
+  border: 1px solid var(--ops-line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 252, 250, 0.9));
+  box-shadow: var(--ops-shadow-xs);
+  transition:
+    border-color 0.22s var(--ease),
+    box-shadow 0.22s var(--ease);
+}
+
+.operation-flow-card:hover {
+  border-color: rgba(0, 199, 157, 0.2);
+  box-shadow: var(--ops-shadow-sm);
+}
+
+.operation-flow-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+@media (min-width: 640px) {
+  .operation-flow-checklist--horizontal {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .operation-flow-checklist--horizontal .operation-flow-check-item {
+    flex: 1 1 calc(50% - 0.5rem);
+    min-width: 9.5rem;
+  }
+}
+
+.operation-flow-check-item {
+  animation: overviewActivityIn 0.36s var(--ease) both;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 8px;
+  padding: 0.3rem 0.4rem;
+  transition: background-color 0.18s var(--ease);
+}
+
+.operation-flow-check-item:hover {
+  background-color: rgba(0, 199, 157, 0.035);
+}
+
+.operation-flow-check-item:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.operation-flow-check-item:nth-child(2) {
+  animation-delay: 0.09s;
+}
+.operation-flow-check-item:nth-child(3) {
+  animation-delay: 0.13s;
+}
+.operation-flow-check-item:nth-child(4) {
+  animation-delay: 0.17s;
+}
+.operation-flow-check-item:nth-child(5) {
+  animation-delay: 0.21s;
+}
+
+.operation-flow-check-icon {
+  display: grid;
+  height: 1.125rem;
+  width: 1.125rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(248, 250, 252, 0.9);
+  color: #94a3b8;
+}
+
+.operation-flow-check-icon--done {
+  border-color: rgba(0, 199, 157, 0.35);
+  background: rgba(231, 250, 244, 0.95);
+  color: #087f69;
+}
+
+.operation-flow-check-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #64748b;
+}
+
+.operation-flow-check-label--done {
+  color: #1e293b;
+}
+
+.proof-summary-panel {
+  animation: overviewProofSlideIn 0.44s var(--ease) 0.06s both;
+  border-radius: 16px;
+  border: 1px solid var(--ops-line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(255, 255, 255, 0.88));
+  box-shadow: var(--ops-shadow-xs);
+}
+
+.proof-summary-row {
+  border-radius: 10px;
+  transition:
+    background-color 0.18s var(--ease),
+    transform 0.18s var(--ease);
+}
+
+.proof-summary-row:hover {
+  background-color: rgba(0, 199, 157, 0.04);
+  transform: translateX(1px);
+}
+
+.secondary-activity {
+  animation: overviewActivityIn 0.38s var(--ease) both;
+}
+
+.secondary-activity-item {
+  animation: overviewActivityIn 0.34s var(--ease) both;
+}
+
 .ops-stream-item--secondary {
   opacity: 0.62;
 }
@@ -1815,6 +1938,11 @@ details[open] > .reconciliation-details-content {
   .proof-rail-step,
   .proof-rail-connector,
   .proof-list-row,
+  .operation-flow-card,
+  .operation-flow-check-item,
+  .proof-summary-panel,
+  .secondary-activity,
+  .secondary-activity-item,
   .mission-action-card,
   .mission-control__spotlight-recent,
   .mission-control__spotlight-enter,
@@ -1834,6 +1962,7 @@ details[open] > .reconciliation-details-content {
   }
   .proof-card:hover,
   .proof-list-row:hover,
+  .proof-summary-row:hover,
   .mission-action-card:hover {
     transform: none;
   }

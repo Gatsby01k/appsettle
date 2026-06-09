@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  Check,
   CheckCircle2,
   FileText,
   Landmark,
@@ -28,38 +29,24 @@ function isPontisEnabled() {
   return isPontisGatewayConfigured() || isPontisConfigured();
 }
 
-function isAuthEvent(action: string) {
-  return action.startsWith("auth.");
-}
+const NOISE_EVENT_ACTIONS = new Set([
+  "auth.login",
+  "settlement.transition",
+  "reconciliation.create",
+  "pontis.payout.status_updated",
+  "settings.update",
+]);
 
-function isOperationalEvent(action: string) {
-  return (
-    action.startsWith("settlement.") ||
-    action.startsWith("reconciliation.") ||
-    action.startsWith("pontis.") ||
-    action.startsWith("remitquickly.") ||
-    action.startsWith("quote.")
-  );
-}
-
-function auditTone(action: string): "neutral" | "success" | "warning" | "danger" | "info" {
-  if (action.includes("EXCEPTION") || action.includes("FAILED") || action.includes("failed")) return "danger";
-  if (
-    action.includes("APPROVED") ||
-    action.includes("MATCHED") ||
-    action.includes("SETTLED") ||
-    action.includes("RECONCILED") ||
-    action.includes("settled") ||
-    action.includes("auto_match")
-  ) {
-    return "success";
-  }
-  if (action.includes("REQUESTED") || action.includes("EXECUTING") || action.includes("transition")) {
-    return "warning";
-  }
-  if (action.includes("CREATE") || action.includes("created") || action.includes("webhook")) return "info";
-  return "neutral";
-}
+const SUMMARY_EVENT_ACTIONS = new Set([
+  "pontis.payout.settled",
+  "pontis.payout.created",
+  "reconciliation.auto_match",
+  "reconciliation.confirm_match",
+  "settlement.create",
+  "quote.create",
+  "remitquickly.payout.settled",
+  "remitquickly.payout.created",
+]);
 
 function humanizeAuditAction(action: string): string {
   const map: Record<string, string> = {
@@ -125,16 +112,41 @@ function proofSummaryCopy(status: SettlementStatus): string {
   return "Settlement proof will appear once provider execution completes.";
 }
 
-function providerProofSnippet(settlement: {
-  provider: string | null;
+type OperationFlowStep = { label: string; done: boolean };
+
+function buildOperationFlowSteps(settlement: {
+  status: SettlementStatus;
   providerTransactionId: string | null;
-}): string | null {
-  if (settlement.providerTransactionId) {
-    const name = settlement.provider ?? "Provider";
-    return `${name} · ${settlement.providerTransactionId.slice(0, 10)}…`;
-  }
-  if (settlement.provider) return settlement.provider;
-  return null;
+  reconciliation: { status: string }[];
+}): OperationFlowStep[] {
+  const isSettled =
+    settlement.status === SettlementStatus.SETTLED || settlement.status === SettlementStatus.RECONCILED;
+  const isReconciled = settlement.status === SettlementStatus.RECONCILED;
+  const hasProviderTx = Boolean(settlement.providerTransactionId);
+  const autoMatched =
+    isReconciled ||
+    settlement.reconciliation.some((record) =>
+      ["AUTO_MATCHED", "MATCHED", "MANUAL_MATCHED"].includes(record.status),
+    );
+
+  return [
+    { label: "Provider payout created", done: hasProviderTx || isSettled },
+    { label: "Provider status completed", done: isSettled },
+    { label: "Settlement marked settled", done: isSettled },
+    { label: "Reconciliation auto-matched", done: autoMatched },
+    { label: "Audit trail recorded", done: isReconciled },
+  ];
+}
+
+function flowStatusLabel(status: SettlementStatus): string {
+  if (status === SettlementStatus.RECONCILED) return "Reconciled";
+  if (status === SettlementStatus.SETTLED) return "Completed";
+  return "In progress";
+}
+
+function isSummaryActivity(action: string) {
+  if (NOISE_EVENT_ACTIONS.has(action)) return false;
+  return SUMMARY_EVENT_ACTIONS.has(action);
 }
 
 export default async function DashboardPage() {
@@ -201,15 +213,11 @@ export default async function DashboardPage() {
     statusCount(SettlementStatus.APPROVED) + statusCount(SettlementStatus.EXECUTING);
   const reconciledRate = completedCount ? Math.round((reconciledCount / completedCount) * 100) : 0;
 
-  const streamLogs = [...auditLogs].sort((a, b) => {
-    const aAuth = isAuthEvent(a.action);
-    const bAuth = isAuthEvent(b.action);
-    if (aAuth !== bAuth) return aAuth ? 1 : -1;
-    const aOps = isOperationalEvent(a.action);
-    const bOps = isOperationalEvent(b.action);
-    if (aOps !== bOps) return aOps ? -1 : 1;
-    return b.createdAt.getTime() - a.createdAt.getTime();
-  });
+  const secondaryActivity = auditLogs
+    .filter((log) => isSummaryActivity(log.action))
+    .slice(0, 3);
+
+  const operationFlowSteps = latestProof ? buildOperationFlowSteps(latestProof) : [];
 
   const alerts = [
     reconExceptions > 0
@@ -469,55 +477,110 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <section>
-          <SectionHeader title="Recent operations stream" description="Live treasury and provider events" />
-          <div className="ops-panel divide-y divide-[var(--ops-line-soft)] px-3 py-0.5">
-            {streamLogs.length ? (
-              streamLogs.map((log, index) => {
-                const tone = auditTone(log.action);
-                const authEvent = isAuthEvent(log.action);
-                const dot = {
-                  neutral: "bg-slate-400",
-                  success: "bg-emerald-500",
-                  warning: "bg-amber-500",
-                  danger: "bg-rose-500",
-                  info: "bg-blue-500",
-                }[tone];
-
-                return (
-                  <div
-                    key={log.id}
-                    className={cn(
-                      "overview-activity-item overview-activity-row flex items-start gap-2 py-2.5",
-                      authEvent && "ops-stream-item--secondary",
-                    )}
-                    style={{ animationDelay: `${0.04 + index * 0.05}s` }}
-                  >
-                    <span className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", dot)} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <p className={cn("ops-stream-title text-[12.5px] font-medium text-slate-900")}>
-                          {humanizeAuditAction(log.action)}
-                        </p>
-                        <span className="ops-stream-event-code">{log.action}</span>
-                      </div>
-                      <p className="mt-0.5 truncate text-[11px] text-slate-500">
-                        {log.user?.email ?? log.actorType} · {formatDateTime(log.createdAt)}
-                      </p>
-                    </div>
+      <div className="grid gap-3 lg:grid-cols-12">
+        <section className="lg:col-span-7">
+          <SectionHeader
+            title="Latest operation flow"
+            description="High-level summary of the most recent completed settlement"
+            action={
+              <Link href="/audit-logs" className="text-xs font-medium text-slate-500 hover:text-slate-800">
+                Full audit trail
+              </Link>
+            }
+          />
+          {latestProof ? (
+            <div className="operation-flow-card p-3.5 sm:p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[var(--ops-line-soft)] pb-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-mono text-[13px] font-semibold text-slate-950">{latestProof.publicId}</p>
+                    <StatusBadge status={flowStatusLabel(latestProof.status)} dot={false} />
                   </div>
-                );
-              })
-            ) : (
-              <div className="py-8">
-                <EmptyState title="No activity yet" description="Operational events will appear as your team works." />
+                  <p
+                    className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-slate-900"
+                    title={formatCurrencyFull(String(latestProof.sourceAmount), latestProof.sourceCurrency)}
+                  >
+                    {formatCurrencyFull(String(latestProof.sourceAmount), latestProof.sourceCurrency)}
+                  </p>
+                </div>
+                {latestCompletedAt ? (
+                  <p className="shrink-0 text-[11px] text-slate-500">{formatDateTime(latestCompletedAt)}</p>
+                ) : null}
               </div>
-            )}
-          </div>
+
+              <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px]">
+                {latestProof.provider ? (
+                  <span className="text-slate-600">
+                    <span className="text-slate-400">Provider · </span>
+                    {latestProof.provider}
+                  </span>
+                ) : null}
+                {latestProof.providerTransactionId ? (
+                  <span className="proof-tx-pill truncate" title={latestProof.providerTransactionId}>
+                    {latestProof.providerTransactionId}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="operation-flow-checklist operation-flow-checklist--horizontal mt-3.5">
+                {operationFlowSteps.map((step) => (
+                  <div key={step.label} className="operation-flow-check-item">
+                    <span
+                      className={cn(
+                        "operation-flow-check-icon",
+                        step.done && "operation-flow-check-icon--done",
+                      )}
+                      aria-hidden="true"
+                    >
+                      {step.done ? <Check className="h-3 w-3" strokeWidth={2.5} /> : null}
+                    </span>
+                    <span
+                      className={cn(
+                        "operation-flow-check-label",
+                        step.done && "operation-flow-check-label--done",
+                      )}
+                    >
+                      {step.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="operation-flow-card p-4">
+              <EmptyState
+                title="No completed flows yet"
+                description="Once a settlement completes, you'll see the end-to-end operation summary here."
+                action={{ label: "Create settlement", href: "/settlements" }}
+              />
+            </div>
+          )}
+
+          {secondaryActivity.length ? (
+            <div className="secondary-activity mt-2.5 rounded-xl border border-[var(--ops-line-soft)] bg-white/60 px-3 py-2">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Recent activity</p>
+                <Link href="/audit-logs" className="text-[10px] font-medium text-slate-500 hover:text-slate-800">
+                  View all
+                </Link>
+              </div>
+              <ul className="space-y-1">
+                {secondaryActivity.map((log, index) => (
+                  <li
+                    key={log.id}
+                    className="secondary-activity-item flex items-baseline justify-between gap-2 py-0.5"
+                    style={{ animationDelay: `${0.04 + index * 0.04}s` }}
+                  >
+                    <span className="truncate text-[11.5px] text-slate-600">{humanizeAuditAction(log.action)}</span>
+                    <span className="shrink-0 text-[10px] text-slate-400">{formatDateTime(log.createdAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </section>
 
-        <section>
+        <section className="lg:col-span-5">
           <SectionHeader
             title="Recent settlement proofs"
             action={
@@ -527,9 +590,8 @@ export default async function DashboardPage() {
             }
           />
           {recentSettlements.length ? (
-            <div className="ops-panel divide-y divide-[var(--ops-line-soft)] px-2 py-1">
-              {recentSettlements.map((settlement) => {
-                const snippet = providerProofSnippet(settlement);
+            <div className="proof-summary-panel divide-y divide-[var(--ops-line-soft)] px-1 py-0.5">
+              {recentSettlements.slice(0, 5).map((settlement) => {
                 const when = settlement.reconciledAt
                   ? formatDateTime(settlement.reconciledAt)
                   : settlement.settledAt
@@ -540,20 +602,25 @@ export default async function DashboardPage() {
                   <Link
                     key={settlement.id}
                     href="/settlements"
-                    className="proof-list-row flex items-center gap-3 px-2 py-2.5"
+                    className="proof-summary-row flex items-center gap-2.5 px-2.5 py-2"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-mono text-[12px] font-semibold text-slate-900">{settlement.publicId}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="truncate font-mono text-[11.5px] font-semibold text-slate-900">
+                          {settlement.publicId}
+                        </p>
                         <StatusBadge status={settlement.status} />
                       </div>
-                      {snippet ? (
-                        <p className="mt-0.5 truncate font-mono text-[10px] text-slate-500">{snippet}</p>
-                      ) : null}
+                      <p className="mt-0.5 truncate text-[10.5px] text-slate-500">
+                        {settlement.provider ?? "No provider"}
+                        {settlement.providerTransactionId
+                          ? ` · ${settlement.providerTransactionId.slice(0, 8)}…`
+                          : ""}
+                      </p>
                     </div>
                     <div className="shrink-0 text-right">
                       <p
-                        className="text-[12px] font-semibold tabular-nums text-slate-800"
+                        className="text-[11.5px] font-semibold tabular-nums text-slate-800"
                         title={formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
                       >
                         {formatCurrencyCompact(String(settlement.sourceAmount), settlement.sourceCurrency)}
