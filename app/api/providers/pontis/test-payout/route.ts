@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { jsonError } from "@/lib/api";
+import { jsonError, requireApiContext } from "@/lib/api";
 import {
   getPayoutStatus,
   isPontisConfigured,
@@ -8,6 +8,7 @@ import {
   sendPayoutRequest,
   type PontisPayoutRequest,
 } from "@/lib/providers/pontis/client";
+import { executeApprovedSettlement } from "@/lib/providers/pontis/settlement";
 import { testPayoutOverridesSchema } from "@/lib/providers/pontis/schema";
 
 export const runtime = "nodejs";
@@ -41,6 +42,29 @@ export async function POST(request: NextRequest) {
 
   try {
     const overrides = testPayoutOverridesSchema.parse(rawBody ?? {});
+
+    // With a settlementId: drive the real lifecycle (execute an APPROVED
+    // settlement through PontisGlobe). Requires an authenticated session.
+    if (overrides.settlementId) {
+      const { context, error } = await requireApiContext();
+      if (error) return error;
+      const result = await executeApprovedSettlement(
+        overrides.settlementId,
+        context.user.id,
+        context.organization.id,
+        {
+          overrides: {
+            country_code: overrides.country_code,
+            currency_code: overrides.currency_code,
+            payment_method: overrides.payment_method,
+            source_amount: overrides.source_amount,
+            source_currency: overrides.source_currency,
+            recipient_details: overrides.recipient_details,
+          },
+        },
+      );
+      return NextResponse.json({ mode: "settlement", data: result });
+    }
 
     const payout: PontisPayoutRequest = {
       idempotency_key: overrides.idempotency_key ?? crypto.randomUUID(),

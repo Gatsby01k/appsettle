@@ -14,6 +14,8 @@ export type SettlementDetail = {
   reference: string;
   corridor: string;
   status: string;
+  provider?: string;
+  providerTransactionId?: string;
   sourceAmount: string;
   targetAmount: string;
   feeAmount: string;
@@ -70,6 +72,10 @@ export function SettlementDetailSheet({ settlement }: { settlement: SettlementDe
               {settlement.approvedAt ? <StatRow label="Approved" value={settlement.approvedAt} /> : null}
               {settlement.settledAt ? <StatRow label="Settled" value={settlement.settledAt} /> : null}
               {settlement.reconciledAt ? <StatRow label="Reconciled" value={settlement.reconciledAt} /> : null}
+              {settlement.provider ? <StatRow label="Provider" value={settlement.provider} /> : null}
+              {settlement.providerTransactionId ? (
+                <StatRow label="Provider transaction" value={settlement.providerTransactionId} />
+              ) : null}
             </div>
             <div className="mt-3 rounded-xl border border-[var(--ops-line)] p-3">
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">Counterparty</p>

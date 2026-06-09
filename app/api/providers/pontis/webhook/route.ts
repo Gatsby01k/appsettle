@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isPontisConfigured, verifyWebhookSignature } from "@/lib/providers/pontis/client";
 import { webhookPayloadSchema } from "@/lib/providers/pontis/schema";
+import { resolvePayoutByTransaction } from "@/lib/providers/pontis/settlement";
 
 export const runtime = "nodejs";
 
@@ -68,12 +69,20 @@ export async function POST(request: NextRequest) {
 
   const { transaction_id, status, status_message } = parsed.data;
 
-  // NOTE: Settlement reconciliation is intentionally not wired up yet (UI/flow
-  // changes are out of scope for this integration). The verified event is
-  // acknowledged so the provider marks delivery successful.
+  // Map the provider transaction back to its settlement and apply the outcome
+  // (EXECUTING -> SETTLED / FAILED). Idempotent: re-deliveries / already-resolved
+  // settlements are safely ignored. We still acknowledge with 2xx regardless so
+  // the provider marks delivery successful and does not retry.
+  let resolution = null;
+  try {
+    resolution = await resolvePayoutByTransaction(transaction_id, status, status_message ?? null);
+  } catch (error) {
+    console.error("[pontis.webhook] failed to resolve settlement:", error);
+  }
+
   return NextResponse.json({
     received: true,
-    handled: true,
+    handled: resolution !== null,
     transaction_id,
     status,
     status_message: status_message ?? null,

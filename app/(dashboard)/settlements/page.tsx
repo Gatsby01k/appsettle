@@ -29,6 +29,11 @@ import { RemitQuicklyTestButton } from "@/components/providers/remitquickly-test
 import { isRemitQuicklyConfigured } from "@/lib/providers/remitquickly/client";
 import { isSandboxTestEnabled } from "@/lib/providers/remitquickly/flags";
 import { executeApprovedSettlement } from "@/lib/providers/remitquickly/settlement";
+import { isPontisConfigured } from "@/lib/providers/pontis/client";
+import {
+  executeApprovedSettlement as executePontisSettlement,
+  checkPayoutStatus as checkPontisPayoutStatus,
+} from "@/lib/providers/pontis/settlement";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/helper-text";
@@ -39,6 +44,7 @@ function successMessage(value?: string) {
   if (value === "approved") return "Settlement approved.";
   if (value === "executing") return "Settlement moved to executing.";
   if (value === "settled") return "Settlement marked as settled.";
+  if (value === "checked") return "Provider status checked. Payout is still in progress.";
   return null;
 }
 
@@ -84,11 +90,18 @@ async function transition(formData: FormData) {
   if (!canApproveSettlement(membership.role)) redirect("/settlements");
   const status = String(formData.get("status")) as SettlementStatus;
   const settlementId = String(formData.get("settlementId"));
+  let finalStatus: string = status;
   try {
-    // When RemitQuickly is configured, executing a settlement creates a real
-    // sandbox payout and records the provider id before moving to EXECUTING.
-    // Otherwise fall back to the plain lifecycle transition.
-    if (status === SettlementStatus.EXECUTING && isRemitQuicklyConfigured()) {
+    // When a payout provider is configured, executing a settlement creates a real
+    // sandbox payout and records the provider transaction id before moving to
+    // EXECUTING. PontisGlobe takes precedence, then RemitQuickly; otherwise we
+    // fall back to the plain lifecycle transition.
+    if (status === SettlementStatus.EXECUTING && isPontisConfigured()) {
+      const result = await executePontisSettlement(settlementId, user.id, organization.id);
+      // The provider may already report a final outcome on submit (e.g. the
+      // sandbox completed trigger), in which case the settlement is already SETTLED.
+      if (result.resolution?.status) finalStatus = result.resolution.status;
+    } else if (status === SettlementStatus.EXECUTING && isRemitQuicklyConfigured()) {
       await executeApprovedSettlement(settlementId, user.id, organization.id);
     } else {
       await transitionSettlement(settlementId, status, user.id, organization.id, "Updated from dashboard.");
@@ -96,7 +109,28 @@ async function transition(formData: FormData) {
   } catch (error) {
     redirect(`/settlements?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
   }
-  redirect(`/settlements?success=${status.toLowerCase()}`);
+  if (finalStatus === SettlementStatus.FAILED) {
+    redirect(`/settlements?error=${encodeURIComponent("PontisGlobe reported the payout failed.")}`);
+  }
+  redirect(`/settlements?success=${finalStatus.toLowerCase()}`);
+}
+
+async function checkStatus(formData: FormData) {
+  "use server";
+  const { user, organization, membership } = await requireSession();
+  if (!canApproveSettlement(membership.role)) redirect("/settlements");
+  const settlementId = String(formData.get("settlementId"));
+  let result: Awaited<ReturnType<typeof checkPontisPayoutStatus>>;
+  try {
+    result = await checkPontisPayoutStatus(settlementId, user.id, organization.id);
+  } catch (error) {
+    redirect(`/settlements?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
+  }
+  if (result.outcome === "success") redirect("/settlements?success=settled");
+  if (result.outcome === "failed") {
+    redirect(`/settlements?error=${encodeURIComponent(`PontisGlobe payout failed (${result.status ?? "failed"}).`)}`);
+  }
+  redirect("/settlements?success=checked");
 }
 
 export default async function SettlementsPage({
@@ -139,6 +173,7 @@ export default async function SettlementsPage({
   const inFlight = settlements.filter((s) => isInFlight(s.status)).length;
   const settled = settlements.filter((s) => isCompleted(s.status)).length;
   const showSandboxTest = isSandboxTestEnabled();
+  const pontisConfigured = isPontisConfigured();
 
   return (
     <div className="space-y-6">
@@ -260,7 +295,7 @@ export default async function SettlementsPage({
                               Execute
                             </SubmitButton>
                           ) : null}
-                          {settlement.status === SettlementStatus.EXECUTING ? (
+                          {settlement.status === SettlementStatus.EXECUTING && !(pontisConfigured && settlement.provider) ? (
                             <SubmitButton name="status" value="SETTLED" variant="outline" size="sm" pendingText="...">
                               Settle
                             </SubmitButton>
@@ -270,12 +305,25 @@ export default async function SettlementsPage({
                       ) : (
                         <span className="text-xs text-slate-400">Read only</span>
                       )}
+                      {canApprove &&
+                      settlement.status === SettlementStatus.EXECUTING &&
+                      pontisConfigured &&
+                      settlement.provider ? (
+                        <form action={checkStatus}>
+                          <input type="hidden" name="settlementId" value={settlement.id} />
+                          <SubmitButton type="submit" variant="outline" size="sm" pendingText="Checking...">
+                            Check status
+                          </SubmitButton>
+                        </form>
+                      ) : null}
                       <SettlementDetailSheet
                         settlement={{
                           publicId: settlement.publicId,
                           reference: settlement.reference,
                           corridor: settlement.corridor.replace("_", " → "),
                           status: settlement.status,
+                          provider: settlement.provider ?? undefined,
+                          providerTransactionId: settlement.providerTransactionId ?? undefined,
                           sourceAmount: formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency),
                           targetAmount: formatCurrencyFull(String(settlement.targetAmount), settlement.targetCurrency),
                           feeAmount: formatCurrencyFull(String(settlement.feeAmount), settlement.sourceCurrency),

@@ -163,6 +163,8 @@ model Settlement {
   status            SettlementStatus   @default(REQUESTED)
   sourceAccount     String
   targetAccount     String
+  provider          String?
+  providerTransactionId String?
   failureReason     String?
   approvedAt        DateTime?
   executedAt        DateTime?
@@ -178,6 +180,7 @@ model Settlement {
 
   @@unique([organizationId, reference])
   @@index([organizationId, status, createdAt])
+  @@index([providerTransactionId])
 }
 
 model SettlementEvent {

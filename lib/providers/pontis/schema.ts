@@ -49,6 +49,11 @@ export const payoutStatusRequestSchema = z.object({
  * optional — the route fills in the documented INR sandbox defaults.
  */
 export const testPayoutOverridesSchema = z.object({
+  /**
+   * When provided, drives the real settlement lifecycle (execute an APPROVED
+   * settlement) instead of running the self-contained connectivity smoke test.
+   */
+  settlementId: z.string().min(1).optional(),
   idempotency_key: z.string().min(1).optional(),
   country_code: z.string().min(2).max(3).optional(),
   currency_code: z.string().min(3).max(3).optional(),
