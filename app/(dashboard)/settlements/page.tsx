@@ -3,7 +3,12 @@ import { SettlementStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth";
-import { autoMatchReconciliation, createSettlement, transitionSettlement } from "@/lib/domain";
+import {
+  autoMatchReconciliation,
+  createSettlement,
+  generateSettlementBankRecordAndReconcile,
+  transitionSettlement,
+} from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
 import { canApproveSettlement } from "@/lib/permissions";
 import { counterpartyForCorridor } from "@/lib/treasury";
@@ -204,9 +209,8 @@ async function runAutoMatch(formData: FormData) {
   const { user, organization, membership } = await requireSession();
   if (!canApproveSettlement(membership.role)) redirect("/settlements");
   const settlementId = String(formData.get("settlementId") ?? "");
-  let result = { matched: 0, scanned: 0 };
   try {
-    result = await autoMatchReconciliation(user.id, organization.id);
+    await autoMatchReconciliation(user.id, organization.id);
   } catch (error) {
     redirect(`/settlements?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
   }
@@ -218,16 +222,29 @@ async function runAutoMatch(formData: FormData) {
       revalidateSettlementsPage();
       redirect("/settlements?success=reconciled");
     }
+    if (settlement?.status === SettlementStatus.SETTLED) {
+      revalidateSettlementsPage();
+      redirect(`/settlements?reconcileRequired=${settlementId}`);
+    }
   }
-  if (result.matched > 0) {
-    revalidateSettlementsPage();
-    redirect("/settlements?success=reconciled");
+  revalidateSettlementsPage();
+  redirect("/settlements");
+}
+
+async function generateAndReconcile(formData: FormData) {
+  "use server";
+  const { user, organization, membership } = await requireSession();
+  if (!canApproveSettlement(membership.role)) redirect("/settlements");
+  const settlementId = String(formData.get("settlementId") ?? "");
+  try {
+    await generateSettlementBankRecordAndReconcile(settlementId, user.id, organization.id);
+  } catch (error) {
+    redirect(
+      `/settlements?reconcileRequired=${settlementId}&error=${encodeURIComponent(friendlyErrorMessage(error))}`,
+    );
   }
-  redirect(
-    `/settlements?error=${encodeURIComponent(
-      "No matching bank record found. Create a matching record on Reconciliation, then run auto-match again.",
-    )}`,
-  );
+  revalidateSettlementsPage();
+  redirect("/settlements?success=reconciled");
 }
 
 async function checkStatus(formData: FormData) {
@@ -256,7 +273,13 @@ async function checkStatus(formData: FormData) {
 export default async function SettlementsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string; q?: string; status?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    success?: string;
+    q?: string;
+    status?: string;
+    reconcileRequired?: string;
+  }>;
 }) {
   const { organization, membership } = await requireSession();
   const params = await searchParams;
@@ -309,7 +332,9 @@ export default async function SettlementsPage({
 
       <SettlementAutoRefresh enabled={autoRefreshSettlements} />
 
-      {params.error ? <SettlementPageFlash message={params.error} tone="error" /> : null}
+      {params.error && !params.reconcileRequired ? (
+        <SettlementPageFlash message={params.error} tone="error" />
+      ) : null}
       {flashMessage ? <SettlementPageFlash message={flashMessage} /> : null}
 
       {showSandboxTest ? (
@@ -489,6 +514,11 @@ export default async function SettlementsPage({
                   autoRefresh={rowAutoRefresh}
                   canReconcile={canApprove}
                   autoMatchAction={runAutoMatch}
+                  generateReconcileAction={generateAndReconcile}
+                  reconcileRequired={params.reconcileRequired === settlement.id}
+                  inlineError={
+                    params.reconcileRequired === settlement.id ? params.error : undefined
+                  }
                 />
                 </Fragment>
                 );

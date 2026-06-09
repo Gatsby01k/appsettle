@@ -88,24 +88,29 @@ function ProofItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-type ConsoleMode = "approved" | "executing" | "settled" | "reconciled";
+type ConsoleMode = "approved" | "executing" | "settled" | "reconcile_required" | "reconciled";
 
 function resolveConsoleMode(
   settlement: SettlementOperationConsoleData,
   settlementId: string,
   pendingSettlementId?: string,
   pendingAction?: string,
+  reconcileRequired?: boolean,
 ): ConsoleMode | null {
   if (pendingSettlementId === settlementId) {
     if (pendingAction === "execute" || pendingAction === "check") return "executing";
     if (pendingAction === "approve") return "approved";
     if (pendingAction === "reconcile") {
-      return settlement.status === "RECONCILED" ? "reconciled" : "settled";
+      if (settlement.status === "RECONCILED") return "reconciled";
+      if (reconcileRequired) return "reconcile_required";
+      return "settled";
     }
   }
 
   if (settlement.status === "RECONCILED") return "reconciled";
-  if (settlement.status === "SETTLED" && !settlement.hasReconciliation) return "settled";
+  if (settlement.status === "SETTLED" && !settlement.hasReconciliation) {
+    return reconcileRequired ? "reconcile_required" : "settled";
+  }
 
   if (!CONSOLE_STATUSES.has(settlement.status)) return null;
 
@@ -176,12 +181,35 @@ function providerLabel(mode: "sandbox" | "live") {
   return mode === "sandbox" ? "PontisGlobe sandbox" : "PontisGlobe";
 }
 
+function ReconciliationProofGrid({
+  settlement,
+  providerStatus,
+}: {
+  settlement: SettlementOperationConsoleData;
+  providerStatus: string;
+}) {
+  return (
+    <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+      <ProofItem label="Provider" value={settlement.provider ?? providerLabel("live")} />
+      <ProofItem label="Provider status" value={providerStatus} />
+      {settlement.providerTransactionId ? (
+        <ProofItem label="Provider transaction id" value={settlement.providerTransactionId} />
+      ) : null}
+      <ProofItem label="Settlement status" value="settled" />
+      <ProofItem label="Audit trail" value={settlement.hasAuditEvents ? "Recorded" : "Pending"} />
+    </div>
+  );
+}
+
 export function SettlementOperationConsoleRow({
   settlementId,
   settlement,
   autoRefresh = false,
   canReconcile = false,
   autoMatchAction,
+  generateReconcileAction,
+  reconcileRequired = false,
+  inlineError,
   colSpan = 5,
 }: {
   settlementId: string;
@@ -189,6 +217,9 @@ export function SettlementOperationConsoleRow({
   autoRefresh?: boolean;
   canReconcile?: boolean;
   autoMatchAction?: (formData: FormData) => Promise<void>;
+  generateReconcileAction?: (formData: FormData) => Promise<void>;
+  reconcileRequired?: boolean;
+  inlineError?: string;
   colSpan?: number;
 }) {
   const actions = useSettlementActionsOptional();
@@ -198,6 +229,7 @@ export function SettlementOperationConsoleRow({
     settlementId,
     pending?.settlementId,
     pending?.action,
+    reconcileRequired,
   );
 
   if (!mode) return null;
@@ -283,18 +315,7 @@ export function SettlementOperationConsoleRow({
                 Provider execution completed. Match this settlement with the bank record to close the workflow.
               </p>
             </div>
-            <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-              <ProofItem label="Provider" value={settlement.provider ?? providerLabel("live")} />
-              <ProofItem label="Provider status" value={providerStatus} />
-              {settlement.providerTransactionId ? (
-                <ProofItem label="Provider transaction id" value={settlement.providerTransactionId} />
-              ) : null}
-              <ProofItem label="Settlement status" value="settled" />
-              <ProofItem
-                label="Audit trail"
-                value={settlement.hasAuditEvents ? "Recorded" : "Pending"}
-              />
-            </div>
+            <ReconciliationProofGrid settlement={settlement} providerStatus={providerStatus} />
             <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-emerald-100/80 pt-2">
               {canReconcile && autoMatchAction ? (
                 <SettlementActionForm
@@ -312,6 +333,57 @@ export function SettlementOperationConsoleRow({
                     action="reconcile"
                   >
                     Auto-match reconciliation
+                  </SubmitButton>
+                </SettlementActionForm>
+              ) : null}
+              <Link
+                href="/reconciliation"
+                className="text-[11px] font-medium text-cyan-700 underline-offset-2 hover:text-cyan-800 hover:underline"
+              >
+                Open reconciliation
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
+        {mode === "reconcile_required" ? (
+          <div
+            className="rounded-lg border border-amber-200/80 bg-amber-50/30 px-3 py-2.5"
+            role="status"
+            aria-live="polite"
+          >
+            <div>
+              <p className="text-xs font-semibold text-slate-900">Reconciliation record required</p>
+              <p className="mt-0.5 text-[11px] text-slate-600">
+                Provider payout completed, but no matching bank record was found for this settlement.
+              </p>
+            </div>
+            <ReconciliationProofGrid settlement={settlement} providerStatus={providerStatus} />
+            {inlineError ? (
+              <p className="mt-2 text-[11px] font-medium text-rose-700" role="alert">
+                {inlineError}
+              </p>
+            ) : null}
+            <p className="mt-2 text-[11px] text-slate-600">
+              Create a matching bank record and reconcile this settlement.
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-amber-100/80 pt-2">
+              {canReconcile && generateReconcileAction ? (
+                <SettlementActionForm
+                  settlementId={settlementId}
+                  action="reconcile"
+                  serverAction={generateReconcileAction}
+                >
+                  <input type="hidden" name="settlementId" value={settlementId} />
+                  <SubmitButton
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    pendingText="Generating..."
+                    settlementId={settlementId}
+                    action="reconcile"
+                  >
+                    Generate bank record & reconcile
                   </SubmitButton>
                 </SettlementActionForm>
               ) : null}

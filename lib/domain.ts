@@ -386,6 +386,109 @@ export async function createMatchingDemoRecord(source: string, userId: string, o
   );
 }
 
+const DEMO_BANK_SOURCE = "bank_statement";
+
+function settlementRefDate(settlement: { settledAt: Date | null; createdAt: Date }) {
+  return settlement.settledAt ?? settlement.createdAt;
+}
+
+function openRecordMatchesSettlement(
+  record: { amount: Prisma.Decimal; currency: string; valueDate: Date },
+  settlement: {
+    sourceCurrency: string;
+    targetCurrency: string;
+    sourceAmount: Prisma.Decimal;
+    targetAmount: Prisma.Decimal;
+    settledAt: Date | null;
+    createdAt: Date;
+  },
+) {
+  return (
+    computeConfidence(Number(record.amount), record.currency, record.valueDate, {
+      sourceCurrency: settlement.sourceCurrency,
+      targetCurrency: settlement.targetCurrency,
+      sourceAmount: Number(settlement.sourceAmount),
+      targetAmount: Number(settlement.targetAmount),
+      refDate: settlementRefDate(settlement),
+    }) >= AUTO_MATCH_MIN_CONFIDENCE
+  );
+}
+
+function demoExternalRefForSettlement(settlement: {
+  providerTransactionId: string | null;
+  reference: string;
+}) {
+  if (settlement.providerTransactionId?.trim()) return settlement.providerTransactionId.trim();
+  if (settlement.reference?.trim()) return `SETTLE-${settlement.reference.trim()}`;
+  return "";
+}
+
+/**
+ * Sandbox/demo helper scoped to one SETTLED settlement. Creates a matching OPEN bank
+ * record when none exists (reusing amount, currency, value date, and provider
+ * reference when available), then runs the normal auto-match engine. Skips creation
+ * when an existing OPEN record already matches at 100% confidence.
+ */
+export async function generateSettlementBankRecordAndReconcile(
+  settlementId: string,
+  userId: string,
+  organizationId: string,
+) {
+  const settlement = await prisma.settlement.findFirst({
+    where: { id: settlementId, organizationId, status: SettlementStatus.SETTLED },
+  });
+
+  if (!settlement) {
+    throw new UserFacingError("Only SETTLED settlements can be reconciled from this action.");
+  }
+
+  const openRecords = await prisma.reconciliationRecord.findMany({
+    where: {
+      organizationId,
+      settlementId: null,
+      status: { in: [ReconciliationStatus.OPEN, ReconciliationStatus.UNMATCHED] },
+    },
+  });
+
+  const hasMatchingOpen = openRecords.some((record) => openRecordMatchesSettlement(record, settlement));
+
+  if (!hasMatchingOpen) {
+    const externalRef = demoExternalRefForSettlement(settlement);
+    const refTaken =
+      externalRef &&
+      (await prisma.reconciliationRecord.findFirst({
+        where: { organizationId, source: DEMO_BANK_SOURCE, externalRef },
+      }));
+
+    await createReconciliationRecord(
+      {
+        externalRef: refTaken ? "" : externalRef,
+        source: DEMO_BANK_SOURCE,
+        amount: Number(settlement.sourceAmount),
+        currency: settlement.sourceCurrency,
+        valueDate: new Date(settlementRefDate(settlement)).toISOString(),
+        status: "OPEN",
+      },
+      userId,
+      organizationId,
+    );
+  }
+
+  await autoMatchReconciliation(userId, organizationId);
+
+  const updated = await prisma.settlement.findFirst({
+    where: { id: settlementId, organizationId },
+  });
+
+  if (updated?.status !== SettlementStatus.RECONCILED) {
+    throw new UserFacingError(
+      "Could not reconcile this settlement. Verify the bank record matches amount, currency, and value date.",
+    );
+  }
+
+  return { reconciled: true };
+}
+
 /**
  * Demo helper: creates an external record that intentionally matches no settlement
  * and is flagged as an EXCEPTION for manual review, with a realistic reason.
