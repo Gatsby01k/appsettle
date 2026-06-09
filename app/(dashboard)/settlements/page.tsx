@@ -26,7 +26,12 @@ import {
   DataGridTh,
 } from "@/components/ops/data-grid";
 import { SettlementDetailSheet } from "@/components/dashboard/settlement-detail-sheet";
-import { SettlementAutoRefresh } from "@/components/dashboard/settlement-auto-refresh";
+import {
+  SettlementActionForm,
+  SettlementActionsProvider,
+  SettlementAutoRefresh,
+  SettlementRowActivityNote,
+} from "@/components/dashboard/settlement-auto-refresh";
 import { RemitQuicklyTestButton } from "@/components/providers/remitquickly-test-button";
 import { isRemitQuicklyConfigured } from "@/lib/providers/remitquickly/client";
 import { isSandboxTestEnabled } from "@/lib/providers/remitquickly/flags";
@@ -208,6 +213,7 @@ export default async function SettlementsPage({
   const pontisConfigured = isPontisEnabled();
 
   return (
+    <SettlementActionsProvider>
     <div className="space-y-6">
       <PageHeader title="Settlements" description="Operate the full settlement lifecycle from request through reconciliation." />
 
@@ -279,7 +285,12 @@ export default async function SettlementsPage({
           <CardDescription>Only ACTIVE, unexpired quotes appear. The quote becomes ACCEPTED after creation.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={submitSettlement} className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          <SettlementActionForm
+            settlementId="__create__"
+            action="create"
+            serverAction={submitSettlement}
+            className="grid gap-4 md:grid-cols-2 lg:grid-cols-5"
+          >
             <Field label="Quote" hint="Only ACTIVE, unexpired quotes appear." required className="lg:col-span-2">
               <FormSelect
                 name="quoteId"
@@ -306,11 +317,18 @@ export default async function SettlementsPage({
               <Input id="targetAccount" name="targetAccount" required />
             </Field>
             <div className="flex items-end md:col-span-2 lg:col-span-5">
-              <SubmitButton type="submit" variant="primary" disabled={quotes.length === 0} pendingText="Creating...">
+              <SubmitButton
+                type="submit"
+                variant="primary"
+                disabled={quotes.length === 0}
+                pendingText="Creating..."
+                settlementId="__create__"
+                action="create"
+              >
                 Create settlement
               </SubmitButton>
             </div>
-          </form>
+          </SettlementActionForm>
         </CardContent>
       </Card>
 
@@ -337,6 +355,7 @@ export default async function SettlementsPage({
                   <DataGridTd>
                     <p className="font-medium text-slate-950">{settlement.publicId}</p>
                     <p className="text-xs text-slate-500">{settlement.reference}</p>
+                    <SettlementRowActivityNote settlementId={settlement.id} />
                   </DataGridTd>
                   <DataGridTd
                     className="whitespace-nowrap tabular-nums"
@@ -353,25 +372,60 @@ export default async function SettlementsPage({
                   <DataGridTd>
                     <div className="flex flex-wrap items-center justify-end gap-2">
                       {canApprove ? (
-                        <form action={transition} className="flex flex-wrap gap-1">
+                        <SettlementActionForm
+                          settlementId={settlement.id}
+                          action={
+                            settlement.status === SettlementStatus.REQUESTED
+                              ? "approve"
+                              : settlement.status === SettlementStatus.APPROVED
+                                ? "execute"
+                                : "settle"
+                          }
+                          serverAction={transition}
+                          className="flex flex-wrap gap-1"
+                        >
                           <input type="hidden" name="settlementId" value={settlement.id} />
                           {settlement.status === SettlementStatus.REQUESTED ? (
-                            <SubmitButton name="status" value="APPROVED" variant="outline" size="sm" pendingText="Approving...">
+                            <SubmitButton
+                              name="status"
+                              value="APPROVED"
+                              variant="outline"
+                              size="sm"
+                              pendingText="Approving..."
+                              settlementId={settlement.id}
+                              action="approve"
+                            >
                               Approve
                             </SubmitButton>
                           ) : null}
                           {settlement.status === SettlementStatus.APPROVED ? (
-                            <SubmitButton name="status" value="EXECUTING" variant="outline" size="sm" pendingText="Executing via Pontis...">
+                            <SubmitButton
+                              name="status"
+                              value="EXECUTING"
+                              variant="outline"
+                              size="sm"
+                              pendingText="Executing..."
+                              settlementId={settlement.id}
+                              action="execute"
+                            >
                               Execute
                             </SubmitButton>
                           ) : null}
                           {settlement.status === SettlementStatus.EXECUTING && !(pontisConfigured && settlement.provider) ? (
-                            <SubmitButton name="status" value="SETTLED" variant="outline" size="sm" pendingText="Settling...">
+                            <SubmitButton
+                              name="status"
+                              value="SETTLED"
+                              variant="outline"
+                              size="sm"
+                              pendingText="Settling..."
+                              settlementId={settlement.id}
+                              action="settle"
+                            >
                               Settle
                             </SubmitButton>
                           ) : null}
                           {!hasWorkflowAction(settlement.status) ? <span className="text-xs text-slate-400">—</span> : null}
-                        </form>
+                        </SettlementActionForm>
                       ) : (
                         <span className="text-xs text-slate-400">Read only</span>
                       )}
@@ -379,14 +433,26 @@ export default async function SettlementsPage({
                       settlement.status === SettlementStatus.EXECUTING &&
                       pontisConfigured &&
                       settlement.provider ? (
-                        <form action={checkStatus}>
+                        <SettlementActionForm
+                          settlementId={settlement.id}
+                          action="check"
+                          serverAction={checkStatus}
+                        >
                           <input type="hidden" name="settlementId" value={settlement.id} />
-                          <SubmitButton type="submit" variant="outline" size="sm" pendingText="Checking...">
+                          <SubmitButton
+                            type="submit"
+                            variant="outline"
+                            size="sm"
+                            pendingText="Checking..."
+                            settlementId={settlement.id}
+                            action="check"
+                          >
                             Check status
                           </SubmitButton>
-                        </form>
+                        </SettlementActionForm>
                       ) : null}
                       <SettlementDetailSheet
+                        key={`${settlement.id}-${settlement.status}-${settlement.providerTransactionId ?? ""}-${settlement.events.length}`}
                         settlement={{
                           publicId: settlement.publicId,
                           reference: settlement.reference,
@@ -436,5 +502,6 @@ export default async function SettlementsPage({
         />
       )}
     </div>
+    </SettlementActionsProvider>
   );
 }

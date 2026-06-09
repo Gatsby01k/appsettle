@@ -32,13 +32,19 @@ export type SettlementDetail = {
 
 export function SettlementDetailSheet({ settlement }: { settlement: SettlementDetail }) {
   const [open, setOpen] = useState(false);
+  const sheetKey = `${settlement.status}-${settlement.providerTransactionId ?? ""}-${settlement.events.length}`;
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
         Details
       </Button>
-      <SheetContent eyebrow="Settlement" title={settlement.publicId} description={settlement.reference}>
+      <SheetContent
+        key={sheetKey}
+        eyebrow="Settlement"
+        title={settlement.publicId}
+        description={settlement.reference}
+      >
         <div className="mb-3 flex items-center gap-2">
           <StatusBadge status={settlement.status} />
           <span className="text-xs text-slate-500">{settlement.corridor}</span>
