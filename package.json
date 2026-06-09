@@ -12,6 +12,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
+    "demo:reset": "tsx prisma/seed-demo.ts",
     "gateway:pontis:dev": "npm --prefix gateway/pontis run dev",
     "gateway:pontis:start": "npm --prefix gateway/pontis run start"
   },
