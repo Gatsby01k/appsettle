@@ -230,6 +230,107 @@ body {
   animation: overviewLiveRing 3.4s ease-in-out infinite;
 }
 
+.overview-monitoring-badge {
+  animation: overviewLiveRing 4.2s ease-in-out infinite;
+}
+
+.ops-pulse--subtle {
+  width: 6px;
+  height: 6px;
+  box-shadow: 0 0 0 3px rgba(0, 199, 157, 0.1);
+}
+.ops-pulse--subtle::after {
+  inset: -3px;
+  border-color: rgba(0, 199, 157, 0.35);
+  animation-duration: 3.2s;
+}
+
+@keyframes overviewHeroMetricIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.overview-hero-metrics > .overview-hero-metric {
+  animation: overviewHeroMetricIn 0.4s var(--ease) both;
+}
+.overview-hero-metrics > .overview-hero-metric:nth-child(1) {
+  animation-delay: 0.04s;
+}
+.overview-hero-metrics > .overview-hero-metric:nth-child(2) {
+  animation-delay: 0.08s;
+}
+.overview-hero-metrics > .overview-hero-metric:nth-child(3) {
+  animation-delay: 0.12s;
+}
+.overview-hero-metrics > .overview-hero-metric:nth-child(4) {
+  animation-delay: 0.16s;
+}
+
+@keyframes overviewProofSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.overview-proof-card {
+  animation: overviewProofSlideIn 0.48s var(--ease) both;
+}
+
+@keyframes overviewProofStepIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.overview-proof-step {
+  animation: overviewProofStepIn 0.38s var(--ease) both;
+}
+
+.overview-proof-check {
+  animation: settlementStepCheck 0.34s var(--ease) both;
+}
+
+.overview-proof-step-active {
+  animation: settlementStepPulse 2.4s ease-in-out infinite;
+}
+
+.overview-settlement-row {
+  transition:
+    background-color 0.18s var(--ease),
+    box-shadow 0.18s var(--ease);
+}
+.overview-settlement-row:hover {
+  background-color: rgba(0, 199, 157, 0.045);
+  box-shadow: inset 3px 0 0 rgba(0, 199, 157, 0.35);
+}
+
+.overview-activity-row {
+  border-radius: 8px;
+  margin: 0 -4px;
+  padding-left: calc(0.5rem + 4px);
+  padding-right: calc(0.5rem + 4px);
+  transition: background-color 0.18s var(--ease);
+}
+.overview-activity-row:hover {
+  background-color: rgba(0, 199, 157, 0.04);
+}
+
 @keyframes overviewProofRecent {
   0% {
     background-color: rgba(231, 250, 244, 0.55);
@@ -1483,10 +1584,25 @@ details[open] > .reconciliation-details-content {
 @media (prefers-reduced-motion: reduce) {
   .overview-command-panel .overview-command-panel__glow,
   .overview-live-badge,
+  .overview-monitoring-badge,
   .overview-proof-recent,
+  .overview-proof-card,
+  .overview-proof-step,
+  .overview-proof-check,
+  .overview-proof-step-active,
+  .overview-hero-metrics > .overview-hero-metric,
   .overview-metrics > *,
   .overview-activity-item {
     animation: none;
+  }
+  .overview-settlement-row,
+  .overview-activity-row {
+    transition: none;
+  }
+  .overview-settlement-row:hover,
+  .overview-activity-row:hover {
+    background-color: transparent;
+    box-shadow: none;
   }
   .overview-alert {
     transition: none;

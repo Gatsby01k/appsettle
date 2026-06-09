@@ -14,10 +14,8 @@ import { autoMatchReconciliation } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 import { isPontisConfigured } from "@/lib/providers/pontis/client";
 import { isPontisGatewayConfigured } from "@/lib/providers/pontis/gateway";
-import { availableBalance } from "@/lib/treasury";
 import { cn, formatCurrencyCompact, formatCurrencyFull, formatDateTime, formatPercent } from "@/lib/utils";
 import { PageHeader, SectionHeader } from "@/components/ops/page-header";
-import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
 import { EmptyState } from "@/components/ops/empty-state";
 import { Button } from "@/components/ui/button";
@@ -62,12 +60,15 @@ function ProofLifecycle({ settlement }: { settlement: Parameters<typeof proofSte
         const active = index === current && !terminal;
         return (
           <div key={label} className="flex flex-1 items-center last:flex-none">
-            <div className="flex min-w-0 flex-col items-center gap-1">
+            <div
+              className="overview-proof-step flex min-w-0 flex-col items-center gap-1"
+              style={{ animationDelay: `${0.12 + index * 0.07}s` }}
+            >
               <div
                 className={cn(
                   "grid h-5 w-5 place-items-center rounded-full border text-[9px] font-bold",
-                  done && "border-[#42d5b7] bg-[#42d5b7] text-[#07132b]",
-                  active && "border-[#07132b] bg-[#07132b] text-white",
+                  done && "border-[#42d5b7] bg-[#42d5b7] text-[#07132b] overview-proof-check",
+                  active && "border-[#07132b] bg-[#07132b] text-white overview-proof-step-active",
                   !done && !active && "border-slate-200 bg-white text-slate-300",
                 )}
               >
@@ -180,6 +181,12 @@ function reconciliationLabel(
   return "—";
 }
 
+function auditStatusLabel(status: SettlementStatus): string {
+  if (status === SettlementStatus.RECONCILED) return "Recorded";
+  if (status === SettlementStatus.SETTLED) return "In progress";
+  return "Pending";
+}
+
 export default async function DashboardPage() {
   const { user, organization } = await requireSession();
   const now = new Date();
@@ -198,14 +205,12 @@ export default async function DashboardPage() {
     auditLogs,
     expiredQuotes,
     pendingApprovals,
-    settledVolume,
-    reconciledVolume,
     settlementsByStatus,
   ] = await Promise.all([
     prisma.settlement.findMany({
       where: { organizationId: organization.id },
       orderBy: { createdAt: "desc" },
-      take: 4,
+      take: 5,
       include: { reconciliation: { take: 1, orderBy: { createdAt: "desc" } } },
     }),
     prisma.settlement.findFirst({
@@ -230,26 +235,12 @@ export default async function DashboardPage() {
       },
     }),
     prisma.settlement.count({ where: { organizationId: organization.id, status: SettlementStatus.REQUESTED } }),
-    prisma.settlement.aggregate({
-      _sum: { sourceAmount: true },
-      where: { organizationId: organization.id, status: SettlementStatus.SETTLED },
-    }),
-    prisma.settlement.aggregate({
-      _sum: { sourceAmount: true },
-      where: { organizationId: organization.id, status: SettlementStatus.RECONCILED },
-    }),
     prisma.settlement.groupBy({
       by: ["status"],
       where: { organizationId: organization.id },
       _count: { _all: true },
     }),
   ]);
-
-  const availableInr = availableBalance("INR");
-  const availableUsdt = availableBalance("USDT");
-  const settledVolumeValue = Number(settledVolume._sum.sourceAmount ?? 0);
-  const reconciledVolumeValue = Number(reconciledVolume._sum.sourceAmount ?? 0);
-  const processedVolume = settledVolumeValue + reconciledVolumeValue;
 
   const statusCount = (status: SettlementStatus) =>
     settlementsByStatus.find((row) => row.status === status)?._count._all ?? 0;
@@ -291,67 +282,75 @@ export default async function DashboardPage() {
   ].filter((alert): alert is NonNullable<typeof alert> => Boolean(alert));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader
-        title="Overview"
-        description="Treasury operations command center for quotes, settlements, reconciliation, and audit activity."
+        title="Treasury Operations"
+        description="Mission control for settlement rails, provider execution, reconciliation, and audit."
       />
 
       {/* Hero command panel */}
       <section className="overview-command-panel ops-panel ops-panel-accent overflow-hidden">
         <div className="overview-command-panel__glow pointer-events-none absolute inset-0" aria-hidden="true" />
-        <div className="relative flex flex-col gap-3.5 p-4 sm:p-5">
+        <div className="relative flex flex-col gap-3 p-4 sm:p-4">
           <div className="space-y-2">
-            <span className="overview-live-badge inline-flex items-center gap-2 rounded-full border border-[#00c79d]/25 bg-[#e7faf4]/80 px-3 py-1 text-[12px] font-semibold text-brand-emerald-ink">
-              <span className="ops-pulse" aria-hidden="true" />
-              Settlement rails live
-            </span>
-            <p className="max-w-2xl text-[13px] leading-snug text-slate-600">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="overview-live-badge inline-flex items-center gap-2 rounded-full border border-[#00c79d]/25 bg-[#e7faf4]/80 px-2.5 py-1 text-[11px] font-semibold text-brand-emerald-ink">
+                <span className="ops-pulse" aria-hidden="true" />
+                Settlement rails live
+              </span>
               {pontisConnected ? (
-                <>
-                  PontisGlobe sandbox execution is connected. INRSettle is tracking payout status,
-                  reconciliation, and audit events.
-                </>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0bb4c4]/25 bg-[#e7f7fb]/80 px-2.5 py-1 text-[11px] font-semibold text-[#0a7d86]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#0bb4c4]" aria-hidden="true" />
+                  PontisGlobe sandbox connected
+                </span>
               ) : (
-                <>
-                  Connect PontisGlobe sandbox execution to track payout status, reconciliation, and
-                  audit events.
-                </>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+                  PontisGlobe sandbox offline
+                </span>
               )}
+              <span className="overview-monitoring-badge inline-flex items-center gap-1.5 rounded-full border border-[var(--ops-line-soft)] bg-white/80 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                <span className="ops-pulse ops-pulse--subtle" aria-hidden="true" />
+                Live monitoring
+              </span>
+            </div>
+            <p className="max-w-2xl text-[12.5px] leading-snug text-slate-600">
+              {pontisConnected
+                ? "INRSettle is tracking payout status, reconciliation, and audit events across your sandbox treasury rail."
+                : "Connect PontisGlobe sandbox execution to unlock live payout tracking, reconciliation, and audit events."}
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-3.5 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-500">
+          <div className="overview-hero-metrics grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="overview-hero-metric ops-card-hover rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">
                 Completed settlements
               </p>
-              <p className="mt-0.5 text-xl font-semibold tabular-nums text-brand-emerald-ink">{completedCount}</p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-brand-emerald-ink">{completedCount}</p>
             </div>
-            <div className="rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-3.5 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-500">
+            <div className="overview-hero-metric ops-card-hover rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">
                 Auto-reconciled rate
               </p>
-              <p className="mt-0.5 text-xl font-semibold tabular-nums text-[#0a7d86]">{formatPercent(reconciledRate)}</p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-[#0a7d86]">{formatPercent(reconciledRate)}</p>
             </div>
-            <div className="rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-3.5 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-500">Exceptions</p>
+            <div className="overview-hero-metric ops-card-hover rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">Exceptions</p>
               <p
                 className={cn(
-                  "mt-0.5 text-xl font-semibold tabular-nums",
+                  "mt-0.5 text-lg font-semibold tabular-nums",
                   reconExceptions ? "text-rose-700" : "text-slate-800",
                 )}
               >
                 {reconExceptions}
               </p>
             </div>
-            <div className="rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-3.5 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-500">In flight</p>
-              <p className="mt-0.5 text-xl font-semibold tabular-nums text-slate-800">{inFlightCount}</p>
+            <div className="overview-hero-metric ops-card-hover rounded-xl border border-[var(--ops-line-soft)] bg-white/70 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">In flight</p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-slate-800">{inFlightCount}</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-[var(--ops-line-soft)] pt-3.5">
+          <div className="flex flex-wrap items-center gap-2 border-t border-[var(--ops-line-soft)] pt-3">
             <Button asChild variant="primary" size="sm">
               <Link href="/quotes">
                 <Plus className="h-3.5 w-3.5" />
@@ -380,91 +379,34 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      {/* Key metrics */}
-      <section>
-        <div className="overview-metrics grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <MetricCard
-            label="Completed settlements"
-            value={completedCount}
-            hint="Settled or reconciled"
-            tone="success"
-          />
-          <MetricCard label="In flight" value={inFlightCount} hint="Approved or executing" tone="info" />
-          <MetricCard
-            label="Auto-reconciled rate"
-            value={formatPercent(reconciledRate)}
-            hint={`${reconciledCount} of ${completedCount || "—"} completed`}
-            tone="success"
-          />
-          <MetricCard
-            label="Exceptions"
-            value={reconExceptions}
-            hint="Reconciliation queue"
-            tone={reconExceptions ? "danger" : "neutral"}
-          />
-          {processedVolume > 0 ? (
-            <MetricCard
-              label="Processed volume"
-              value={formatCurrencyCompact(processedVolume)}
-              valueTitle={formatCurrencyFull(processedVolume)}
-              hint="Settled + reconciled (sandbox)"
-              tone="neutral"
-            />
-          ) : null}
-          {reconciledVolumeValue > 0 ? (
-            <MetricCard
-              label="Reconciled volume"
-              value={formatCurrencyCompact(reconciledVolumeValue)}
-              valueTitle={formatCurrencyFull(reconciledVolumeValue)}
-              hint="Reconciled settlements (sandbox)"
-              tone="success"
-            />
-          ) : null}
-        </div>
-        <p className="mt-2 text-[12px] text-slate-500">
-          Sandbox reference ·{" "}
-          <span className="tabular-nums">
-            {formatCurrencyCompact(availableInr, "INR")} INR liquidity
-          </span>
-          {" · "}
-          <span className="tabular-nums">
-            {formatCurrencyCompact(availableUsdt, "USDT")} USDT treasury
-          </span>
-          {" — "}
-          <Link href="/accounts" className="font-medium text-brand-emerald-ink hover:underline">
-            View accounts
-          </Link>
-        </p>
-      </section>
-
-      <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
+      <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
         {/* Latest settlement proof */}
         <section>
           <SectionHeader
             title="Latest settlement proof"
-            description="Provider payout, settlement update, reconciliation and audit trail recorded."
+            description="End-to-end proof of provider payout, reconciliation, and audit trail."
           />
           {latestProof ? (
             <div
               className={cn(
-                "ops-panel ops-panel-accent overflow-hidden p-4",
+                "overview-proof-card ops-panel ops-panel-accent ops-card-hover overflow-hidden p-3.5",
                 isRecentlyCompleted(latestProof, now) && "overview-proof-recent",
               )}
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[15px] font-semibold tracking-tight text-slate-950">{latestProof.publicId}</p>
+                    <p className="text-[14px] font-semibold tracking-tight text-slate-950">{latestProof.publicId}</p>
                     <StatusBadge status={latestProof.status} />
                   </div>
                   <p
-                    className="mt-1 text-lg font-semibold tabular-nums text-slate-900"
+                    className="mt-0.5 text-base font-semibold tabular-nums text-slate-900"
                     title={formatCurrencyFull(String(latestProof.sourceAmount), latestProof.sourceCurrency)}
                   >
                     {formatCurrencyFull(String(latestProof.sourceAmount), latestProof.sourceCurrency)}
                   </p>
                 </div>
-                <div className="text-right text-[12px] text-slate-500">
+                <div className="text-right text-[11px] text-slate-500">
                   {latestProof.reconciledAt
                     ? formatDateTime(latestProof.reconciledAt)
                     : latestProof.settledAt
@@ -473,25 +415,25 @@ export default async function DashboardPage() {
                 </div>
               </div>
 
-              <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+              <dl className="mt-2.5 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
                 {latestProof.provider ? (
-                  <div className="rounded-lg border border-[var(--ops-line-soft)] bg-slate-50/60 px-3 py-2">
-                    <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">Provider</dt>
-                    <dd className="mt-0.5 text-[13px] font-medium text-slate-800">{latestProof.provider}</dd>
+                  <div className="rounded-lg border border-[var(--ops-line-soft)] bg-slate-50/60 px-2.5 py-1.5">
+                    <dt className="text-[9px] font-semibold uppercase tracking-[0.07em] text-slate-500">Provider</dt>
+                    <dd className="mt-0.5 text-[12px] font-medium text-slate-800">{latestProof.provider}</dd>
                   </div>
                 ) : null}
                 {latestProof.providerTransactionId ? (
-                  <div className="rounded-lg border border-[var(--ops-line-soft)] bg-slate-50/60 px-3 py-2">
-                    <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">
+                  <div className="rounded-lg border border-[var(--ops-line-soft)] bg-slate-50/60 px-2.5 py-1.5">
+                    <dt className="text-[9px] font-semibold uppercase tracking-[0.07em] text-slate-500">
                       Provider transaction
                     </dt>
-                    <dd className="mt-0.5 truncate font-mono text-[12px] text-slate-700">
+                    <dd className="mt-0.5 truncate font-mono text-[11px] text-slate-700">
                       {latestProof.providerTransactionId}
                     </dd>
                   </div>
                 ) : null}
-                <div className="rounded-lg border border-[var(--ops-line-soft)] bg-slate-50/60 px-3 py-2">
-                  <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">
+                <div className="rounded-lg border border-[var(--ops-line-soft)] bg-slate-50/60 px-2.5 py-1.5">
+                  <dt className="text-[9px] font-semibold uppercase tracking-[0.07em] text-slate-500">
                     Reconciliation
                   </dt>
                   <dd className="mt-0.5">
@@ -501,15 +443,21 @@ export default async function DashboardPage() {
                     />
                   </dd>
                 </div>
+                <div className="rounded-lg border border-[var(--ops-line-soft)] bg-slate-50/60 px-2.5 py-1.5">
+                  <dt className="text-[9px] font-semibold uppercase tracking-[0.07em] text-slate-500">Audit status</dt>
+                  <dd className="mt-0.5">
+                    <StatusBadge status={auditStatusLabel(latestProof.status)} dot={false} />
+                  </dd>
+                </div>
               </dl>
 
-              <div className="mt-4 rounded-xl border border-[var(--ops-line-soft)] bg-slate-50/50 px-3 py-3">
+              <div className="overview-proof-lifecycle mt-2.5 rounded-xl border border-[var(--ops-line-soft)] bg-slate-50/50 px-2.5 py-2.5">
                 <ProofLifecycle settlement={latestProof} />
               </div>
 
               <Link
                 href="/settlements"
-                className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-brand-emerald-ink hover:underline"
+                className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-emerald-ink hover:underline"
               >
                 View settlement detail
                 <ArrowRight className="h-3 w-3" />
@@ -526,8 +474,8 @@ export default async function DashboardPage() {
 
         {/* Operational alerts */}
         <section>
-          <SectionHeader title="Operational alerts" description="Actionable items for treasury operators" />
-          <div className="space-y-2">
+          <SectionHeader title="Operational alerts" description="Items requiring operator attention" />
+          <div className="space-y-1.5">
             {alerts.length ? (
               alerts.map((alert) => (
                 <Link key={alert.title} href={alert.href} className="group block">
@@ -565,11 +513,11 @@ export default async function DashboardPage() {
         </section>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         {/* Recent activity */}
         <section>
-          <SectionHeader title="Recent activity" />
-          <div className="ops-panel divide-y divide-[var(--ops-line-soft)] px-3.5 py-1">
+          <SectionHeader title="Recent activity" description="Human-readable operational events" />
+          <div className="ops-panel divide-y divide-[var(--ops-line-soft)] px-3 py-0.5">
             {auditLogs.length ? (
               auditLogs.map((log, index) => {
                 const tone = auditTone(log.action);
@@ -584,13 +532,18 @@ export default async function DashboardPage() {
                 return (
                   <div
                     key={log.id}
-                    className="overview-activity-item flex items-start gap-2.5 py-2.5"
+                    className="overview-activity-item overview-activity-row flex items-start gap-2 py-2"
                     style={{ animationDelay: `${0.04 + index * 0.05}s` }}
                   >
                     <span className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", dot)} />
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-medium text-slate-900">{humanizeAuditAction(log.action)}</p>
-                      <p className="mt-0.5 truncate text-[11.5px] text-slate-500">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="text-[12.5px] font-medium text-slate-900">{humanizeAuditAction(log.action)}</p>
+                        <span className="overview-event-code rounded border border-[var(--ops-line-soft)] bg-slate-50 px-1.5 py-px font-mono text-[9px] font-medium uppercase tracking-wide text-slate-400">
+                          {log.action}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 truncate text-[11px] text-slate-500">
                         {log.user?.email ?? log.actorType} · {formatDateTime(log.createdAt)}
                       </p>
                     </div>
@@ -616,36 +569,35 @@ export default async function DashboardPage() {
             }
           />
           {recentSettlements.length ? (
-            <DataGrid>
+            <DataGrid className="overview-settlements-grid">
               <table className="w-full">
                 <DataGridHead>
-                  <DataGridTh>ID</DataGridTh>
-                  <DataGridTh>Amount</DataGridTh>
-                  <DataGridTh>Status</DataGridTh>
-                  <DataGridTh>Proof</DataGridTh>
-                  <DataGridTh className="text-right">Completed</DataGridTh>
+                  <DataGridTh className="py-2">ID</DataGridTh>
+                  <DataGridTh className="py-2">Amount</DataGridTh>
+                  <DataGridTh className="py-2">Status</DataGridTh>
+                  <DataGridTh className="py-2">Provider</DataGridTh>
+                  <DataGridTh className="py-2 text-right">When</DataGridTh>
                 </DataGridHead>
                 <DataGridBody>
                   {recentSettlements.map((settlement) => (
-                    <DataGridRow key={settlement.id}>
-                      <DataGridTd className="py-2.5 text-[13px] font-medium">{settlement.publicId}</DataGridTd>
+                    <DataGridRow key={settlement.id} className="overview-settlement-row">
+                      <DataGridTd className="py-2 text-[12px] font-medium">{settlement.publicId}</DataGridTd>
                       <DataGridTd
-                        className="py-2.5 whitespace-nowrap text-[13px] tabular-nums"
+                        className="py-2 whitespace-nowrap text-[12px] tabular-nums"
                         title={formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
                       >
                         {formatCurrencyCompact(String(settlement.sourceAmount), settlement.sourceCurrency)}
                       </DataGridTd>
-                      <DataGridTd className="py-2.5">
-                        <div className="flex items-center gap-2">
+                      <DataGridTd className="py-2">
+                        <div className="flex items-center gap-1.5">
                           <StatusBadge status={settlement.status} />
                           {settlementLifecycleDots(settlement.status)}
                         </div>
                       </DataGridTd>
-                      <DataGridTd className="py-2.5 text-[12px] text-slate-600">
+                      <DataGridTd className="py-2 text-[11px] text-slate-600">
                         {settlement.providerTransactionId ? (
-                          <span className="font-mono text-[11px]" title={settlement.providerTransactionId}>
-                            {settlement.provider ?? "Provider"} ·{" "}
-                            {settlement.providerTransactionId.slice(0, 8)}…
+                          <span className="font-mono text-[10px]" title={settlement.providerTransactionId}>
+                            {settlement.provider ?? "Provider"} · {settlement.providerTransactionId.slice(0, 8)}…
                           </span>
                         ) : settlement.provider ? (
                           settlement.provider
@@ -653,7 +605,7 @@ export default async function DashboardPage() {
                           <span className="text-slate-400">—</span>
                         )}
                       </DataGridTd>
-                      <DataGridTd className="py-2.5 text-right text-[12px] text-slate-500">
+                      <DataGridTd className="py-2 text-right text-[11px] text-slate-500">
                         {settlement.reconciledAt
                           ? formatDateTime(settlement.reconciledAt)
                           : settlement.settledAt
