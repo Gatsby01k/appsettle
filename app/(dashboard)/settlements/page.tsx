@@ -296,17 +296,17 @@ export default async function SettlementsPage({
                         <form action={transition} className="flex flex-wrap gap-1">
                           <input type="hidden" name="settlementId" value={settlement.id} />
                           {settlement.status === SettlementStatus.REQUESTED ? (
-                            <SubmitButton name="status" value="APPROVED" variant="outline" size="sm" pendingText="...">
+                            <SubmitButton name="status" value="APPROVED" variant="outline" size="sm" pendingText="Approving...">
                               Approve
                             </SubmitButton>
                           ) : null}
                           {settlement.status === SettlementStatus.APPROVED ? (
-                            <SubmitButton name="status" value="EXECUTING" variant="outline" size="sm" pendingText="...">
+                            <SubmitButton name="status" value="EXECUTING" variant="outline" size="sm" pendingText="Executing via Pontis...">
                               Execute
                             </SubmitButton>
                           ) : null}
                           {settlement.status === SettlementStatus.EXECUTING && !(pontisConfigured && settlement.provider) ? (
-                            <SubmitButton name="status" value="SETTLED" variant="outline" size="sm" pendingText="...">
+                            <SubmitButton name="status" value="SETTLED" variant="outline" size="sm" pendingText="Settling...">
                               Settle
                             </SubmitButton>
                           ) : null}
