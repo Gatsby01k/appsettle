@@ -30,10 +30,20 @@ import { isRemitQuicklyConfigured } from "@/lib/providers/remitquickly/client";
 import { isSandboxTestEnabled } from "@/lib/providers/remitquickly/flags";
 import { executeApprovedSettlement } from "@/lib/providers/remitquickly/settlement";
 import { isPontisConfigured } from "@/lib/providers/pontis/client";
+import { isPontisGatewayConfigured } from "@/lib/providers/pontis/gateway";
 import {
   executeApprovedSettlement as executePontisSettlement,
   checkPayoutStatus as checkPontisPayoutStatus,
 } from "@/lib/providers/pontis/settlement";
+
+/**
+ * PontisGlobe is "enabled" whenever either the VPS gateway is configured (the
+ * production path on Vercel — Pontis keys live only on the gateway) or the
+ * Pontis credentials are present directly (e.g. running on the VPS host itself).
+ */
+function isPontisEnabled() {
+  return isPontisGatewayConfigured() || isPontisConfigured();
+}
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/helper-text";
@@ -96,7 +106,7 @@ async function transition(formData: FormData) {
     // sandbox payout and records the provider transaction id before moving to
     // EXECUTING. PontisGlobe takes precedence, then RemitQuickly; otherwise we
     // fall back to the plain lifecycle transition.
-    if (status === SettlementStatus.EXECUTING && isPontisConfigured()) {
+    if (status === SettlementStatus.EXECUTING && isPontisEnabled()) {
       const result = await executePontisSettlement(settlementId, user.id, organization.id);
       // The provider may already report a final outcome on submit (e.g. the
       // sandbox completed trigger), in which case the settlement is already SETTLED.
@@ -173,7 +183,7 @@ export default async function SettlementsPage({
   const inFlight = settlements.filter((s) => isInFlight(s.status)).length;
   const settled = settlements.filter((s) => isCompleted(s.status)).length;
   const showSandboxTest = isSandboxTestEnabled();
-  const pontisConfigured = isPontisConfigured();
+  const pontisConfigured = isPontisEnabled();
 
   return (
     <div className="space-y-6">

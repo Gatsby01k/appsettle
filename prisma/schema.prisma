@@ -165,6 +165,8 @@ model Settlement {
   targetAccount     String
   provider          String?
   providerTransactionId String?
+  providerStatus    String?
+  providerResponse  Json?
   failureReason     String?
   approvedAt        DateTime?
   executedAt        DateTime?

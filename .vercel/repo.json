@@ -1,0 +1,11 @@
+{
+  "remoteName": "origin",
+  "projects": [
+    {
+      "id": "prj_IxlAvDWEOOigdd8xeopLAydvlG00",
+      "name": "appsettle",
+      "directory": ".",
+      "orgId": "team_pBsmNqqAmPuK4uwtJu0O9yT6"
+    }
+  ]
+}

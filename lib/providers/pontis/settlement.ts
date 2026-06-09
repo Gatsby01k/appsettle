@@ -1,6 +1,6 @@
 import "server-only";
 
-import { AuditActorType, SettlementStatus, type Settlement } from "@prisma/client";
+import { AuditActorType, Prisma, SettlementStatus, type Settlement } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { UserFacingError } from "@/lib/errors";
@@ -14,6 +14,12 @@ import {
   type PontisPayoutRequest,
   type PontisResponse,
 } from "./client";
+import {
+  gatewayCheckStatus,
+  gatewaySendPayout,
+  isPontisGatewayConfigured,
+  type PontisGatewayResult,
+} from "./gateway";
 
 /** Provider name persisted on the settlement + stamped on every audit entry. */
 export const PROVIDER = "PontisGlobe";
@@ -79,10 +85,54 @@ export function buildPayoutRequest(
   };
 }
 
-function extractPayoutData(
-  response: PontisResponse<PontisEnvelope<PontisPayoutData>>,
-): PontisPayoutData | null {
-  return response.data?.data ?? null;
+/** Coerces an arbitrary provider response into a Prisma-storable JSON value. */
+function asJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
+}
+
+/** Normalises a direct Pontis client response into the gateway result shape. */
+function normalizeDirect(
+  result: PontisResponse<PontisEnvelope<PontisPayoutData>>,
+  fallbackTransactionId?: string | null,
+): PontisGatewayResult {
+  const payout = result.data?.data ?? null;
+  return {
+    ok: result.ok,
+    status: result.status,
+    transactionId: payout?.transaction_id ?? fallbackTransactionId ?? null,
+    providerStatus: payout?.status ?? null,
+    statusMessage: payout?.status_message ?? null,
+    response: result.data,
+    error: result.ok
+      ? null
+      : ((result.data?.error as { message?: string })?.message ??
+        payout?.status_message ??
+        `PontisGlobe call failed (HTTP ${result.status}).`),
+  };
+}
+
+/**
+ * Submits a payout. Prefers the VPS gateway (so Pontis keys never live on
+ * Vercel); only falls back to a direct Pontis call when the app itself runs on
+ * the whitelisted host with the Pontis credentials configured.
+ */
+async function submitPayout(request: PontisPayoutRequest): Promise<PontisGatewayResult> {
+  if (isPontisGatewayConfigured()) {
+    return gatewaySendPayout(request);
+  }
+  const jwt = await loginOrThrow();
+  const result = await sendPayoutRequest(request, jwt);
+  return normalizeDirect(result);
+}
+
+/** Reads a payout status via the gateway, falling back to a direct Pontis call. */
+async function fetchStatus(transactionId: string): Promise<PontisGatewayResult> {
+  if (isPontisGatewayConfigured()) {
+    return gatewayCheckStatus(transactionId);
+  }
+  const jwt = await loginOrThrow();
+  const result = await getPayoutStatus(transactionId, jwt);
+  return normalizeDirect(result, transactionId);
 }
 
 /**
@@ -110,16 +160,11 @@ export async function executeApprovedSettlement(
 
   const request = buildPayoutRequest(settlement, options.overrides);
 
-  const jwt = await loginOrThrow();
-  const result = await sendPayoutRequest(request, jwt);
-  const payout = extractPayoutData(result);
-  const transactionId = payout?.transaction_id ?? null;
+  const result = await submitPayout(request);
+  const transactionId = result.transactionId;
 
   if (!result.ok || !transactionId) {
-    const message =
-      (result.data?.error as { message?: string })?.message ??
-      payout?.status_message ??
-      `PontisGlobe rejected the payout (HTTP ${result.status}).`;
+    const message = result.error ?? `PontisGlobe rejected the payout (HTTP ${result.status}).`;
     await writeAuditLog({
       action: "pontis.payout.failed_submit",
       resourceType: "settlement",
@@ -127,14 +172,19 @@ export async function executeApprovedSettlement(
       organizationId,
       userId,
       actorType: AuditActorType.API,
-      after: { provider: PROVIDER, status: result.status, response: result.data },
+      after: { provider: PROVIDER, status: result.status, response: result.response },
     });
     throw new UserFacingError(message);
   }
 
   await prisma.settlement.update({
     where: { id: settlement.id },
-    data: { provider: PROVIDER, providerTransactionId: transactionId },
+    data: {
+      provider: PROVIDER,
+      providerTransactionId: transactionId,
+      providerStatus: result.providerStatus,
+      providerResponse: asJson(result.response),
+    },
   });
 
   await transitionSettlement(
@@ -158,14 +208,14 @@ export async function executeApprovedSettlement(
       idempotencyKey: request.idempotency_key,
       sourceAmount: request.source_amount,
       sourceCurrency: request.source_currency,
-      status: payout?.status ?? null,
+      status: result.providerStatus,
     },
   });
 
   // The submit response may already carry a final outcome (e.g. the sandbox
   // `.00` completed trigger). Apply it right away so the settlement lands in the
   // correct state without waiting for a poll / webhook.
-  const outcome = mapPontisStatus(payout?.status);
+  const outcome = mapPontisStatus(result.providerStatus);
   let resolution = null;
   if (outcome !== "pending") {
     resolution = await applyPayoutResolution({
@@ -174,12 +224,12 @@ export async function executeApprovedSettlement(
       userId,
       organizationId,
       transactionId,
-      statusMessage: payout?.status_message ?? null,
+      statusMessage: result.statusMessage,
       actorType: AuditActorType.API,
     });
   }
 
-  return { transactionId, status: payout?.status ?? null, submit: result.data, resolution };
+  return { transactionId, status: result.providerStatus, submit: result.response, resolution };
 }
 
 /**
@@ -200,17 +250,23 @@ export async function checkPayoutStatus(
     throw new UserFacingError("This settlement has no PontisGlobe transaction to check.");
   }
 
-  const jwt = await loginOrThrow();
-  const result = await getPayoutStatus(settlement.providerTransactionId, jwt);
-  const payout = extractPayoutData(result);
+  const result = await fetchStatus(settlement.providerTransactionId);
 
   if (!result.ok) {
     throw new UserFacingError(
-      `PontisGlobe could not return the payout status (HTTP ${result.status}).`,
+      result.error ?? `PontisGlobe could not return the payout status (HTTP ${result.status}).`,
     );
   }
 
-  const outcome = mapPontisStatus(payout?.status);
+  const outcome = mapPontisStatus(result.providerStatus);
+
+  await prisma.settlement.update({
+    where: { id: settlement.id },
+    data: {
+      providerStatus: result.providerStatus,
+      providerResponse: asJson(result.response),
+    },
+  });
 
   await writeAuditLog({
     action: "pontis.payout.status_updated",
@@ -222,7 +278,7 @@ export async function checkPayoutStatus(
     after: {
       provider: PROVIDER,
       transactionId: settlement.providerTransactionId,
-      status: payout?.status ?? null,
+      status: result.providerStatus,
       outcome,
     },
   });
@@ -235,12 +291,12 @@ export async function checkPayoutStatus(
       userId,
       organizationId,
       transactionId: settlement.providerTransactionId,
-      statusMessage: payout?.status_message ?? null,
+      statusMessage: result.statusMessage,
       actorType: AuditActorType.API,
     });
   }
 
-  return { status: payout?.status ?? null, outcome, resolution };
+  return { status: result.providerStatus, outcome, resolution };
 }
 
 type ResolutionInput = {
