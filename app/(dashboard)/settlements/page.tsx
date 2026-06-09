@@ -30,6 +30,7 @@ import {
   SettlementActionForm,
   SettlementActionsProvider,
   SettlementAutoRefresh,
+  SettlementOperationPanel,
   SettlementRowActivityNote,
 } from "@/components/dashboard/settlement-auto-refresh";
 import { RemitQuicklyTestButton } from "@/components/providers/remitquickly-test-button";
@@ -63,9 +64,9 @@ import { SubmitButton } from "@/components/ui/submit-button";
 
 function successMessage(value?: string) {
   if (value === "created") return "Settlement created and quote marked as accepted.";
-  if (value === "approved") return "Settlement approved.";
-  if (value === "executing") return "Settlement moved to executing.";
-  if (value === "settled") return "Settlement marked as settled.";
+  if (value === "approved") return "Settlement approved and ready for execution.";
+  if (value === "executing") return "Payout submitted via PontisGlobe. Tracking transaction status.";
+  if (value === "settled") return "Settlement settled successfully.";
   if (value === "checked") return "Provider status checked. Payout is still in progress.";
   return null;
 }
@@ -222,41 +223,7 @@ export default async function SettlementsPage({
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {message ? <FlashMessage message={message} /> : null}
 
-      {autoRefreshSettlements ? (
-        <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 shadow-sm">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-cyan-100">Settlement operation activity</p>
-              <p className="mt-1 text-sm text-cyan-200/80">
-                INRSettle is refreshing provider and reconciliation state automatically.
-              </p>
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 px-3 py-1 text-xs font-medium text-cyan-100">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300" />
-              Live refresh
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-2 text-sm text-cyan-100 md:grid-cols-4">
-            <div className="rounded-xl bg-slate-950/40 p-3">
-              <p className="font-medium">1. Provider execution</p>
-              <p className="mt-1 text-xs text-cyan-200/70">Creating or tracking payout request.</p>
-            </div>
-            <div className="rounded-xl bg-slate-950/40 p-3">
-              <p className="font-medium">2. Transaction status</p>
-              <p className="mt-1 text-xs text-cyan-200/70">Waiting for PontisGlobe response.</p>
-            </div>
-            <div className="rounded-xl bg-slate-950/40 p-3">
-              <p className="font-medium">3. Settlement update</p>
-              <p className="mt-1 text-xs text-cyan-200/70">Moving lifecycle to settled state.</p>
-            </div>
-            <div className="rounded-xl bg-slate-950/40 p-3">
-              <p className="font-medium">4. Reconciliation</p>
-              <p className="mt-1 text-xs text-cyan-200/70">Auto-match and audit trail recording.</p>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <SettlementOperationPanel autoRefresh={autoRefreshSettlements} />
 
       {showSandboxTest ? (
         <Card>
