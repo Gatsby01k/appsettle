@@ -30,14 +30,22 @@ export type SettlementDetail = {
   reconciliation: { externalRef: string; source: string; status: string; amount: string; valueDate: string }[];
 };
 
-export function SettlementDetailSheet({ settlement }: { settlement: SettlementDetail }) {
+export function SettlementDetailSheet({
+  settlement,
+  defaultTab = "overview",
+  triggerLabel = "Details",
+}: {
+  settlement: SettlementDetail;
+  defaultTab?: "overview" | "audit" | "reconciliation";
+  triggerLabel?: string;
+}) {
   const [open, setOpen] = useState(false);
-  const sheetKey = `${settlement.status}-${settlement.providerTransactionId ?? ""}-${settlement.events.length}`;
+  const sheetKey = `${settlement.status}-${settlement.providerTransactionId ?? ""}-${settlement.events.length}-${defaultTab}`;
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
-        Details
+        {triggerLabel}
       </Button>
       <SheetContent
         key={sheetKey}
@@ -54,7 +62,7 @@ export function SettlementDetailSheet({ settlement }: { settlement: SettlementDe
           <SettlementLifecycle status={settlement.status} />
         </div>
 
-        <Tabs defaultValue="overview" className="mt-4">
+        <Tabs defaultValue={defaultTab} className="mt-4">
           <TabsList className="w-full">
             <TabsTrigger value="overview" className="flex-1">
               Overview

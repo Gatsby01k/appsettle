@@ -1,7 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { CheckCircle2, XCircle } from "lucide-react";
-import { useSettlementActionsOptional } from "@/components/dashboard/settlement-auto-refresh";
+import {
+  SettlementActionForm,
+  useSettlementActionsOptional,
+} from "@/components/dashboard/settlement-auto-refresh";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { cn } from "@/lib/utils";
 
 export type SettlementOperationConsoleData = {
@@ -90,20 +95,55 @@ function resolveConsoleMode(
   settlementId: string,
   pendingSettlementId?: string,
   pendingAction?: string,
-  highlightCompleted = false,
 ): ConsoleMode | null {
   if (pendingSettlementId === settlementId) {
     if (pendingAction === "execute" || pendingAction === "check") return "executing";
     if (pendingAction === "approve") return "approved";
+    if (pendingAction === "reconcile") {
+      return settlement.status === "RECONCILED" ? "reconciled" : "settled";
+    }
   }
+
+  if (settlement.status === "RECONCILED") return "reconciled";
+  if (settlement.status === "SETTLED" && !settlement.hasReconciliation) return "settled";
 
   if (!CONSOLE_STATUSES.has(settlement.status)) return null;
 
-  if (settlement.status === "RECONCILED") return highlightCompleted ? "reconciled" : null;
-  if (settlement.status === "SETTLED") return highlightCompleted ? "settled" : null;
   if (settlement.status === "EXECUTING") return "executing";
   if (settlement.status === "APPROVED") return "approved";
   return null;
+}
+
+export function SettlementRowStatusSubtext({
+  status,
+  hasReconciliation,
+  settlementId,
+}: {
+  status: string;
+  hasReconciliation: boolean;
+  settlementId: string;
+}) {
+  const actions = useSettlementActionsOptional();
+  const isPending = actions?.pendingAction?.settlementId === settlementId;
+
+  let hint: string | null = null;
+  if (status === "APPROVED") hint = "Ready to execute";
+  else if (status === "EXECUTING") hint = "Tracking via PontisGlobe";
+  else if (status === "SETTLED" && !hasReconciliation) hint = "Ready for reconciliation";
+  else if (status === "SETTLED") hint = "Payout completed";
+  else if (status === "RECONCILED") hint = "Reconciled automatically";
+
+  if (!hint) return null;
+
+  return (
+    <p
+      className={cn("text-xs", isPending ? "text-cyan-600" : "text-slate-500")}
+      role="status"
+      aria-live="polite"
+    >
+      {isPending ? `${hint} · processing` : hint}
+    </p>
+  );
 }
 
 export function SettlementPageFlash({
@@ -140,13 +180,15 @@ export function SettlementOperationConsoleRow({
   settlementId,
   settlement,
   autoRefresh = false,
-  highlightCompleted = false,
+  canReconcile = false,
+  autoMatchAction,
   colSpan = 5,
 }: {
   settlementId: string;
   settlement: SettlementOperationConsoleData;
   autoRefresh?: boolean;
-  highlightCompleted?: boolean;
+  canReconcile?: boolean;
+  autoMatchAction?: (formData: FormData) => Promise<void>;
   colSpan?: number;
 }) {
   const actions = useSettlementActionsOptional();
@@ -156,7 +198,6 @@ export function SettlementOperationConsoleRow({
     settlementId,
     pending?.settlementId,
     pending?.action,
-    highlightCompleted,
   );
 
   if (!mode) return null;
@@ -237,13 +278,13 @@ export function SettlementOperationConsoleRow({
             aria-live="polite"
           >
             <div>
-              <p className="text-xs font-semibold text-slate-900">Payout completed</p>
+              <p className="text-xs font-semibold text-slate-900">Payout completed — ready for reconciliation</p>
               <p className="mt-0.5 text-[11px] text-slate-600">
-                Provider execution completed and settlement was recorded.
+                Provider execution completed. Match this settlement with the bank record to close the workflow.
               </p>
             </div>
             <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-              <ProofItem label="Provider" value={providerLabel("live")} />
+              <ProofItem label="Provider" value={settlement.provider ?? providerLabel("live")} />
               <ProofItem label="Provider status" value={providerStatus} />
               {settlement.providerTransactionId ? (
                 <ProofItem label="Provider transaction id" value={settlement.providerTransactionId} />
@@ -253,6 +294,33 @@ export function SettlementOperationConsoleRow({
                 label="Audit trail"
                 value={settlement.hasAuditEvents ? "Recorded" : "Pending"}
               />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-emerald-100/80 pt-2">
+              {canReconcile && autoMatchAction ? (
+                <SettlementActionForm
+                  settlementId={settlementId}
+                  action="reconcile"
+                  serverAction={autoMatchAction}
+                >
+                  <input type="hidden" name="settlementId" value={settlementId} />
+                  <SubmitButton
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    pendingText="Matching..."
+                    settlementId={settlementId}
+                    action="reconcile"
+                  >
+                    Auto-match reconciliation
+                  </SubmitButton>
+                </SettlementActionForm>
+              ) : null}
+              <Link
+                href="/reconciliation"
+                className="text-[11px] font-medium text-cyan-700 underline-offset-2 hover:text-cyan-800 hover:underline"
+              >
+                Open reconciliation
+              </Link>
             </div>
           </div>
         ) : null}
@@ -264,7 +332,7 @@ export function SettlementOperationConsoleRow({
             aria-live="polite"
           >
             <div>
-              <p className="text-xs font-semibold text-slate-900">Settlement reconciled</p>
+              <p className="text-xs font-semibold text-slate-900">Settlement complete</p>
               <p className="mt-0.5 text-[11px] text-slate-600">
                 Provider payout, settlement update, reconciliation and audit trail are complete.
               </p>
@@ -272,14 +340,8 @@ export function SettlementOperationConsoleRow({
             <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
               <ProofItem label="Provider payout" value="Completed" />
               <ProofItem label="Settlement" value="Settled" />
-              <ProofItem
-                label="Reconciliation"
-                value={settlement.hasReconciliation ? "Matched" : "Not linked"}
-              />
-              <ProofItem
-                label="Audit trail"
-                value={settlement.hasAuditEvents ? "Recorded" : "Pending"}
-              />
+              <ProofItem label="Reconciliation" value="Matched" />
+              <ProofItem label="Audit trail" value="Recorded" />
             </div>
           </div>
         ) : null}

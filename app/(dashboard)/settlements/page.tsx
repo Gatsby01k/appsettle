@@ -3,7 +3,7 @@ import { SettlementStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth";
-import { createSettlement, transitionSettlement } from "@/lib/domain";
+import { autoMatchReconciliation, createSettlement, transitionSettlement } from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
 import { canApproveSettlement } from "@/lib/permissions";
 import { counterpartyForCorridor } from "@/lib/treasury";
@@ -24,17 +24,20 @@ import {
   DataGridTd,
   DataGridTh,
 } from "@/components/ops/data-grid";
-import { SettlementDetailSheet } from "@/components/dashboard/settlement-detail-sheet";
+import {
+  SettlementDetailSheet,
+  type SettlementDetail,
+} from "@/components/dashboard/settlement-detail-sheet";
 import {
   SettlementOperationConsoleRow,
   SettlementPageFlash,
+  SettlementRowStatusSubtext,
   type SettlementOperationConsoleData,
 } from "@/components/dashboard/settlement-operation-console";
 import {
   SettlementActionForm,
   SettlementActionsProvider,
   SettlementAutoRefresh,
-  SettlementRowStatusHint,
 } from "@/components/dashboard/settlement-auto-refresh";
 import { RemitQuicklyTestButton } from "@/components/providers/remitquickly-test-button";
 import { isRemitQuicklyConfigured } from "@/lib/providers/remitquickly/client";
@@ -67,25 +70,8 @@ import { SubmitButton } from "@/components/ui/submit-button";
 
 function pageFlashMessage(value?: string) {
   if (value === "created") return "Settlement created.";
+  if (value === "reconciled") return "Reconciliation matched — settlement complete.";
   return null;
-}
-
-function pickHighlightSettlementId(
-  settlements: Array<{ id: string; status: SettlementStatus }>,
-  success?: string,
-) {
-  if (success === "settled") {
-    return settlements.find(
-      (s) => s.status === SettlementStatus.SETTLED || s.status === SettlementStatus.RECONCILED,
-    )?.id;
-  }
-  if (success === "approved") {
-    return settlements.find((s) => s.status === SettlementStatus.APPROVED)?.id;
-  }
-  if (success === "executing" || success === "checked") {
-    return settlements.find((s) => s.status === SettlementStatus.EXECUTING)?.id;
-  }
-  return undefined;
 }
 
 function hasWorkflowAction(status: SettlementStatus) {
@@ -104,17 +90,49 @@ function isCompleted(status: SettlementStatus) {
   return new Set<SettlementStatus>([SettlementStatus.SETTLED, SettlementStatus.RECONCILED]).has(status);
 }
 
-function toOperationConsoleData(settlement: {
-  status: SettlementStatus;
-  corridor: string;
-  sourceAmount: unknown;
-  sourceCurrency: string;
-  provider: string | null;
-  providerStatus: string | null;
-  providerTransactionId: string | null;
-  events: unknown[];
-  reconciliation: unknown[];
-}): SettlementOperationConsoleData {
+type SettlementRow = Awaited<
+  ReturnType<
+    typeof prisma.settlement.findMany<{
+      include: { events: true; reconciliation: true };
+    }>
+  >
+>[number];
+
+function toSettlementDetail(settlement: SettlementRow): SettlementDetail {
+  const cp = counterpartyForCorridor(settlement.corridor);
+  return {
+    publicId: settlement.publicId,
+    reference: settlement.reference,
+    corridor: settlement.corridor.replace("_", " → "),
+    status: settlement.status,
+    provider: settlement.provider ?? undefined,
+    providerTransactionId: settlement.providerTransactionId ?? undefined,
+    sourceAmount: formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency),
+    targetAmount: formatCurrencyFull(String(settlement.targetAmount), settlement.targetCurrency),
+    feeAmount: formatCurrencyFull(String(settlement.feeAmount), settlement.sourceCurrency),
+    createdAt: formatDateTime(settlement.createdAt),
+    approvedAt: settlement.approvedAt ? formatDateTime(settlement.approvedAt) : undefined,
+    settledAt: settlement.settledAt ? formatDateTime(settlement.settledAt) : undefined,
+    reconciledAt: settlement.reconciledAt ? formatDateTime(settlement.reconciledAt) : undefined,
+    sourceAccount: settlement.sourceAccount,
+    targetAccount: settlement.targetAccount,
+    counterparty: { name: cp.name, type: cp.type, country: cp.country },
+    events: settlement.events.map((event) => ({
+      label: event.toStatus.replaceAll("_", " "),
+      note: event.note ?? undefined,
+      at: formatDateTime(event.createdAt),
+    })),
+    reconciliation: settlement.reconciliation.map((record) => ({
+      externalRef: record.externalRef,
+      source: record.source,
+      status: record.status,
+      amount: formatCurrencyFull(String(record.amount), record.currency),
+      valueDate: formatDateTime(record.valueDate),
+    })),
+  };
+}
+
+function toOperationConsoleData(settlement: SettlementRow): SettlementOperationConsoleData {
   return {
     status: settlement.status,
     corridor: settlement.corridor.replace("_", " → "),
@@ -181,6 +199,37 @@ async function transition(formData: FormData) {
   redirect(`/settlements?success=${finalStatus.toLowerCase()}`);
 }
 
+async function runAutoMatch(formData: FormData) {
+  "use server";
+  const { user, organization, membership } = await requireSession();
+  if (!canApproveSettlement(membership.role)) redirect("/settlements");
+  const settlementId = String(formData.get("settlementId") ?? "");
+  let result = { matched: 0, scanned: 0 };
+  try {
+    result = await autoMatchReconciliation(user.id, organization.id);
+  } catch (error) {
+    redirect(`/settlements?error=${encodeURIComponent(friendlyErrorMessage(error))}`);
+  }
+  if (settlementId) {
+    const settlement = await prisma.settlement.findFirst({
+      where: { id: settlementId, organizationId: organization.id },
+    });
+    if (settlement?.status === SettlementStatus.RECONCILED) {
+      revalidateSettlementsPage();
+      redirect("/settlements?success=reconciled");
+    }
+  }
+  if (result.matched > 0) {
+    revalidateSettlementsPage();
+    redirect("/settlements?success=reconciled");
+  }
+  redirect(
+    `/settlements?error=${encodeURIComponent(
+      "No matching bank record found. Create a matching record on Reconciliation, then run auto-match again.",
+    )}`,
+  );
+}
+
 async function checkStatus(formData: FormData) {
   "use server";
   const { user, organization, membership } = await requireSession();
@@ -229,8 +278,6 @@ export default async function SettlementsPage({
       },
     }),
   ]);
-
-  const highlightSettlementId = pickHighlightSettlementId(settlements, params.success);
 
   const query = params.q?.toLowerCase().trim() ?? "";
   const filteredSettlements = settlements.filter((settlement) => {
@@ -314,6 +361,7 @@ export default async function SettlementsPage({
                         settlement.providerStatus.toLowerCase(),
                       ),
                   );
+                const settlementDetail = toSettlementDetail(settlement);
 
                 return (
                 <Fragment key={settlement.id}>
@@ -321,7 +369,11 @@ export default async function SettlementsPage({
                   <DataGridTd>
                     <p className="font-medium text-slate-950">{settlement.publicId}</p>
                     <p className="text-xs text-slate-500">{settlement.reference}</p>
-                    <SettlementRowStatusHint status={settlement.status} settlementId={settlement.id} />
+                    <SettlementRowStatusSubtext
+                      status={settlement.status}
+                      hasReconciliation={settlement.reconciliation.length > 0}
+                      settlementId={settlement.id}
+                    />
                   </DataGridTd>
                   <DataGridTd
                     className="whitespace-nowrap tabular-nums"
@@ -337,7 +389,7 @@ export default async function SettlementsPage({
                   </DataGridTd>
                   <DataGridTd>
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                      {canApprove ? (
+                      {canApprove && hasWorkflowAction(settlement.status) ? (
                         <SettlementActionForm
                           settlementId={settlement.id}
                           action={
@@ -390,11 +442,10 @@ export default async function SettlementsPage({
                               Settle
                             </SubmitButton>
                           ) : null}
-                          {!hasWorkflowAction(settlement.status) ? <span className="text-xs text-slate-400">—</span> : null}
                         </SettlementActionForm>
-                      ) : (
+                      ) : !canApprove ? (
                         <span className="text-xs text-slate-400">Read only</span>
-                      )}
+                      ) : null}
                       {canApprove &&
                       settlement.status === SettlementStatus.EXECUTING &&
                       pontisConfigured &&
@@ -419,40 +470,16 @@ export default async function SettlementsPage({
                       ) : null}
                       <SettlementDetailSheet
                         key={`${settlement.id}-${settlement.status}-${settlement.providerTransactionId ?? ""}-${settlement.events.length}`}
-                        settlement={{
-                          publicId: settlement.publicId,
-                          reference: settlement.reference,
-                          corridor: settlement.corridor.replace("_", " → "),
-                          status: settlement.status,
-                          provider: settlement.provider ?? undefined,
-                          providerTransactionId: settlement.providerTransactionId ?? undefined,
-                          sourceAmount: formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency),
-                          targetAmount: formatCurrencyFull(String(settlement.targetAmount), settlement.targetCurrency),
-                          feeAmount: formatCurrencyFull(String(settlement.feeAmount), settlement.sourceCurrency),
-                          createdAt: formatDateTime(settlement.createdAt),
-                          approvedAt: settlement.approvedAt ? formatDateTime(settlement.approvedAt) : undefined,
-                          settledAt: settlement.settledAt ? formatDateTime(settlement.settledAt) : undefined,
-                          reconciledAt: settlement.reconciledAt ? formatDateTime(settlement.reconciledAt) : undefined,
-                          sourceAccount: settlement.sourceAccount,
-                          targetAccount: settlement.targetAccount,
-                          counterparty: (() => {
-                            const cp = counterpartyForCorridor(settlement.corridor);
-                            return { name: cp.name, type: cp.type, country: cp.country };
-                          })(),
-                          events: settlement.events.map((event) => ({
-                            label: event.toStatus.replaceAll("_", " "),
-                            note: event.note ?? undefined,
-                            at: formatDateTime(event.createdAt),
-                          })),
-                          reconciliation: settlement.reconciliation.map((record) => ({
-                            externalRef: record.externalRef,
-                            source: record.source,
-                            status: record.status,
-                            amount: formatCurrencyFull(String(record.amount), record.currency),
-                            valueDate: formatDateTime(record.valueDate),
-                          })),
-                        }}
+                        settlement={settlementDetail}
                       />
+                      {settlement.status === SettlementStatus.RECONCILED ? (
+                        <SettlementDetailSheet
+                          key={`${settlement.id}-audit-${settlement.events.length}`}
+                          settlement={settlementDetail}
+                          defaultTab="audit"
+                          triggerLabel="Audit trail"
+                        />
+                      ) : null}
                     </div>
                   </DataGridTd>
                 </DataGridRow>
@@ -460,7 +487,8 @@ export default async function SettlementsPage({
                   settlementId={settlement.id}
                   settlement={toOperationConsoleData(settlement)}
                   autoRefresh={rowAutoRefresh}
-                  highlightCompleted={highlightSettlementId === settlement.id}
+                  canReconcile={canApprove}
+                  autoMatchAction={runAutoMatch}
                 />
                 </Fragment>
                 );
