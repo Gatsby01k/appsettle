@@ -201,6 +201,27 @@ function ReconciliationProofGrid({
   );
 }
 
+function ReconciledProofGrid({
+  settlement,
+  providerStatus,
+}: {
+  settlement: SettlementOperationConsoleData;
+  providerStatus: string;
+}) {
+  return (
+    <div className="mt-1.5 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+      <ProofItem label="Provider" value={settlement.provider ?? providerLabel("live")} />
+      <ProofItem label="Provider status" value={providerStatus} />
+      {settlement.providerTransactionId ? (
+        <ProofItem label="Provider transaction id" value={settlement.providerTransactionId} />
+      ) : null}
+      <ProofItem label="Settlement" value="Settled" />
+      <ProofItem label="Reconciliation" value="Matched" />
+      <ProofItem label="Audit trail" value="Recorded" />
+    </div>
+  );
+}
+
 export function SettlementOperationConsoleRow({
   settlementId,
   settlement,
@@ -248,7 +269,7 @@ export function SettlementOperationConsoleRow({
 
   return (
     <tr className="text-sm">
-      <td colSpan={colSpan} className="px-4 pb-3 pt-0 first:pl-5 last:pr-5">
+      <td colSpan={colSpan} className="px-4 pb-2 pt-0 first:pl-5 last:pr-5">
         {mode === "approved" ? (
           <div
             className="rounded-lg border border-amber-200/80 bg-amber-50/40 px-3 py-2.5"
@@ -399,22 +420,12 @@ export function SettlementOperationConsoleRow({
 
         {mode === "reconciled" ? (
           <div
-            className="rounded-lg border border-emerald-200/80 bg-emerald-50/30 px-3 py-2.5"
+            className="rounded-lg border border-emerald-200/80 bg-emerald-50/30 px-3 py-2"
             role="status"
             aria-live="polite"
           >
-            <div>
-              <p className="text-xs font-semibold text-slate-900">Settlement complete</p>
-              <p className="mt-0.5 text-[11px] text-slate-600">
-                Provider payout, settlement update, reconciliation and audit trail are complete.
-              </p>
-            </div>
-            <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-              <ProofItem label="Provider payout" value="Completed" />
-              <ProofItem label="Settlement" value="Settled" />
-              <ProofItem label="Reconciliation" value="Matched" />
-              <ProofItem label="Audit trail" value="Recorded" />
-            </div>
+            <p className="text-xs font-semibold text-slate-900">Settlement complete</p>
+            <ReconciledProofGrid settlement={settlement} providerStatus={providerStatus} />
           </div>
         ) : null}
       </td>

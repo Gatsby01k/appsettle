@@ -75,7 +75,9 @@ import { SubmitButton } from "@/components/ui/submit-button";
 
 function pageFlashMessage(value?: string) {
   if (value === "created") return "Settlement created.";
-  if (value === "reconciled") return "Reconciliation matched — settlement complete.";
+  if (value === "reconciled" || value === "matched") {
+    return "Settlement complete — payout, reconciliation and audit trail recorded.";
+  }
   return null;
 }
 
@@ -284,6 +286,8 @@ export default async function SettlementsPage({
   const { organization, membership } = await requireSession();
   const params = await searchParams;
   const flashMessage = pageFlashMessage(params.success);
+  const justCompleted =
+    params.success === "reconciled" || params.success === "matched";
   const canApprove = canApproveSettlement(membership.role);
 
   const [quotes, settlements] = await Promise.all([
@@ -327,8 +331,8 @@ export default async function SettlementsPage({
 
   return (
     <SettlementActionsProvider>
-    <div className="space-y-6">
-      <PageHeader title="Settlements" description="Operate the full settlement lifecycle from request through reconciliation." />
+    <div className="space-y-4">
+      <PageHeader title="Settlements" className="gap-3" />
 
       <SettlementAutoRefresh enabled={autoRefreshSettlements} />
 
@@ -352,10 +356,15 @@ export default async function SettlementsPage({
         </Card>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-3">
         <MetricCard label="Requested" value={requested} hint="Awaiting approval" tone="warning" />
         <MetricCard label="In flight" value={inFlight} hint="Approved or executing" tone="info" />
-        <MetricCard label="Completed" value={settled} hint="Settled or reconciled" tone="success" />
+        <MetricCard
+          label="Completed"
+          value={settled}
+          hint={justCompleted ? "Settled or reconciled · +1 just now" : "Settled or reconciled"}
+          tone="success"
+        />
       </div>
 
       <Suspense fallback={null}>
