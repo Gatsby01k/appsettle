@@ -484,7 +484,10 @@ body {
 }
 
 .quote-row-active {
-  background-color: rgba(0, 199, 157, 0.03);
+  background-color: rgba(0, 199, 157, 0.035);
+  box-shadow:
+    inset 3px 0 0 rgba(0, 199, 157, 0.3),
+    0 0 0 1px rgba(0, 199, 157, 0.07);
   transition:
     background-color 0.22s var(--ease),
     box-shadow 0.22s var(--ease);
@@ -493,8 +496,8 @@ body {
 .quote-row-active:hover {
   background-color: rgba(0, 199, 157, 0.055);
   box-shadow:
-    inset 3px 0 0 rgba(0, 199, 157, 0.34),
-    0 2px 10px rgba(0, 199, 157, 0.06);
+    inset 3px 0 0 rgba(0, 199, 157, 0.42),
+    0 2px 12px rgba(0, 199, 157, 0.08);
 }
 
 .quote-row-highlight {
@@ -508,6 +511,31 @@ body {
 
 .quote-row-expired:hover {
   background-color: rgba(148, 163, 184, 0.07);
+}
+
+.quote-row-expired td {
+  color: rgba(100, 116, 139, 0.9);
+}
+
+.quote-row-expired .text-slate-900,
+.quote-row-expired .text-slate-950,
+.quote-row-expired .text-slate-800,
+.quote-row-expired .text-slate-700,
+.quote-row-expired .text-slate-600 {
+  color: rgba(100, 116, 139, 0.8) !important;
+}
+
+.quote-expired-refresh {
+  box-shadow: 0 4px 14px rgba(242, 173, 35, 0.24);
+  font-weight: 600;
+}
+
+.quote-expired-refresh:hover:not(:disabled) {
+  box-shadow: 0 7px 20px rgba(242, 173, 35, 0.34);
+}
+
+.quote-expired-refresh-form {
+  animation: quotePreviewEnter 0.32s var(--ease) both;
 }
 
 .quote-row-accepted {
@@ -536,6 +564,234 @@ body {
 .quote-generate-form:has([aria-busy="true"]) .text-slate-500 {
   opacity: 0.78;
   transition: opacity 0.25s var(--ease);
+}
+
+@keyframes quoteBtnShimmer {
+  0% {
+    background-position: 130% 0;
+  }
+  100% {
+    background-position: -130% 0;
+  }
+}
+
+@keyframes quoteBtnPendingBreath {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 6px 16px rgba(8, 127, 105, 0.22);
+  }
+  50% {
+    transform: scale(0.993);
+    box-shadow: 0 9px 22px rgba(8, 127, 105, 0.3);
+  }
+}
+
+@keyframes quoteStepPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 199, 157, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(0, 199, 157, 0);
+  }
+}
+
+@keyframes quoteStepDoneIn {
+  from {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes quoteConnectorFade {
+  from {
+    opacity: 0.35;
+    transform: translateX(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes quoteBadgeGlow {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 0 1px rgba(0, 199, 157, 0.24),
+      0 0 0 0 rgba(0, 199, 157, 0);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 1px rgba(0, 199, 157, 0.34),
+      0 0 10px rgba(0, 199, 157, 0.16);
+  }
+}
+
+@keyframes quoteBadgeDotPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 6px rgba(0, 199, 157, 0.45);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 11px rgba(0, 199, 157, 0.7);
+    transform: scale(1.18);
+  }
+}
+
+@keyframes quoteExpiryTick {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+@keyframes quotePreviewEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes quoteChainLinkPulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.quote-ticket {
+  box-shadow:
+    var(--ops-shadow-sm),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  transition:
+    box-shadow 0.28s var(--ease),
+    border-color 0.28s var(--ease);
+}
+
+.quote-ticket:hover {
+  box-shadow:
+    var(--ops-shadow-sm),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 0 0 1px rgba(0, 199, 157, 0.06);
+}
+
+.quote-ticket:focus-within {
+  box-shadow:
+    var(--ops-shadow-sm),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 0 0 1px rgba(0, 199, 157, 0.14);
+}
+
+.quote-ticket-form {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 252, 250, 0.55) 100%);
+}
+
+.quote-ticket-form input,
+.quote-ticket-form button[role="combobox"] {
+  border-color: rgba(7, 17, 31, 0.07);
+  transition:
+    border-color 0.22s var(--ease),
+    box-shadow 0.22s var(--ease),
+    background-color 0.22s var(--ease);
+}
+
+.quote-ticket-form input:hover:not(:focus-visible):not(:disabled),
+.quote-ticket-form button[role="combobox"]:hover:not(:focus):not(:disabled) {
+  border-color: rgba(7, 17, 31, 0.11);
+  background-color: rgba(255, 255, 255, 0.98);
+}
+
+.quote-ticket-form input:focus-visible,
+.quote-ticket-form button[role="combobox"]:focus {
+  border-color: rgba(0, 199, 157, 0.42) !important;
+  box-shadow:
+    0 0 0 4px rgba(0, 199, 157, 0.09),
+    0 1px 2px rgba(0, 199, 157, 0.05) !important;
+  outline: none;
+}
+
+.quote-ticket-cta {
+  box-shadow: 0 6px 16px rgba(8, 127, 105, 0.22);
+  transition:
+    transform 0.2s var(--ease),
+    box-shadow 0.2s var(--ease);
+}
+
+.quote-ticket-cta:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(8, 127, 105, 0.28);
+}
+
+.quote-ticket-cta.reconciliation-btn-pending {
+  background-image: linear-gradient(
+    105deg,
+    transparent 28%,
+    rgba(255, 255, 255, 0.13) 50%,
+    transparent 72%
+  );
+  background-size: 220% 100%;
+  animation:
+    quoteBtnPendingBreath 1.6s ease-in-out infinite,
+    quoteBtnShimmer 2.6s ease-in-out infinite;
+}
+
+.quote-ticket-cta .ops-submit-spinner {
+  animation: submitSpin 0.8s cubic-bezier(0.45, 0.15, 0.35, 0.85) infinite;
+}
+
+.quote-preview-locked {
+  color: var(--brand-emerald-ink);
+  background: rgba(0, 199, 157, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(0, 199, 157, 0.22);
+}
+
+.quote-metrics-compact {
+  box-shadow: var(--ops-shadow-xs);
+}
+
+.quote-execution-path {
+  max-width: 100%;
+}
+
+.quote-execution-step-active {
+  animation: quoteStepPulse 2.6s ease-in-out infinite;
+}
+
+.quote-execution-step-done {
+  animation: quoteStepDoneIn 0.42s var(--ease) both;
+}
+
+.quote-execution-connector-done {
+  animation: quoteConnectorFade 0.48s var(--ease) both;
+}
+
+.quote-preview-panel-locked {
+  animation: quotePreviewEnter 0.45s var(--ease) both;
+}
+
+.quote-preview-panel-locked .quote-preview-surface {
+  animation: quotePreviewEnter 0.5s var(--ease) 0.08s both;
+}
+
+.quote-preview-panel-locked .quote-preview-locked {
+  animation: quoteBadgeGlow 2.8s ease-in-out infinite;
 }
 
 .ops-panel-accent:has(.quote-generate-form [aria-busy="true"]) .quote-preview-panel .quote-preview-surface {
@@ -587,8 +843,48 @@ body {
   background: #0bb4c4;
 }
 
+.quote-badge-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  padding: 0.125rem 0.625rem;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--brand-emerald-ink);
+  background: rgba(0, 199, 157, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(0, 199, 157, 0.24);
+}
+
+.quote-badge-locked::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #00c79d;
+  box-shadow: 0 0 6px rgba(0, 199, 157, 0.45);
+}
+
+.quote-row-active .quote-badge-locked,
+.quote-badge-locked.quote-badge-live {
+  animation: quoteBadgeGlow 2.8s ease-in-out infinite;
+}
+
+.quote-row-active .quote-badge-locked::before,
+.quote-badge-locked.quote-badge-live::before {
+  animation: quoteBadgeDotPulse 2.4s ease-in-out infinite;
+}
+
+.quote-expiry-countdown {
+  animation: quoteExpiryTick 2.2s ease-in-out infinite;
+}
+
 .quote-cta-primary {
-  box-shadow: 0 6px 16px rgba(8, 127, 105, 0.22);
+  min-height: 2rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  box-shadow: 0 6px 18px rgba(8, 127, 105, 0.28);
   transition:
     transform 0.2s var(--ease),
     box-shadow 0.2s var(--ease);
@@ -596,7 +892,12 @@ body {
 
 .quote-cta-primary:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 10px 22px rgba(8, 127, 105, 0.28);
+  box-shadow: 0 10px 24px rgba(8, 127, 105, 0.34);
+}
+
+.quote-cta-secondary {
+  opacity: 0.82;
+  box-shadow: none;
 }
 
 .quote-refresh-cta {
@@ -631,8 +932,39 @@ body {
   box-shadow: 0 8px 18px rgba(11, 180, 196, 0.16);
 }
 
+.quote-accepted-chain {
+  animation: quotePreviewEnter 0.35s var(--ease) both;
+}
+
+.quote-chain-node {
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.1);
+  padding: 1px 4px;
+}
+
+.quote-chain-link {
+  animation: quoteChainLinkPulse 2.4s ease-in-out infinite;
+  color: rgba(11, 180, 196, 0.55);
+}
+
+.quote-chain-node-settlement {
+  color: #0a7d86;
+  font-weight: 600;
+  background: rgba(11, 180, 196, 0.1);
+}
+
+.quote-row-accepted .quote-badge-accepted {
+  box-shadow:
+    inset 0 0 0 1px rgba(11, 180, 196, 0.26),
+    0 0 0 0 rgba(11, 180, 196, 0);
+}
+
 .quote-details summary::-webkit-details-marker {
   display: none;
+}
+
+details[open] > .quote-details-panel {
+  animation: quotePreviewEnter 0.22s var(--ease) both;
 }
 
 .settlement-row-highlight {
@@ -1024,8 +1356,26 @@ details[open] > .reconciliation-details-content {
   .quote-row-expired,
   .quote-row-accepted,
   .quote-cta-primary,
+  .quote-cta-secondary,
+  .quote-badge-locked,
+  .quote-badge-locked::before,
+  .quote-badge-live,
+  .quote-ticket-cta.reconciliation-btn-pending,
+  .quote-ticket-cta .ops-submit-spinner,
+  .quote-execution-step-active,
+  .quote-execution-step-done,
+  .quote-execution-connector-done,
+  .quote-preview-panel-locked,
+  .quote-preview-panel-locked .quote-preview-surface,
+  .quote-preview-panel-locked .quote-preview-locked,
+  .quote-expiry-countdown,
+  .quote-expired-refresh,
+  .quote-expired-refresh-form,
+  .quote-accepted-chain,
+  .quote-chain-link,
   .quote-refresh-cta,
   .quote-settlement-link,
+  details[open] > .quote-details-panel,
   .ops-panel-accent:has(.quote-generate-form [aria-busy="true"]) .quote-preview-panel .quote-preview-surface,
   .settlement-console-enter,
   .settlement-console-glow,

@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Check } from "lucide-react";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { createQuote, createSettlement } from "@/lib/domain";
@@ -10,7 +9,6 @@ import { prisma } from "@/lib/prisma";
 import { displayQuoteStatus } from "@/lib/quotes";
 import { cn, formatCurrencyFull, formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
-import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
 import { EmptyState } from "@/components/ops/empty-state";
 import { FlashMessage } from "@/components/ops/flash-message";
@@ -111,7 +109,7 @@ function quotePublicId(id: string) {
 function quoteStatusSubtext(status: string) {
   if (status === "ACTIVE") return "Available for settlement";
   if (status === "ACCEPTED") return "Consumed by settlement";
-  return "Needs refresh";
+  return "Refresh to regain execution";
 }
 
 function formatQuoteRate(rate: string | number, corridor: string) {
@@ -121,74 +119,6 @@ function formatQuoteRate(rate: string | number, corridor: string) {
   return corridor === "USDT_INR" ? `${trimmed} INR/USDT` : `${trimmed} USDT/INR`;
 }
 
-function quoteLifecycleIndex(status: string, hasSettlement: boolean) {
-  if (status === "EXPIRED") return 2;
-  if (status === "ACCEPTED") return hasSettlement ? 3 : 2;
-  if (status === "ACTIVE") return 1;
-  return 0;
-}
-
-function QuoteMetadataChip({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600">
-      <span className="text-slate-400">{label}</span>
-      <span className="font-medium tabular-nums text-slate-700">{value}</span>
-    </span>
-  );
-}
-
-function QuoteLifecycle({ status, hasSettlement }: { status: string; hasSettlement: boolean }) {
-  const isExpired = status === "EXPIRED";
-  const steps = isExpired
-    ? (["Generated", "Active", "Expired"] as const)
-    : (["Generated", "Active", "Accepted", "Settlement"] as const);
-  const current = quoteLifecycleIndex(status, hasSettlement);
-  const terminalComplete = status === "ACCEPTED" && hasSettlement;
-
-  return (
-    <div className="w-full min-w-[168px]">
-      <div className="flex items-center">
-        {steps.map((step, index) => {
-          const done = index < current || (terminalComplete && index === current);
-          const active = index === current && !terminalComplete;
-          const future = index > current;
-          const connectorDone = index < current || (terminalComplete && index === current);
-          const connectorActive = index === current && !terminalComplete;
-
-          return (
-            <div key={step} className="flex flex-1 items-center last:flex-none">
-              <div className="flex flex-col items-center">
-                <div
-                  className={cn(
-                    "grid h-6 w-6 place-items-center rounded-full border text-[10px] font-semibold transition-colors",
-                    done && "border-[#42d5b7] bg-[#42d5b7] text-[#07132b] settlement-step-complete",
-                    active &&
-                      "border-[#07132b] bg-[#07132b] text-white ring-2 ring-[#42d5b7]/25 settlement-step-active",
-                    future && "border-slate-200 bg-white text-slate-400",
-                  )}
-                  title={step}
-                >
-                  {done ? <Check className="h-3 w-3 settlement-step-check" /> : index + 1}
-                </div>
-              </div>
-              {index < steps.length - 1 ? (
-                <div
-                  className={cn(
-                    "mx-0.5 h-0.5 flex-1 rounded-full transition-colors",
-                    connectorDone && "bg-[#42d5b7]",
-                    connectorActive && "settlement-connector-active",
-                    !connectorDone && !connectorActive && "bg-slate-200",
-                  )}
-                />
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function settlementWindowLabel(window: string) {
   if (window === "instant") return "Instant";
   if (window === "same_day") return "Same day";
@@ -196,36 +126,199 @@ function settlementWindowLabel(window: string) {
   return window;
 }
 
-function QuotePreviewPlaceholder() {
-  const rows = [
-    { label: "Corridor", value: "—" },
-    { label: "Source amount", value: "—" },
-    { label: "Destination (indicative)", value: "—" },
-    { label: "Settlement window", value: "—" },
-    { label: "Fee", value: "—" },
-    { label: "Valid until", value: "—" },
+function formatExpiryCountdown(expiresAt: Date) {
+  const ms = expiresAt.getTime() - Date.now();
+  if (ms <= 0) return null;
+  const totalSec = Math.floor(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  if (min >= 60) {
+    const hr = Math.floor(min / 60);
+    const remMin = min % 60;
+    return `${hr}h ${remMin}m left`;
+  }
+  return min > 0 ? `${min}m ${sec}s left` : `${sec}s left`;
+}
+
+const EXECUTION_PATH = [
+  "Quote",
+  "Lock terms",
+  "Create settlement",
+  "Execute payout",
+  "Reconcile",
+] as const;
+
+function ExecutionPathStrip({ activeStep }: { activeStep: number }) {
+  return (
+    <ol className="quote-execution-path flex flex-wrap items-center gap-1">
+      {EXECUTION_PATH.map((step, index) => {
+        const isActive = index === activeStep;
+        const isDone = index < activeStep;
+
+        return (
+          <li key={step} className="flex items-center gap-1">
+            <span
+              className={cn(
+                "quote-execution-step rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] transition-all duration-300",
+                isActive && "quote-execution-step-active bg-brand-emerald/[0.14] text-brand-emerald-ink ring-1 ring-brand-emerald/20",
+                isDone && "quote-execution-step-done bg-brand-emerald/[0.08] text-brand-emerald-ink/80",
+                !isActive && !isDone && "border border-[var(--ops-line)] bg-white text-slate-400",
+              )}
+            >
+              {step}
+            </span>
+            {index < EXECUTION_PATH.length - 1 ? (
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "quote-execution-connector text-[10px] transition-colors duration-300",
+                  index < activeStep ? "quote-execution-connector-done text-brand-emerald/55" : "text-slate-300",
+                )}
+              >
+                →
+              </span>
+            ) : null}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+type PreviewQuote = {
+  corridor: string;
+  sourceAmount: unknown;
+  sourceCurrency: string;
+  targetAmount: unknown;
+  targetCurrency: string;
+  rate: unknown;
+  feeAmount: unknown;
+  expiresAt: Date;
+  settlementWindow: string;
+};
+
+function QuotePreviewPanel({ quote }: { quote?: PreviewQuote | null }) {
+  const isLocked = Boolean(quote);
+  const rows = quote
+    ? [
+        { label: "Corridor", value: corridorLabel(quote.corridor) },
+        {
+          label: "Source amount",
+          value: formatCurrencyFull(String(quote.sourceAmount), quote.sourceCurrency),
+        },
+        {
+          label: "Destination amount",
+          value: formatCurrencyFull(String(quote.targetAmount), quote.targetCurrency),
+        },
+        { label: "Rate", value: formatQuoteRate(String(quote.rate), quote.corridor) },
+        { label: "Fee", value: formatCurrencyFull(String(quote.feeAmount), quote.sourceCurrency) },
+        { label: "Valid until", value: formatDateTime(quote.expiresAt) },
+        { label: "Settlement window", value: settlementWindowLabel(quote.settlementWindow) },
+      ]
+    : [
+        { label: "Corridor", value: "USDT → INR", estimated: true },
+        { label: "Source amount", value: "—", estimated: true },
+        { label: "Indicative payout", value: "—", estimated: true },
+        { label: "Rate", value: "—", estimated: true },
+        { label: "Fee", value: "—", estimated: true },
+        { label: "Validity", value: "15 min", estimated: true },
+      ];
+
+  return (
+    <div
+      className={cn(
+        "quote-preview-panel flex flex-col border-t border-[var(--ops-line-soft)] bg-gradient-to-b from-[#f4fbf8]/80 to-slate-50/40 p-3 lg:border-l lg:border-t-0",
+        isLocked && "quote-preview-panel-locked",
+      )}
+    >
+      <div className="mb-2.5 flex items-start justify-between gap-2">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+            {isLocked ? "Locked quote terms" : "Estimated preview"}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {isLocked ? "Executable terms ready for settlement" : "Final terms lock after generation"}
+          </p>
+        </div>
+        {isLocked ? (
+          <span className="quote-preview-locked shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">
+            Locked
+          </span>
+        ) : (
+          <span className="shrink-0 rounded-full border border-[var(--ops-line)] bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
+            Indicative
+          </span>
+        )}
+      </div>
+
+      <div
+        className={cn(
+          "quote-preview-surface ops-grid-faint rounded-xl border bg-white/90 p-3 transition-colors",
+          isLocked
+            ? "border-brand-emerald/25 shadow-[inset_0_0_0_1px_rgba(0,199,157,0.08)]"
+            : "border-[var(--ops-line-soft)]",
+        )}
+      >
+        <dl className="space-y-2">
+          {rows.map((row) => (
+            <div key={row.label} className="flex items-center justify-between gap-3 text-xs">
+              <dt className="text-slate-500">{row.label}</dt>
+              <dd
+                className={cn(
+                  "font-medium tabular-nums text-right",
+                  "estimated" in row && row.estimated ? "text-slate-400" : "text-slate-800",
+                )}
+              >
+                {row.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      <div className="mt-2.5 rounded-lg border border-[var(--ops-line-soft)] bg-white/60 px-2.5 py-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">Settlement path</p>
+        <p className="mt-0.5 text-[11px] font-medium text-slate-600">
+          Quote → Settlement → Execute → Reconcile
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function CompactQuoteMetrics({
+  active,
+  accepted,
+  expired,
+}: {
+  active: number;
+  accepted: number;
+  expired: number;
+}) {
+  const items = [
+    { label: "Active", value: active, tone: "success" as const },
+    { label: "Accepted", value: accepted, tone: "info" as const },
+    { label: "Expired", value: expired, tone: "warning" as const },
   ];
 
   return (
-    <div className="quote-preview-panel flex h-full flex-col border-t border-[var(--ops-line-soft)] bg-slate-50/35 p-3 lg:border-l lg:border-t-0">
-      <div className="mb-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Quote preview</p>
-        <p className="mt-0.5 text-xs text-slate-400">Executable terms before you commit</p>
-      </div>
-      <div className="quote-preview-surface ops-grid-faint flex flex-1 flex-col justify-center rounded-xl border border-dashed border-[var(--ops-line)] bg-white/70 px-4 py-5 text-center transition-colors">
-        <p className="text-sm font-medium text-slate-700">Preview appears after quote generation</p>
-        <p className="mt-1 text-xs leading-relaxed text-slate-500">
-          Corridor, destination amount, fee, and expiry lock once the quote is created.
-        </p>
-      </div>
-      <dl className="mt-3 space-y-1.5">
-        {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-3 text-xs">
-            <dt className="text-slate-500">{row.label}</dt>
-            <dd className="font-medium tabular-nums text-slate-300">{row.value}</dd>
-          </div>
-        ))}
-      </dl>
+    <div className="quote-metrics-compact flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-[var(--ops-line-soft)] bg-white/70 px-3 py-2">
+      {items.map((item, index) => (
+        <div key={item.label} className="flex items-center gap-2">
+          {index > 0 ? <span aria-hidden="true" className="hidden h-3 w-px bg-[var(--ops-line)] sm:block" /> : null}
+          <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-slate-400">{item.label}</span>
+          <span
+            className={cn(
+              "text-sm font-semibold tabular-nums leading-none",
+              item.tone === "success" && "text-brand-emerald-ink",
+              item.tone === "info" && "text-[#0a7d86]",
+              item.tone === "warning" && "text-[#9b6810]",
+            )}
+          >
+            {item.value}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -269,12 +362,15 @@ export default async function QuotesPage({
   const highlightNewQuote = params.success === "created" || params.success === "refreshed";
   const newestQuoteId =
     highlightNewQuote && tab === "active" && filtered.length > 0 ? filtered[0].id : null;
+  const previewQuote =
+    newestQuoteId != null ? (filtered.find((q) => q.id === newestQuoteId) ?? quotes.find((q) => q.id === newestQuoteId)) : null;
+  const previewStep = previewQuote ? 1 : 0;
 
   const emptyTitle =
-    tab === "active" ? "No active executable quotes" : query ? "No quotes match your search" : `No ${tab} quotes`;
+    tab === "active" ? "No executable quotes" : query ? "No quotes match your search" : `No ${tab} quotes`;
   const emptyDescription =
     tab === "active"
-      ? "Generate a quote to lock a corridor, amount and settlement window. Active quotes can be used to create settlements."
+      ? "Generate a quote to lock corridor, amount and settlement window before settlement creation."
       : query
         ? "Try a different corridor or quote ID."
         : tab === "accepted"
@@ -285,8 +381,8 @@ export default async function QuotesPage({
     <div className="space-y-4">
       <PageHeader
         title="Quotes"
-        description="Step 1 before settlement — generate executable quotes that lock corridor, amount, and settlement window. Promote active quotes to settlements when ready."
-        className="gap-3"
+        description="Lock executable terms before settlement creation."
+        className="gap-2"
       />
 
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
@@ -297,43 +393,32 @@ export default async function QuotesPage({
         <FlashMessage message="Replacement quote generated — it is ACTIVE and ready for settlement." />
       ) : null}
 
-      <div className="grid gap-2 sm:grid-cols-3">
-        <MetricCard label="Active" value={activeCount} hint="Executable · ready for settlement" tone="success" />
-        <MetricCard label="Accepted" value={acceptedCount} hint="Consumed by settlements" tone="info" />
-        <MetricCard label="Expired" value={expiredCount} hint="Refresh to regain execution" tone="warning" />
-      </div>
+      <CompactQuoteMetrics active={activeCount} accepted={acceptedCount} expired={expiredCount} />
 
-      <div className="ops-panel ops-panel-accent overflow-hidden">
-        <div className="flex flex-col gap-2 border-b border-[var(--ops-line-soft)] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+      <div id="quote-ticket" className="quote-ticket ops-panel ops-panel-accent scroll-mt-4 overflow-hidden">
+        <div className="flex flex-col gap-2 border-b border-[var(--ops-line-soft)] px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Quote command center</p>
-            <p className="truncate text-xs text-slate-400">
-              Lock terms here · promote to{" "}
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Quote ticket</p>
+            <p className="truncate text-xs text-slate-500">
+              Configure execution input · promote to{" "}
               <Link href="/settlements" className="font-medium text-brand-emerald-ink hover:underline">
                 Settlements
               </Link>{" "}
-              when ready
+              when terms are locked
             </p>
           </div>
-          <ol className="flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
-            <li className="rounded-md bg-brand-emerald/[0.1] px-2 py-0.5 text-brand-emerald-ink">Quote</li>
-            <li aria-hidden="true" className="text-slate-300">
-              →
-            </li>
-            <li className="rounded-md border border-[var(--ops-line)] bg-white px-2 py-0.5">Settlement</li>
-            <li aria-hidden="true" className="text-slate-300">
-              →
-            </li>
-            <li className="rounded-md border border-[var(--ops-line)] bg-white px-2 py-0.5">Reconcile</li>
-          </ol>
+          <ExecutionPathStrip activeStep={previewStep} />
         </div>
 
-        <div className="grid lg:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="p-3">
-            <p className="mb-2.5 text-xs text-slate-500">
-              Configure corridor and amount. The generated quote becomes your settlement input.
-            </p>
-            <form action={submitQuote} className="quote-generate-form grid gap-3 sm:grid-cols-2">
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="quote-ticket-form p-3">
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-brand-emerald/15 bg-brand-emerald/[0.06] px-2.5 py-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">Corridor</span>
+              <span className="text-sm font-semibold text-brand-emerald-ink">USDT → INR</span>
+              <span className="ml-auto text-[10px] text-slate-400">Primary execution lane</span>
+            </div>
+
+            <form action={submitQuote} className="quote-generate-form grid gap-2.5 sm:grid-cols-2">
               <Field label="Corridor" hint="Conversion direction.">
                 <FormSelect
                   name="corridor"
@@ -363,8 +448,8 @@ export default async function QuotesPage({
                   type="submit"
                   variant="primary"
                   size="sm"
-                  pendingText="Generating quote..."
-                  className="w-full sm:w-auto"
+                  pendingText="Locking quote..."
+                  className="quote-ticket-cta w-full sm:w-auto"
                 >
                   Generate executable quote
                 </SubmitButton>
@@ -372,7 +457,7 @@ export default async function QuotesPage({
             </form>
           </div>
 
-          <QuotePreviewPlaceholder />
+          <QuotePreviewPanel quote={previewQuote} />
         </div>
       </div>
 
@@ -380,7 +465,7 @@ export default async function QuotesPage({
         <div className="flex flex-col gap-2 border-b border-[var(--ops-line-soft)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Quote inventory</p>
-            <p className="truncate text-xs text-slate-400">Active quotes feed settlement creation</p>
+            <p className="truncate text-xs text-slate-400">Executable tickets ready for settlement creation</p>
           </div>
           <TabLinks
             basePath="/quotes"
@@ -400,12 +485,11 @@ export default async function QuotesPage({
 
         {filtered.length ? (
           <DataGrid className="rounded-none border-0 shadow-none">
-            <table className="w-full min-w-[880px]">
+            <table className="w-full min-w-[760px]">
               <DataGridHead>
-                <DataGridTh>Quote</DataGridTh>
+                <DataGridTh>Quote ticket</DataGridTh>
                 <DataGridTh>Execution terms</DataGridTh>
                 <DataGridTh>Status</DataGridTh>
-                <DataGridTh>Lifecycle</DataGridTh>
                 <DataGridTh className="text-right">Actions</DataGridTh>
               </DataGridHead>
               <DataGridBody>
@@ -417,6 +501,7 @@ export default async function QuotesPage({
                   const linkedSettlement = quote.settlements[0];
                   const publicId = quotePublicId(quote.id);
                   const isNewlyGenerated = quote.id === newestQuoteId;
+                  const expiryCountdown = isActive ? formatExpiryCountdown(quote.expiresAt) : null;
 
                   return (
                     <DataGridRow
@@ -429,109 +514,191 @@ export default async function QuotesPage({
                       )}
                     >
                       <DataGridTd>
-                        <p className="font-medium text-slate-950">{publicId}</p>
-                        <p className="text-xs text-slate-600">{corridorLabel(quote.corridor)}</p>
-                        <p className="text-[11px] text-slate-400">{settlementWindowLabel(quote.settlementWindow)}</p>
-                        <p
-                          className={cn(
-                            "mt-1 text-[11px]",
-                            isActive && "text-brand-emerald-ink",
-                            isAccepted && "text-slate-500",
-                            isExpired && "text-amber-700/80",
-                          )}
-                        >
-                          {quoteStatusSubtext(displayStatus)}
-                        </p>
+                        {isActive ? (
+                          <>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <p className="text-sm font-semibold text-slate-950">Executable quote locked</p>
+                              <span className="quote-badge-locked quote-badge-live">LOCKED</span>
+                            </div>
+                            <p className="mt-0.5 text-[11px] font-medium text-brand-emerald-ink">
+                              {quoteStatusSubtext(displayStatus)}
+                            </p>
+                            <p className="mt-1 text-[11px] text-slate-400">
+                              {publicId} · {corridorLabel(quote.corridor)}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-semibold text-slate-950">{publicId}</p>
+                            <p className="mt-0.5 text-xs font-medium text-slate-700">{corridorLabel(quote.corridor)}</p>
+                            <p className="text-[11px] text-slate-400">{settlementWindowLabel(quote.settlementWindow)}</p>
+                            <p
+                              className={cn(
+                                "mt-1.5 text-[11px] font-medium",
+                                isAccepted && "text-slate-500",
+                                isExpired && "text-amber-700/80",
+                              )}
+                            >
+                              {quoteStatusSubtext(displayStatus)}
+                            </p>
+                            {isAccepted && linkedSettlement ? (
+                              <p className="mt-1 flex items-center gap-1 text-[10px] text-slate-400">
+                                <span className="quote-chain-node">Consumed</span>
+                                <span className="quote-chain-link" aria-hidden="true">
+                                  →
+                                </span>
+                                <span className="quote-chain-node-settlement font-medium">{linkedSettlement.publicId}</span>
+                              </p>
+                            ) : null}
+                          </>
+                        )}
                       </DataGridTd>
                       <DataGridTd>
-                        <div className="flex flex-wrap gap-1">
-                          <QuoteMetadataChip
-                            label="Source"
-                            value={formatCurrencyFull(String(quote.sourceAmount), quote.sourceCurrency)}
-                          />
-                          <QuoteMetadataChip
-                            label="Dest"
-                            value={formatCurrencyFull(String(quote.targetAmount), quote.targetCurrency)}
-                          />
-                          <QuoteMetadataChip label="Rate" value={formatQuoteRate(String(quote.rate), quote.corridor)} />
-                          <QuoteMetadataChip
-                            label="Fee"
-                            value={formatCurrencyFull(String(quote.feeAmount), quote.sourceCurrency)}
-                          />
-                        </div>
-                        <p className="mt-1.5 text-[11px] text-slate-500">
-                          Valid until{" "}
-                          <span className="font-medium tabular-nums text-slate-600">
-                            {formatDateTime(quote.expiresAt)}
-                          </span>
-                        </p>
+                        <dl className="space-y-1 text-[11px]">
+                          <div className="flex items-baseline justify-between gap-3">
+                            <dt className="text-slate-400">Source</dt>
+                            <dd className="text-sm font-semibold tabular-nums text-slate-900">
+                              {formatCurrencyFull(String(quote.sourceAmount), quote.sourceCurrency)}
+                            </dd>
+                          </div>
+                          <div className="flex items-baseline justify-between gap-3">
+                            <dt className="text-slate-400">Destination</dt>
+                            <dd className="text-sm font-semibold tabular-nums text-slate-900">
+                              {formatCurrencyFull(String(quote.targetAmount), quote.targetCurrency)}
+                            </dd>
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 pt-0.5 text-slate-500">
+                            <span>
+                              Rate{" "}
+                              <span className="font-medium tabular-nums text-slate-700">
+                                {formatQuoteRate(String(quote.rate), quote.corridor)}
+                              </span>
+                            </span>
+                            <span>
+                              Fee{" "}
+                              <span className="font-medium tabular-nums text-slate-700">
+                                {formatCurrencyFull(String(quote.feeAmount), quote.sourceCurrency)}
+                              </span>
+                            </span>
+                          </div>
+                          <div className="flex items-baseline justify-between gap-3 text-slate-500">
+                            <dt>Valid until</dt>
+                            <dd className="text-right">
+                              <span className="font-medium tabular-nums text-slate-600">
+                                {formatDateTime(quote.expiresAt)}
+                              </span>
+                              {expiryCountdown ? (
+                                <span className="quote-expiry-countdown ml-1.5 font-semibold tabular-nums text-brand-emerald-ink">
+                                  · {expiryCountdown}
+                                </span>
+                              ) : null}
+                            </dd>
+                          </div>
+                          <div className="flex items-baseline justify-between gap-3 text-slate-500">
+                            <dt>Settlement window</dt>
+                            <dd className="font-medium text-slate-700">{settlementWindowLabel(quote.settlementWindow)}</dd>
+                          </div>
+                        </dl>
                       </DataGridTd>
                       <DataGridTd>
                         {isExpired ? (
                           <span className="quote-badge-expired">EXPIRED</span>
                         ) : isAccepted ? (
                           <span className="quote-badge-accepted">ACCEPTED</span>
+                        ) : isActive ? (
+                          <span className="quote-badge-locked quote-badge-live">LOCKED</span>
                         ) : (
                           <StatusBadge status={displayStatus} />
                         )}
                       </DataGridTd>
-                      <DataGridTd className="min-w-[168px]">
-                        <QuoteLifecycle status={displayStatus} hasSettlement={Boolean(linkedSettlement)} />
-                      </DataGridTd>
                       <DataGridTd>
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
                           {isActive ? (
-                            <>
-                              <form action={acceptQuote}>
+                            <div className="quote-active-actions flex w-full min-w-[168px] flex-col items-end gap-1">
+                              <form action={acceptQuote} className="w-full">
                                 <input type="hidden" name="quoteId" value={quote.id} />
                                 <input type="hidden" name="corridor" value={quote.corridor} />
                                 <SubmitButton
                                   variant="primary"
                                   size="sm"
                                   pendingText="Creating..."
-                                  className="quote-cta-primary"
+                                  className="quote-cta-primary w-full"
                                 >
                                   Create settlement
                                 </SubmitButton>
                               </form>
-                              <form action={refreshQuote}>
-                                <input type="hidden" name="corridor" value={quote.corridor} />
-                                <input type="hidden" name="sourceAmount" value={String(quote.sourceAmount)} />
-                                <input type="hidden" name="settlementWindow" value={quote.settlementWindow} />
-                                <SubmitButton
-                                  variant="outline"
-                                  size="sm"
-                                  pendingText="Refreshing..."
-                                  className="quote-refresh-cta"
-                                >
-                                  Refresh quote
-                                </SubmitButton>
-                              </form>
-                            </>
-                          ) : null}
-                          {isAccepted && linkedSettlement ? (
-                            <Link
-                              href={`/settlements?q=${encodeURIComponent(linkedSettlement.publicId)}`}
-                              className="quote-settlement-link inline-flex h-8 items-center rounded-lg border px-3 text-xs font-semibold text-[#0a7d86]"
-                            >
-                              Open {linkedSettlement.publicId}
-                            </Link>
+                              <p className="quote-cta-hint max-w-[196px] text-right text-[10px] leading-snug text-slate-400">
+                                Promotes this quote into the settlement lifecycle.
+                              </p>
+                              <div className="quote-cta-secondary-row mt-0.5 flex flex-wrap items-center justify-end gap-1">
+                                <form action={refreshQuote}>
+                                  <input type="hidden" name="corridor" value={quote.corridor} />
+                                  <input type="hidden" name="sourceAmount" value={String(quote.sourceAmount)} />
+                                  <input type="hidden" name="settlementWindow" value={quote.settlementWindow} />
+                                  <SubmitButton
+                                    variant="outline"
+                                    size="sm"
+                                    pendingText="Refreshing..."
+                                    className="quote-refresh-cta quote-cta-secondary h-7 px-2 text-[11px]"
+                                  >
+                                    Refresh rate
+                                  </SubmitButton>
+                                </form>
+                                <details className="quote-details">
+                                  <summary className="inline-flex h-7 cursor-pointer list-none items-center rounded-lg border border-slate-200/80 bg-white/80 px-2 text-[11px] font-medium text-slate-500 shadow-none transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700">
+                                    Details
+                                  </summary>
+                                  <div className="quote-details-panel mt-1.5 w-52 rounded-lg border border-[var(--ops-line)] bg-slate-50/80 p-2.5 text-left shadow-ops-xs">
+                                    <dl className="space-y-1.5 text-[11px]">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-slate-400">Quote ID</dt>
+                                        <dd className="font-medium text-slate-700">{publicId}</dd>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-slate-400">Generated</dt>
+                                        <dd className="font-medium tabular-nums text-slate-700">
+                                          {formatDateTime(quote.createdAt)}
+                                        </dd>
+                                      </div>
+                                    </dl>
+                                  </div>
+                                </details>
+                              </div>
+                            </div>
                           ) : null}
                           {isExpired ? (
-                            <form action={refreshQuote}>
+                            <form action={refreshQuote} className="quote-expired-refresh-form">
                               <input type="hidden" name="corridor" value={quote.corridor} />
                               <input type="hidden" name="sourceAmount" value={String(quote.sourceAmount)} />
                               <input type="hidden" name="settlementWindow" value={quote.settlementWindow} />
                               <SubmitButton
-                                variant="outline"
+                                variant="primary"
                                 size="sm"
                                 pendingText="Refreshing..."
-                                className="quote-refresh-cta"
+                                className="quote-refresh-cta quote-expired-refresh"
                               >
-                                Refresh quote
+                                Refresh rate
                               </SubmitButton>
                             </form>
                           ) : null}
+                          {isAccepted && linkedSettlement ? (
+                            <div className="quote-accepted-chain flex flex-col items-end gap-1.5">
+                              <div className="flex items-center gap-1 text-[10px] font-medium text-slate-400" aria-hidden="true">
+                                <span className="quote-chain-node rounded px-1 py-px">Quote</span>
+                                <span className="quote-chain-link">→</span>
+                                <span className="quote-chain-node quote-chain-node-settlement rounded px-1 py-px">
+                                  {linkedSettlement.publicId}
+                                </span>
+                              </div>
+                              <Link
+                                href={`/settlements?q=${encodeURIComponent(linkedSettlement.publicId)}`}
+                                className="quote-settlement-link inline-flex h-8 items-center rounded-lg border px-3 text-xs font-semibold text-[#0a7d86]"
+                              >
+                                Open settlement
+                              </Link>
+                            </div>
+                          ) : null}
+                          {!isActive ? (
                           <details className="quote-details">
                             <summary className="inline-flex h-8 cursor-pointer list-none items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 shadow-ops-xs transition-colors hover:border-slate-300 hover:bg-slate-50">
                               Details
@@ -585,6 +752,7 @@ export default async function QuotesPage({
                               </dl>
                             </div>
                           </details>
+                          ) : null}
                         </div>
                       </DataGridTd>
                     </DataGridRow>
@@ -599,7 +767,7 @@ export default async function QuotesPage({
             description={emptyDescription}
             action={
               tab === "active"
-                ? undefined
+                ? { label: "Generate quote", href: "#quote-ticket" }
                 : { label: tab === "expired" ? "View active" : "View active quotes", href: "/quotes?tab=active" }
             }
           />
