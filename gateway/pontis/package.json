@@ -1,0 +1,25 @@
+{
+  "name": "pontis-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone PontisGlobe gateway for the whitelisted VPS. INRSettle (Vercel) calls this instead of Pontis directly so the Pontis credentials never live on Vercel.",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "start:tsx": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
