@@ -31,7 +31,8 @@ import {
   SettlementActionsProvider,
   SettlementAutoRefresh,
   SettlementOperationPanel,
-  SettlementRowActivityNote,
+  SettlementRowStatusHint,
+  type OperationPanelSettlement,
 } from "@/components/dashboard/settlement-auto-refresh";
 import { RemitQuicklyTestButton } from "@/components/providers/remitquickly-test-button";
 import { isRemitQuicklyConfigured } from "@/lib/providers/remitquickly/client";
@@ -85,6 +86,52 @@ function isInFlight(status: SettlementStatus) {
 
 function isCompleted(status: SettlementStatus) {
   return new Set<SettlementStatus>([SettlementStatus.SETTLED, SettlementStatus.RECONCILED]).has(status);
+}
+
+function pickFocusSettlement(
+  settlements: Array<{
+    publicId: string;
+    status: SettlementStatus;
+    corridor: string;
+    sourceAmount: unknown;
+    sourceCurrency: string;
+    provider: string | null;
+    providerStatus: string | null;
+    providerTransactionId: string | null;
+    events: unknown[];
+    reconciliation: unknown[];
+  }>,
+  success?: string,
+) {
+  const executing = settlements.find((s) => s.status === SettlementStatus.EXECUTING);
+  if (executing) return executing;
+
+  const approved = settlements.find((s) => s.status === SettlementStatus.APPROVED);
+  if (approved) return approved;
+
+  if (success === "settled") {
+    return settlements.find(
+      (s) => s.status === SettlementStatus.SETTLED || s.status === SettlementStatus.RECONCILED,
+    );
+  }
+
+  return undefined;
+}
+
+function toOperationPanelSettlement(
+  settlement: NonNullable<ReturnType<typeof pickFocusSettlement>>,
+): OperationPanelSettlement {
+  return {
+    publicId: settlement.publicId,
+    status: settlement.status,
+    corridor: settlement.corridor.replace("_", " → "),
+    amount: formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency),
+    provider: settlement.provider ?? undefined,
+    providerStatus: settlement.providerStatus ?? undefined,
+    providerTransactionId: settlement.providerTransactionId ?? undefined,
+    hasReconciliation: settlement.reconciliation.length > 0,
+    hasAuditEvents: settlement.events.length > 0,
+  };
 }
 
 async function submitSettlement(formData: FormData) {
@@ -212,6 +259,8 @@ export default async function SettlementsPage({
   );
   const showSandboxTest = isSandboxTestEnabled();
   const pontisConfigured = isPontisEnabled();
+  const focusSettlementRaw = pickFocusSettlement(settlements, params.success);
+  const focusSettlement = focusSettlementRaw ? toOperationPanelSettlement(focusSettlementRaw) : null;
 
   return (
     <SettlementActionsProvider>
@@ -223,7 +272,11 @@ export default async function SettlementsPage({
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {message ? <FlashMessage message={message} /> : null}
 
-      <SettlementOperationPanel autoRefresh={autoRefreshSettlements} />
+      <SettlementOperationPanel
+        autoRefresh={autoRefreshSettlements}
+        focusSettlement={focusSettlement}
+        successHint={params.success}
+      />
 
       {showSandboxTest ? (
         <Card>
@@ -322,7 +375,7 @@ export default async function SettlementsPage({
                   <DataGridTd>
                     <p className="font-medium text-slate-950">{settlement.publicId}</p>
                     <p className="text-xs text-slate-500">{settlement.reference}</p>
-                    <SettlementRowActivityNote settlementId={settlement.id} />
+                    <SettlementRowStatusHint status={settlement.status} settlementId={settlement.id} />
                   </DataGridTd>
                   <DataGridTd
                     className="whitespace-nowrap tabular-nums"
@@ -375,7 +428,7 @@ export default async function SettlementsPage({
                               settlementId={settlement.id}
                               action="execute"
                             >
-                              Execute
+                              {pontisConfigured ? "Execute via PontisGlobe" : "Execute"}
                             </SubmitButton>
                           ) : null}
                           {settlement.status === SettlementStatus.EXECUTING && !(pontisConfigured && settlement.provider) ? (

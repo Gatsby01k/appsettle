@@ -28,21 +28,26 @@ export const ACTION_STEPS: Record<SettlementAction, string[]> = {
   create: ["Validating quote", "Creating settlement"],
 };
 
-const ACTION_LABELS: Record<SettlementAction, string> = {
-  approve: "Approval",
-  execute: "Payout execution",
-  check: "Status check",
-  settle: "Settlement",
-  reconcile: "Reconciliation",
-  create: "Creation",
+const EXECUTING_STEPS = [
+  "Payout request created",
+  "Waiting for provider status",
+  "Settlement update",
+  "Auto-reconciliation",
+];
+
+export type OperationPanelSettlement = {
+  publicId: string;
+  status: string;
+  corridor: string;
+  amount: string;
+  provider?: string;
+  providerStatus?: string;
+  providerTransactionId?: string;
+  hasReconciliation: boolean;
+  hasAuditEvents: boolean;
 };
 
-const BACKGROUND_STEPS = [
-  "Creating or tracking payout request",
-  "Waiting for PontisGlobe response",
-  "Moving lifecycle to settled state",
-  "Auto-match and audit trail recording",
-];
+type OperationPanelVisualState = "approved" | "executing" | "completed";
 
 type PendingAction = { settlementId: string; action: SettlementAction; stepIndex: number };
 
@@ -75,48 +80,81 @@ function isNextRedirect(error: unknown) {
   );
 }
 
-function StepList({
-  steps,
-  activeIndex,
-  tone = "cyan",
-}: {
-  steps: string[];
-  activeIndex: number;
-  tone?: "cyan" | "slate";
-}) {
-  const activeText = tone === "cyan" ? "text-cyan-100" : "text-slate-700";
-  const doneText = tone === "cyan" ? "text-cyan-200/60" : "text-slate-400";
-  const pendingText = tone === "cyan" ? "text-cyan-200/40" : "text-slate-300";
-  const activeBg = tone === "cyan" ? "bg-cyan-300" : "bg-cyan-500";
-  const doneBg = tone === "cyan" ? "bg-cyan-400/50" : "bg-emerald-400";
-  const pendingBg = tone === "cyan" ? "bg-cyan-900/40" : "bg-slate-200";
-
+function MetadataChip({ label, value }: { label: string; value: string }) {
   return (
-    <ol className="space-y-2">
+    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs text-slate-600">
+      <span className="text-slate-400">{label}</span>
+      <span className="font-medium text-slate-700">{value}</span>
+    </span>
+  );
+}
+
+function CompactStepper({ steps, activeIndex }: { steps: string[]; activeIndex: number }) {
+  return (
+    <ol className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-1">
       {steps.map((step, index) => {
         const isDone = index < activeIndex;
         const isActive = index === activeIndex;
+        const stateLabel = isDone ? "completed" : isActive ? "active" : "upcoming";
+
         return (
-          <li
-            key={step}
-            className={`flex items-start gap-2 text-sm ${
-              isActive ? activeText : isDone ? doneText : pendingText
-            }`}
-          >
-            <span
-              className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
-                isActive ? `${activeBg} animate-pulse` : isDone ? doneBg : pendingBg
+          <li key={step} className="flex items-center gap-1 sm:contents">
+            <div
+              className={`flex min-w-0 items-center gap-1.5 rounded-lg border px-2 py-1 text-xs sm:rounded-full sm:px-2.5 sm:py-0.5 ${
+                isActive
+                  ? "border-cyan-200 bg-cyan-50 text-cyan-800"
+                  : isDone
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-slate-200 bg-slate-50 text-slate-400"
               }`}
-            />
-            <span className={isActive ? "font-medium" : undefined}>
-              {step}
-              {isActive ? "..." : isDone ? " — done" : ""}
-            </span>
+            >
+              <span
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                  isActive ? "animate-pulse bg-cyan-500" : isDone ? "bg-emerald-500" : "bg-slate-300"
+                }`}
+              />
+              <span className={isActive ? "font-medium" : undefined}>{step}</span>
+              <span className="hidden text-[10px] uppercase tracking-wide opacity-70 sm:inline">
+                — {stateLabel}
+              </span>
+            </div>
+            {index < steps.length - 1 ? (
+              <span className="hidden text-slate-300 sm:inline" aria-hidden="true">
+                →
+              </span>
+            ) : null}
           </li>
         );
       })}
     </ol>
   );
+}
+
+function resolvePanelState(
+  settlement: OperationPanelSettlement | null | undefined,
+  pendingAction: PendingAction | null,
+  autoRefresh: boolean,
+  successHint?: string,
+): OperationPanelVisualState | null {
+  if (pendingAction?.action === "execute" || pendingAction?.action === "check") return "executing";
+  if (settlement?.status === "EXECUTING" || autoRefresh || successHint === "executing" || successHint === "checked") {
+    return "executing";
+  }
+  if (settlement?.status === "APPROVED" || pendingAction?.action === "approve" || successHint === "approved") {
+    return "approved";
+  }
+  if (
+    settlement?.status === "SETTLED" ||
+    settlement?.status === "RECONCILED" ||
+    successHint === "settled"
+  ) {
+    return "completed";
+  }
+  return null;
+}
+
+function providerLabel(mode: "sandbox" | "live") {
+  return mode === "sandbox" ? "PontisGlobe sandbox" : "PontisGlobe";
 }
 
 export function SettlementActionsProvider({ children }: { children: ReactNode }) {
@@ -208,70 +246,164 @@ export function useSettlementActionStep(settlementId?: string, action?: Settleme
   return steps[context.pendingAction.stepIndex] ?? steps[steps.length - 1];
 }
 
-export function SettlementRowActivityNote({ settlementId }: { settlementId: string }) {
+const ROW_STATUS_HINTS: Record<string, string> = {
+  APPROVED: "Ready to execute",
+  EXECUTING: "Tracking via PontisGlobe",
+  SETTLED: "Payout completed",
+  RECONCILED: "Reconciled automatically",
+};
+
+export function SettlementRowStatusHint({
+  status,
+  settlementId,
+}: {
+  status: string;
+  settlementId: string;
+}) {
   const { pendingAction } = useSettlementActionsContext();
+  const hint = ROW_STATUS_HINTS[status];
+  if (!hint) return null;
 
-  if (!pendingAction || pendingAction.settlementId !== settlementId) {
-    return null;
-  }
-
-  const steps = ACTION_STEPS[pendingAction.action];
-  const currentStep = steps[pendingAction.stepIndex] ?? steps[steps.length - 1];
+  const isPending = pendingAction?.settlementId === settlementId;
 
   return (
-    <div className="mt-1.5 rounded-lg border border-cyan-200/60 bg-cyan-50 px-2 py-1.5" role="status" aria-live="polite">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-800">
-        {ACTION_LABELS[pendingAction.action]} in progress
-      </p>
-      <p className="mt-0.5 text-xs font-medium text-cyan-700">{currentStep}...</p>
-    </div>
+    <p className={`text-xs ${isPending ? "text-cyan-600" : "text-slate-500"}`} role="status" aria-live="polite">
+      {isPending ? `${hint} · processing` : hint}
+    </p>
   );
+}
+
+export function SettlementRowActivityNote(_props: { settlementId: string }) {
+  return null;
 }
 
 export function SettlementOperationPanel({
   autoRefresh,
-  settlementLabel,
+  focusSettlement,
+  successHint,
 }: {
   autoRefresh: boolean;
-  settlementLabel?: string;
+  focusSettlement?: OperationPanelSettlement | null;
+  successHint?: string;
 }) {
   const { pendingAction } = useSettlementActionsContext();
-  const visible = Boolean(pendingAction) || autoRefresh;
+  const panelState = resolvePanelState(focusSettlement, pendingAction, autoRefresh, successHint);
 
-  if (!visible) return null;
+  if (!panelState) return null;
 
-  const actionSteps = pendingAction ? ACTION_STEPS[pendingAction.action] : BACKGROUND_STEPS;
-  const activeIndex = pendingAction
-    ? pendingAction.stepIndex
+  const executingActiveIndex = pendingAction
+    ? Math.min(pendingAction.stepIndex, EXECUTING_STEPS.length - 1)
     : autoRefresh
       ? 1
-      : 0;
+      : focusSettlement?.providerTransactionId
+        ? 1
+        : 0;
 
-  return (
-    <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 shadow-sm">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+  if (panelState === "approved" && focusSettlement) {
+    return (
+      <div className="rounded-xl border border-amber-200/80 bg-amber-50/50 p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Ready for provider execution</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Settlement approved. Execute payout via PontisGlobe to start provider tracking.
+            </p>
+          </div>
+          <MetadataChip label="Next step" value="Execute payout" />
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <MetadataChip label="Provider" value={providerLabel("sandbox")} />
+          <MetadataChip label="Amount" value={focusSettlement.amount} />
+          {focusSettlement.corridor ? (
+            <MetadataChip label="Route" value={focusSettlement.corridor} />
+          ) : null}
+          <MetadataChip label="Settlement" value={focusSettlement.publicId} />
+        </div>
+      </div>
+    );
+  }
+
+  if (panelState === "executing") {
+    return (
+      <div className="rounded-xl border border-cyan-200/80 bg-cyan-50/40 p-4 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Provider execution in progress</p>
+            <p className="mt-1 text-sm text-slate-600">
+              INRSettle is tracking the payout status from PontisGlobe.
+            </p>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full border border-cyan-200 bg-white px-2.5 py-0.5 text-[11px] font-medium text-cyan-700">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-500" />
+            Live refresh
+          </span>
+        </div>
+        <div className="mt-3">
+          <CompactStepper steps={EXECUTING_STEPS} activeIndex={executingActiveIndex} />
+        </div>
+        {focusSettlement ? (
+          <div className="mt-3 flex flex-wrap gap-2 border-t border-cyan-100 pt-3">
+            <MetadataChip label="Provider" value={providerLabel("sandbox")} />
+            {focusSettlement.amount ? <MetadataChip label="Amount" value={focusSettlement.amount} /> : null}
+            {focusSettlement.providerTransactionId ? (
+              <MetadataChip label="Transaction" value={focusSettlement.providerTransactionId} />
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (panelState === "completed" && focusSettlement) {
+    const settlementStatus =
+      focusSettlement.status === "RECONCILED" ? "reconciled" : "settled";
+    const providerStatus = focusSettlement.providerStatus ?? "completed";
+
+    return (
+      <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/40 p-4 shadow-sm">
         <div>
-          <p className="text-sm font-semibold text-cyan-100">Settlement operation activity</p>
-          <p className="mt-1 text-sm text-cyan-200/80">
-            {pendingAction
-              ? `${ACTION_LABELS[pendingAction.action]} running${settlementLabel ? ` for ${settlementLabel}` : ""}.`
-              : "INRSettle is refreshing provider and reconciliation state automatically."}
+          <p className="text-sm font-semibold text-slate-900">Payout completed</p>
+          <p className="mt-1 text-sm text-slate-600">
+            Provider execution completed and settlement was recorded.
           </p>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 px-3 py-1 text-xs font-medium text-cyan-100">
-          <span className="h-3 w-3 animate-spin rounded-full border-2 border-cyan-200 border-t-transparent" />
-          {pendingAction ? "Processing" : "Live refresh"}
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="flex items-center justify-between rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs">
+            <span className="text-slate-500">Provider</span>
+            <span className="font-medium text-slate-800">{providerLabel("live")}</span>
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs">
+            <span className="text-slate-500">Provider status</span>
+            <span className="font-medium capitalize text-emerald-700">{providerStatus}</span>
+          </div>
+          {focusSettlement.providerTransactionId ? (
+            <div className="flex items-center justify-between rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs sm:col-span-2">
+              <span className="text-slate-500">Provider transaction id</span>
+              <span className="font-mono font-medium text-slate-800">{focusSettlement.providerTransactionId}</span>
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs">
+            <span className="text-slate-500">Settlement</span>
+            <span className="font-medium capitalize text-emerald-700">{settlementStatus}</span>
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs">
+            <span className="text-slate-500">Audit trail</span>
+            <span className="font-medium text-emerald-700">
+              {focusSettlement.hasAuditEvents ? "Recorded" : "Pending"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs sm:col-span-2">
+            <span className="text-slate-500">Reconciliation</span>
+            <span className="font-medium text-emerald-700">
+              {focusSettlement.hasReconciliation ? "Auto matched" : "Not linked"}
+            </span>
+          </div>
         </div>
       </div>
+    );
+  }
 
-      <div className="mt-4 rounded-xl bg-slate-950/40 p-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-cyan-200/70">
-          {pendingAction ? `${ACTION_LABELS[pendingAction.action]} steps` : "Background monitoring"}
-        </p>
-        <StepList steps={actionSteps} activeIndex={activeIndex} />
-      </div>
-    </div>
-  );
+  return null;
 }
 
 export function SettlementAutoRefresh({
