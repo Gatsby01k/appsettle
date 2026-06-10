@@ -61,6 +61,12 @@ enum AuditActorType {
   SYSTEM
 }
 
+enum ProofReceivedVia {
+  WEBHOOK
+  POLL
+  MANUAL
+}
+
 model User {
   id           String       @id @default(cuid())
   email        String       @unique
@@ -179,6 +185,7 @@ model Settlement {
   quote             Quote?             @relation(fields: [quoteId], references: [id])
   events            SettlementEvent[]
   reconciliation    ReconciliationRecord[]
+  providerProofs    ProviderProof[]
 
   @@unique([organizationId, reference])
   @@index([organizationId, status, createdAt])
@@ -217,6 +224,31 @@ model ReconciliationRecord {
 
   @@index([organizationId, status, valueDate])
   @@unique([organizationId, source, externalRef])
+}
+
+// Structured, append-only evidence of what a payout provider reported about a
+// settlement. Provider status "completed" only means the payout MAY have
+// completed; proof rows are one of the three independent inputs (proof +
+// reconciliation + audit trail) that finality review requires before a
+// settlement is safe to finalize. Multiple rows per settlement are expected
+// (webhook + poll + manual sync) — never updated, never deleted.
+model ProviderProof {
+  id                    String           @id @default(cuid())
+  settlementId          String
+  provider              String
+  providerTransactionId String?
+  utr                   String?
+  providerStatus        String
+  actualAmount          Decimal?         @db.Decimal(20, 6)
+  currency              String?
+  rawResponse           Json?
+  receivedVia           ProofReceivedVia
+  receivedAt            DateTime         @default(now())
+  createdAt             DateTime         @default(now())
+  settlement            Settlement       @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  @@index([settlementId, receivedAt])
+  @@index([provider, providerTransactionId])
 }
 
 model AuditLog {

@@ -11,30 +11,12 @@ import {
   type MatchOrigin,
 } from "@/lib/reconciliation";
 import { quoteSchema, reconciliationSchema, settlementSchema, settingsSchema } from "@/lib/validators";
+import { assertValidSettlementTransition } from "@/lib/settlement-lifecycle";
 
 const RATE_BY_CORRIDOR = {
   INR_USDT: 83.5,
   USDT_INR: 83.15,
 } as const;
-
-function assertValidSettlementTransition(from: SettlementStatus, to: SettlementStatus) {
-  const allowed: Record<SettlementStatus, SettlementStatus[]> = {
-    [SettlementStatus.REQUESTED]: [SettlementStatus.APPROVED],
-    [SettlementStatus.QUOTED]: [SettlementStatus.APPROVED],
-    [SettlementStatus.PENDING_APPROVAL]: [SettlementStatus.APPROVED],
-    [SettlementStatus.APPROVED]: [SettlementStatus.EXECUTING, SettlementStatus.FAILED],
-    [SettlementStatus.EXECUTING]: [SettlementStatus.SETTLED, SettlementStatus.FAILED],
-    [SettlementStatus.SETTLED]: [SettlementStatus.RECONCILED],
-    [SettlementStatus.RECONCILED]: [],
-    [SettlementStatus.FAILED]: [],
-    [SettlementStatus.CANCELLED]: [],
-    [SettlementStatus.ON_HOLD]: [],
-  };
-
-  if (!allowed[from].includes(to)) {
-    throw new UserFacingError(`Cannot move settlement from ${from} to ${to}.`);
-  }
-}
 
 export async function createQuote(input: unknown, userId: string, organizationId: string) {
   const data = quoteSchema.parse(input);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AuditActorType } from "@prisma/client";
+import { AuditActorType, ProofReceivedVia } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import {
   decodeWebhookPayload,
@@ -100,6 +100,10 @@ export async function POST(request: NextRequest) {
       payoutId: record.payout_id as number | undefined,
       utr: (record.utr ?? record.reference) as string | undefined,
       comment: record.comment as string | undefined,
+      providerStatus: record.status as string | undefined,
+      actualAmount: typeof record.amount === "number" ? record.amount : Number(record.amount) || null,
+      rawResponse: record,
+      receivedVia: ProofReceivedVia.WEBHOOK,
       actorType: AuditActorType.SYSTEM,
     });
 

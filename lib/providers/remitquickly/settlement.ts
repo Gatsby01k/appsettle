@@ -1,10 +1,11 @@
 import "server-only";
 
-import { AuditActorType, SettlementStatus, type Settlement } from "@prisma/client";
+import { AuditActorType, ProofReceivedVia, SettlementStatus, type Settlement } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { UserFacingError } from "@/lib/errors";
-import { createReconciliationRecord, transitionSettlement } from "@/lib/domain";
+import { transitionSettlement } from "@/lib/domain";
+import { recordProviderProof } from "@/lib/provider-proof";
 import {
   extractPayoutId,
   simulatePayoutOutcome,
@@ -15,7 +16,6 @@ import {
 import type { BeneficiaryOverrides } from "./schema";
 
 export const PROVIDER = "remitquickly";
-const RECON_SOURCE = "psp_report";
 
 /** The INR leg of a settlement (the IMPS payout is always denominated in INR). */
 function inrLeg(settlement: Settlement): { amount: number; currency: "INR" } {
@@ -138,6 +138,14 @@ type ResolutionInput = {
   payoutId?: number | string | null;
   utr?: string | null;
   comment?: string | null;
+  /** Raw provider status string (e.g. "success", "failed"), when known. */
+  providerStatus?: string | null;
+  /** Amount the provider claims was paid out, when reported. */
+  actualAmount?: number | null;
+  /** Full provider payload backing this resolution (webhook record / status row). */
+  rawResponse?: unknown;
+  /** How this outcome reached us. Defaults to POLL. */
+  receivedVia?: ProofReceivedVia;
   actorType?: AuditActorType;
 };
 
@@ -146,13 +154,21 @@ type ResolutionInput = {
  * webhooks or repeated status polls are safely ignored once the settlement has
  * left the EXECUTING state.
  *
- * On success: settlement -> SETTLED, then a MATCHED reconciliation record is
- *   created (which reconciles the settlement) and an audit event is written.
- * On failure: settlement -> FAILED with a failure reason and an audit event.
+ * IMPORTANT (finality model): provider status "completed/success" only means
+ * the payout MAY have completed. This function records structured provider
+ * proof and moves the settlement to SETTLED — it NEVER creates or matches a
+ * reconciliation record. Reconciliation must come from an independent source
+ * (bank statement / PSP report ingest), and finality review (lib/finality.ts)
+ * requires proof + reconciliation + audit trail to agree.
+ *
+ * On success: provider proof recorded, then settlement -> SETTLED + audit event.
+ * On failure: provider proof recorded, then settlement -> FAILED with a
+ *   failure reason + audit event.
  */
 export async function applyPayoutResolution(input: ResolutionInput) {
   const { settlement, outcome, userId, organizationId } = input;
   const actorType = input.actorType ?? AuditActorType.SYSTEM;
+  const receivedVia = input.receivedVia ?? ProofReceivedVia.POLL;
 
   const fresh = await prisma.settlement.findFirst({
     where: { id: settlement.id, organizationId },
@@ -167,35 +183,32 @@ export async function applyPayoutResolution(input: ResolutionInput) {
       throw new UserFacingError(`Settlement ${fresh.publicId} is not executing; cannot mark settled.`);
     }
 
+    // Record evidence BEFORE the transition: if the proof write fails, the
+    // settlement stays EXECUTING and the webhook/poll can be retried safely.
+    // Only provider-reported values go into proof — never substitute expected
+    // amounts, or the finality amount check would always "agree".
+    const proof = await recordProviderProof({
+      settlementId: fresh.id,
+      organizationId,
+      userId,
+      provider: PROVIDER,
+      providerTransactionId: input.payoutId != null ? String(input.payoutId) : null,
+      utr: input.utr,
+      providerStatus: input.providerStatus ?? "success",
+      actualAmount: input.actualAmount ?? null,
+      currency: input.actualAmount != null ? "INR" : null,
+      rawResponse: input.rawResponse,
+      receivedVia,
+      actorType,
+    });
+
     await transitionSettlement(
       fresh.id,
       SettlementStatus.SETTLED,
       userId,
       organizationId,
-      `RemitQuickly payout ${input.payoutId ?? ""} succeeded${input.utr ? ` (UTR ${input.utr})` : ""}.`,
+      `RemitQuickly payout ${input.payoutId ?? ""} reported successful${input.utr ? ` (UTR ${input.utr})` : ""}. Awaiting independent reconciliation.`,
     );
-
-    const externalRef = input.utr?.trim() || `RQ-${input.payoutId ?? fresh.publicId}`;
-    const existingRecord = await prisma.reconciliationRecord.findFirst({
-      where: { organizationId, source: RECON_SOURCE, externalRef },
-    });
-
-    if (!existingRecord) {
-      const { amount, currency } = inrLeg(fresh);
-      await createReconciliationRecord(
-        {
-          externalRef,
-          source: RECON_SOURCE,
-          amount,
-          currency,
-          settlementId: fresh.id,
-          valueDate: new Date().toISOString(),
-          status: "MATCHED",
-        },
-        userId,
-        organizationId,
-      );
-    }
 
     await writeAuditLog({
       action: "remitquickly.payout.settled",
@@ -208,11 +221,13 @@ export async function applyPayoutResolution(input: ResolutionInput) {
         provider: PROVIDER,
         payoutId: input.payoutId,
         utr: input.utr,
-        externalRef,
+        proofId: proof.id,
+        receivedVia,
+        reconciliation: "pending_independent_match",
       },
     });
 
-    return { settlementId: fresh.id, status: SettlementStatus.SETTLED, externalRef };
+    return { settlementId: fresh.id, status: SettlementStatus.SETTLED, proofId: proof.id };
   }
 
   // outcome === "failed"
@@ -224,6 +239,23 @@ export async function applyPayoutResolution(input: ResolutionInput) {
   }
 
   const reason = input.comment?.trim() || "RemitQuickly payout failed.";
+
+  // Failed outcomes are evidence too — record proof before the transition.
+  await recordProviderProof({
+    settlementId: fresh.id,
+    organizationId,
+    userId,
+    provider: PROVIDER,
+    providerTransactionId: input.payoutId != null ? String(input.payoutId) : null,
+    utr: input.utr,
+    providerStatus: input.providerStatus ?? "failed",
+    actualAmount: input.actualAmount ?? null,
+    currency: input.actualAmount != null ? "INR" : null,
+    rawResponse: input.rawResponse,
+    receivedVia,
+    actorType,
+  });
+
   await prisma.settlement.update({
     where: { id: fresh.id },
     data: { failureReason: reason },

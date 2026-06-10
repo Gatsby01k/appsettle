@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ProofReceivedVia } from "@prisma/client";
 import { jsonError, requireApiContext } from "@/lib/api";
 import { getOrderStatus, isRemitQuicklyConfigured } from "@/lib/providers/remitquickly/client";
 import { applyPayoutResolution, mapPayoutStatus } from "@/lib/providers/remitquickly/settlement";
@@ -62,6 +63,10 @@ export async function GET(
             payoutId: record.payout_id as number | undefined,
             utr: (record.utr ?? record.reference) as string | undefined,
             comment: record.comment as string | undefined,
+            providerStatus: record.status as string | undefined,
+            actualAmount: typeof record.amount === "number" ? record.amount : Number(record.amount) || null,
+            rawResponse: record,
+            receivedVia: ProofReceivedVia.POLL,
           });
         }
       }

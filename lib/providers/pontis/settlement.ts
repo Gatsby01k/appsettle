@@ -1,10 +1,11 @@
 import "server-only";
 
-import { AuditActorType, Prisma, SettlementStatus, type Settlement } from "@prisma/client";
+import { AuditActorType, Prisma, ProofReceivedVia, SettlementStatus, type Settlement } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { UserFacingError } from "@/lib/errors";
 import { transitionSettlement } from "@/lib/domain";
+import { recordProviderProof } from "@/lib/provider-proof";
 import {
   getPayoutStatus,
   loginOrThrow,
@@ -225,6 +226,9 @@ export async function executeApprovedSettlement(
       organizationId,
       transactionId,
       statusMessage: result.statusMessage,
+      providerStatus: result.providerStatus,
+      rawResponse: result.response,
+      receivedVia: ProofReceivedVia.POLL,
       actorType: AuditActorType.API,
     });
   }
@@ -292,6 +296,9 @@ export async function checkPayoutStatus(
       organizationId,
       transactionId: settlement.providerTransactionId,
       statusMessage: result.statusMessage,
+      providerStatus: result.providerStatus,
+      rawResponse: result.response,
+      receivedVia: ProofReceivedVia.POLL,
       actorType: AuditActorType.API,
     });
   }
@@ -306,6 +313,12 @@ type ResolutionInput = {
   organizationId: string;
   transactionId?: string | null;
   statusMessage?: string | null;
+  /** Raw provider status string (e.g. "completed", "failed"), when known. */
+  providerStatus?: string | null;
+  /** Full provider payload backing this resolution. */
+  rawResponse?: unknown;
+  /** How this outcome reached us. Defaults to POLL. */
+  receivedVia?: ProofReceivedVia;
   actorType?: AuditActorType;
 };
 
@@ -321,6 +334,7 @@ type ResolutionInput = {
 export async function applyPayoutResolution(input: ResolutionInput) {
   const { outcome, userId, organizationId } = input;
   const actorType = input.actorType ?? AuditActorType.SYSTEM;
+  const receivedVia = input.receivedVia ?? ProofReceivedVia.POLL;
 
   const fresh = await prisma.settlement.findFirst({
     where: { id: input.settlement.id, organizationId },
@@ -334,6 +348,26 @@ export async function applyPayoutResolution(input: ResolutionInput) {
     if (fresh.status !== SettlementStatus.EXECUTING) {
       throw new UserFacingError(`Settlement ${fresh.publicId} is not executing; cannot mark settled.`);
     }
+
+    // Record evidence BEFORE the transition: if the proof write fails, the
+    // settlement stays EXECUTING and the webhook/poll can be retried safely.
+    // Provider "completed" is a claim, not finality — independent
+    // reconciliation and audit agreement are still required (lib/finality.ts).
+    await recordProviderProof({
+      settlementId: fresh.id,
+      organizationId,
+      userId,
+      provider: PROVIDER,
+      providerTransactionId: input.transactionId,
+      providerStatus: input.providerStatus ?? "completed",
+      // Pontis status payloads do not report a paid amount; never substitute
+      // the expected amount here — proof must only contain provider claims.
+      actualAmount: null,
+      currency: null,
+      rawResponse: input.rawResponse,
+      receivedVia,
+      actorType,
+    });
 
     await transitionSettlement(
       fresh.id,
@@ -369,6 +403,22 @@ export async function applyPayoutResolution(input: ResolutionInput) {
   }
 
   const reason = input.statusMessage?.trim() || "PontisGlobe payout failed.";
+
+  // Failed outcomes are evidence too — record proof before the transition.
+  await recordProviderProof({
+    settlementId: fresh.id,
+    organizationId,
+    userId,
+    provider: PROVIDER,
+    providerTransactionId: input.transactionId,
+    providerStatus: input.providerStatus ?? "failed",
+    actualAmount: null,
+    currency: null,
+    rawResponse: input.rawResponse,
+    receivedVia,
+    actorType,
+  });
+
   await prisma.settlement.update({
     where: { id: fresh.id },
     data: { failureReason: reason },
@@ -422,6 +472,9 @@ export async function resolvePayoutByTransaction(
     organizationId: settlement.organizationId,
     transactionId,
     statusMessage: statusMessage ?? null,
+    providerStatus: status,
+    rawResponse: { transaction_id: transactionId, status, status_message: statusMessage ?? null },
+    receivedVia: ProofReceivedVia.WEBHOOK,
     actorType: AuditActorType.SYSTEM,
   });
 }
