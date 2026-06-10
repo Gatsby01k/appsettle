@@ -1,4 +1,5 @@
 import { Fragment, Suspense } from "react";
+import Link from "next/link";
 import { SettlementStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -72,6 +73,7 @@ function revalidateSettlementsPage() {
   revalidatePath("/settlements");
   revalidatePath("/dashboard/settlements");
 }
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/helper-text";
@@ -646,6 +648,9 @@ export default async function SettlementsPage({
                           triggerLabel="Audit trail"
                         />
                       ) : null}
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/settlements/${settlement.id}/report`}>Report</Link>
+                      </Button>
                     </div>
                   </DataGridTd>
                 </DataGridRow>
