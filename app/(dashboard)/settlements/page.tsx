@@ -17,7 +17,7 @@ import { cn, formatCurrencyCompact, formatCurrencyFull, formatDateTime } from "@
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
-import { StatusFlight, type StatusFlightStatus } from "@/components/ui/status-flight";
+import { SettlementRowFlightOverlay, type StatusFlightStatus } from "@/components/ui/status-flight";
 import { EmptyState } from "@/components/ops/empty-state";
 import { FilterBar } from "@/components/ops/filter-bar";
 import { FormSelect } from "@/components/ops/form-select";
@@ -107,14 +107,14 @@ function rowShowsConsole(status: SettlementStatus) {
   ]).has(status);
 }
 
-function settlementStatusFlight(status: SettlementStatus): { flight: StatusFlightStatus; trigger: boolean } | null {
+function settlementStatusFlight(status: SettlementStatus): StatusFlightStatus | null {
   switch (status) {
     case SettlementStatus.SETTLED:
-      return { flight: "settled", trigger: true };
+      return "settled";
     case SettlementStatus.RECONCILED:
-      return { flight: "reconciled", trigger: true };
+      return "reconciled";
     case SettlementStatus.FAILED:
-      return { flight: "failed", trigger: true };
+      return "failed";
     default:
       return null;
   }
@@ -465,10 +465,14 @@ export default async function SettlementsPage({
                 <Fragment key={settlement.id}>
                 <DataGridRow
                   className={cn(
+                    "relative isolate overflow-hidden",
                     showConsole && "settlement-row-active",
                     rowJustUpdated && "settlement-row-highlight",
                   )}
                 >
+                  {statusFlight && rowJustUpdated ? (
+                    <SettlementRowFlightOverlay status={statusFlight} />
+                  ) : null}
                   <DataGridTd>
                     <p className="font-medium text-slate-950">{settlement.publicId}</p>
                     <p className="text-xs text-slate-500">{settlement.reference}</p>
@@ -484,17 +488,7 @@ export default async function SettlementsPage({
                     {formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
                   </DataGridTd>
                   <DataGridTd>
-                    <span className="inline-flex items-center gap-1.5">
-                      <StatusBadge status={settlement.status} />
-                      {statusFlight ? (
-                        <StatusFlight
-                          status={statusFlight.flight}
-                          trigger={statusFlight.trigger}
-                          label=""
-                          className="shrink-0"
-                        />
-                      ) : null}
-                    </span>
+                    <StatusBadge status={settlement.status} />
                   </DataGridTd>
                   <DataGridTd className="min-w-[240px]">
                     <SettlementLifecycle status={settlement.status} compact />
