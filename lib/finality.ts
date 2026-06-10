@@ -45,6 +45,16 @@ export type FinalityReconciliationInput = {
   currency: string;
 };
 
+/** Safety status for SHADOW / LIVE_TEST settlements (computed by lib/shadow-mode.ts). */
+export type FinalitySafetyInput = {
+  /** INR leg within the cap for the settlement's mode. */
+  withinCap: boolean;
+  /** Human-readable cap (e.g. "INR 10,000") for messages. */
+  capLabel: string;
+  /** True unless someone explicitly enabled live payouts (tripwire). */
+  livePayoutsDisabled: boolean;
+};
+
 export type FinalityInput = {
   settlement: FinalitySettlementInput;
   /** Latest provider proof for the settlement, or null when none recorded. */
@@ -53,6 +63,10 @@ export type FinalityInput = {
   reconciliation: FinalityReconciliationInput | null;
   /** True when the audit trail records an approval for this settlement. */
   auditApprovalPresent: boolean;
+  /** Settlement mode: DEMO (default) | SHADOW | LIVE_TEST. */
+  mode?: string | null;
+  /** Required when mode is SHADOW/LIVE_TEST; ignored for DEMO. */
+  safety?: FinalitySafetyInput | null;
 };
 
 export type FinalityAssessment = {
@@ -121,11 +135,16 @@ function maxRisk(a: FinalityRiskLevel, b: FinalityRiskLevel): FinalityRiskLevel 
  *  - reconciliation unmatched / exception     -> needs_review (high risk)
  *  - expected vs reported amount differs      -> needs_review (high risk)
  *  - audit approval missing                   -> needs_review (high risk)
+ *  - SHADOW/LIVE_TEST over the safety cap, or
+ *    live payouts enabled, or safety not
+ *    evaluated                                -> needs_review (high risk;
+ *      shadow settlements can never bypass caps)
  *  - proof + INDEPENDENT reconciliation +
- *    audit agree                              -> ready_to_finalize (low risk)
+ *    audit agree (and safety holds)           -> ready_to_finalize (low risk)
  */
 export function assessFinality(input: FinalityInput): FinalityAssessment {
   const { settlement, proof, reconciliation, auditApprovalPresent } = input;
+  const isShadowMode = input.mode === "SHADOW" || input.mode === "LIVE_TEST";
 
   const blockingIssues: string[] = [];
   const warnings: string[] = [];
@@ -157,6 +176,12 @@ export function assessFinality(input: FinalityInput): FinalityAssessment {
       blockingIssues.push("No provider proof recorded — provider outcome is unknown.");
       recommendedActions.push("Execute the payout and record provider proof (webhook, poll, or manual sync).");
       riskLevel = "high";
+    }
+
+    if (isShadowMode) {
+      evidence.push(
+        `${input.mode} mode: INRSettle did not move funds directly — the external partner/provider moved the money.`,
+      );
     }
 
     return {
@@ -262,6 +287,38 @@ export function assessFinality(input: FinalityInput): FinalityAssessment {
   } else {
     confidence += 25;
     evidence.push("Audit trail records an approval for this settlement.");
+  }
+
+  // --- 5. Shadow/live-test safety gate -------------------------------------------
+  // In SHADOW/LIVE_TEST the money is moved externally by the partner/provider.
+  // The safety caps and the live-payout tripwire can never be bypassed: any
+  // violation blocks ready_to_finalize regardless of how good the evidence is.
+  if (isShadowMode) {
+    evidence.push(
+      `${input.mode} mode: INRSettle did not move funds directly — the external partner/provider moved the money.`,
+    );
+
+    if (!input.safety) {
+      blockingIssues.push(`Safety status was not evaluated for this ${input.mode} settlement.`);
+      recommendedActions.push("Evaluate the shadow-test safety caps before finality review.");
+      riskLevel = "high";
+    } else {
+      if (!input.safety.livePayoutsDisabled) {
+        blockingIssues.push("LIVE_PAYOUTS_ENABLED is set — live payouts must stay disabled during shadow testing.");
+        recommendedActions.push("Unset LIVE_PAYOUTS_ENABLED before continuing the shadow test.");
+        riskLevel = "high";
+      }
+      if (!input.safety.withinCap) {
+        blockingIssues.push(
+          `Settlement exceeds the ${input.mode} safety cap (${input.safety.capLabel}).`,
+        );
+        recommendedActions.push("Reduce the test amount below the cap; caps cannot be bypassed.");
+        riskLevel = "high";
+      }
+      if (input.safety.withinCap && input.safety.livePayoutsDisabled) {
+        evidence.push(`Safety caps hold: amount within the ${input.mode} cap (${input.safety.capLabel}); live payouts disabled.`);
+      }
+    }
   }
 
   // --- Decision ------------------------------------------------------------------

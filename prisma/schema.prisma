@@ -67,6 +67,18 @@ enum ProofReceivedVia {
   MANUAL
 }
 
+// The operational mode of a settlement:
+//  - DEMO:      fake/demo data; no real-world money anywhere
+//  - SHADOW:    a real-world operation tracked by INRSettle while the money is
+//               moved EXTERNALLY by a partner/provider — INRSettle never moves
+//               funds directly
+//  - LIVE_TEST: a tiny, capped, manually guarded test through a provider
+enum SettlementTestMode {
+  DEMO
+  SHADOW
+  LIVE_TEST
+}
+
 model User {
   id           String       @id @default(cuid())
   email        String       @unique
@@ -167,6 +179,7 @@ model Settlement {
   targetAmount      Decimal            @db.Decimal(20, 6)
   feeAmount         Decimal            @default(0) @db.Decimal(20, 2)
   status            SettlementStatus   @default(REQUESTED)
+  mode              SettlementTestMode @default(DEMO)
   sourceAccount     String
   targetAccount     String
   provider          String?

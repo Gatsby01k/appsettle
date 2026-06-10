@@ -5,7 +5,7 @@
 // the endpoint can never disagree about why a settlement is (not) safe to
 // finalize.
 
-import type { FinalityInput } from "@/lib/finality";
+import type { FinalityInput, FinalitySafetyInput } from "@/lib/finality";
 import { isIndependentReconciliationSource } from "@/lib/reconciliation";
 
 /** number, numeric string, or Prisma Decimal (anything with a numeric toString). */
@@ -38,6 +38,8 @@ export type EventLike = {
 export type SettlementLike = {
   publicId: string;
   status: string;
+  /** DEMO (default) | SHADOW | LIVE_TEST. */
+  mode?: string | null;
   sourceCurrency: string;
   targetCurrency: string;
   sourceAmount: NumberLike;
@@ -94,17 +96,25 @@ export function hasAuditApproval(settlement: SettlementLike, events: EventLike[]
   return Boolean(settlement.approvedAt) && events.some((event) => event.toStatus === "APPROVED");
 }
 
-/** Assembles the full deterministic finality input for a settlement. */
+/**
+ * Assembles the full deterministic finality input for a settlement. For
+ * SHADOW/LIVE_TEST settlements pass `safety` (from lib/shadow-mode.ts
+ * `safetyFor`) — when omitted on a shadow settlement, finality blocks with
+ * "safety not evaluated" rather than assuming the caps hold.
+ */
 export function buildFinalityInput(
   settlement: SettlementLike,
   proofs: ProofLike[],
   reconciliationRecords: ReconciliationLike[],
   events: EventLike[],
+  safety?: FinalitySafetyInput | null,
 ): FinalityInput {
   const proof = latestProofOf(proofs);
   const reconciliation = relevantReconciliationOf(reconciliationRecords);
 
   return {
+    mode: settlement.mode ?? "DEMO",
+    safety: safety ?? null,
     settlement: {
       publicId: settlement.publicId,
       status: settlement.status,

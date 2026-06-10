@@ -175,6 +175,66 @@ describe("ready_to_finalize", () => {
   });
 });
 
+describe("shadow / live-test mode", () => {
+  const safeShadow = { withinCap: true, capLabel: "INR 10,000", livePayoutsDisabled: true };
+
+  it("SHADOW without proof -> not_ready", () => {
+    const result = assessFinality(input({ proof: null, mode: "SHADOW", safety: safeShadow }));
+    expect(result.decision).toBe("not_ready");
+    expect(result.evidence.join(" ")).toMatch(/did not move funds directly/);
+  });
+
+  it("SHADOW without independent reconciliation -> needs_review", () => {
+    const result = assessFinality(input({ reconciliation: null, mode: "SHADOW", safety: safeShadow }));
+    expect(result.decision).toBe("needs_review");
+  });
+
+  it("SHADOW with proof + independent reconciliation + audit -> ready_to_finalize", () => {
+    const result = assessFinality(input({ mode: "SHADOW", safety: safeShadow }));
+    expect(result.decision).toBe("ready_to_finalize");
+    expect(result.riskLevel).toBe("low");
+    expect(result.evidence.join(" ")).toMatch(/INRSettle did not move funds directly/);
+  });
+
+  it("provider completed alone never finalizes a SHADOW settlement", () => {
+    const result = assessFinality(
+      input({ mode: "SHADOW", safety: safeShadow, reconciliation: null, auditApprovalPresent: false }),
+    );
+    expect(result.decision).toBe("needs_review");
+    expect(result.decision).not.toBe("ready_to_finalize");
+  });
+
+  it("a cap violation blocks ready_to_finalize even with perfect evidence (no bypass)", () => {
+    const result = assessFinality(
+      input({ mode: "LIVE_TEST", safety: { ...safeShadow, withinCap: false, capLabel: "INR 1,000" } }),
+    );
+    expect(result.decision).toBe("needs_review");
+    expect(result.riskLevel).toBe("high");
+    expect(result.blockingIssues.join(" ")).toMatch(/safety cap/);
+  });
+
+  it("live payouts enabled blocks ready_to_finalize (tripwire)", () => {
+    const result = assessFinality(
+      input({ mode: "SHADOW", safety: { ...safeShadow, livePayoutsDisabled: false } }),
+    );
+    expect(result.decision).toBe("needs_review");
+    expect(result.riskLevel).toBe("high");
+    expect(result.blockingIssues.join(" ")).toMatch(/LIVE_PAYOUTS_ENABLED/);
+  });
+
+  it("missing safety evaluation blocks a SHADOW settlement", () => {
+    const result = assessFinality(input({ mode: "SHADOW", safety: null }));
+    expect(result.decision).toBe("needs_review");
+    expect(result.blockingIssues.join(" ")).toMatch(/Safety status was not evaluated/);
+  });
+
+  it("DEMO mode is unaffected by safety inputs", () => {
+    const result = assessFinality(input({ mode: "DEMO" }));
+    expect(result.decision).toBe("ready_to_finalize");
+    expect(result.confidence).toBe(100);
+  });
+});
+
 describe("determinism", () => {
   it("identical input always produces identical output", () => {
     const a = assessFinality(input());

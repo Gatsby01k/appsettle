@@ -6,6 +6,14 @@ import { prisma } from "@/lib/prisma";
 import { assessFinality, type FinalityAssessment } from "@/lib/finality";
 import { buildFinalityInput, hasAuditApproval, latestProofOf, relevantReconciliationOf } from "@/lib/finality-input";
 import { RECONCILIATION_SOURCE_LABEL, isIndependentReconciliationSource } from "@/lib/reconciliation";
+import {
+  MODE_DESCRIPTION,
+  MODE_LABEL,
+  buildShadowChecklist,
+  getShadowConfig,
+  safetyFor,
+  type SettlementMode,
+} from "@/lib/shadow-mode";
 import { cn, formatCurrencyFull, formatDateTime } from "@/lib/utils";
 import { StatusBadge } from "@/components/ops/status-badge";
 import { StatRow } from "@/components/ops/stat-row";
@@ -118,8 +126,26 @@ export default async function SettlementReportPage({
 
   if (!settlement) notFound();
 
+  const shadowConfig = getShadowConfig();
+  const safety = safetyFor(settlement, shadowConfig);
+  const checklist = buildShadowChecklist(
+    settlement,
+    settlement.providerProofs,
+    settlement.reconciliation,
+    settlement.events,
+    shadowConfig,
+  );
+  const mode = (settlement.mode in MODE_LABEL ? settlement.mode : "DEMO") as SettlementMode;
+  const isShadowMode = mode === "SHADOW" || mode === "LIVE_TEST";
+
   const assessment = assessFinality(
-    buildFinalityInput(settlement, settlement.providerProofs, settlement.reconciliation, settlement.events),
+    buildFinalityInput(
+      settlement,
+      settlement.providerProofs,
+      settlement.reconciliation,
+      settlement.events,
+      safety,
+    ),
   );
   const proof = latestProofOf(settlement.providerProofs);
   const reconciliation = relevantReconciliationOf(settlement.reconciliation);
@@ -152,12 +178,71 @@ export default async function SettlementReportPage({
           </div>
           <div className="flex items-center gap-2">
             <StatusBadge status={settlement.status} />
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]",
+                mode === "DEMO" && "border-slate-200 bg-slate-50 text-slate-500",
+                mode === "SHADOW" && "border-indigo-200 bg-indigo-50 text-indigo-700",
+                mode === "LIVE_TEST" && "border-red-200 bg-red-50 text-red-700",
+              )}
+            >
+              {MODE_LABEL[mode]} mode
+            </span>
             <span className="text-xs text-slate-500">{settlement.corridor.replace("_", " → ")}</span>
           </div>
         </div>
 
         {/* Finality decision */}
         <DecisionBanner assessment={assessment} />
+
+        {/* Mode + money movement + safety checklist */}
+        <div className="rounded-xl border border-[var(--ops-line)] p-4">
+          <SectionTitle>Test mode &amp; safety</SectionTitle>
+          <StatRow label="Mode" value={`${MODE_LABEL[mode]} — ${MODE_DESCRIPTION[mode]}`} />
+          <StatRow
+            label="Funds moved by INRSettle"
+            value={mode === "DEMO" ? "No — demo data only" : "No — external provider moved money"}
+          />
+          {isShadowMode ? (
+            <>
+              <StatRow
+                label="Safety cap"
+                value={`${safety.capLabel} · ${safety.withinCap ? "within cap" : "EXCEEDED"}`}
+              />
+              <StatRow
+                label="Live payouts"
+                value={safety.livePayoutsDisabled ? "Disabled" : "ENABLED — must be turned off"}
+              />
+            </>
+          ) : null}
+          <div className="mt-3 space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+              Shadow test checklist
+            </p>
+            {checklist.map((item) => (
+              <div key={item.key} className="flex items-start gap-2 text-sm">
+                <span
+                  className={cn(
+                    "mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
+                    item.done ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700",
+                  )}
+                >
+                  {item.done ? "✓" : "•"}
+                </span>
+                <div>
+                  <span className={item.done ? "text-slate-700" : "font-medium text-slate-900"}>{item.label}</span>
+                  <span className="block text-xs text-slate-400">{item.detail}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {isShadowMode ? (
+            <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">
+              INRSettle did not move funds directly in this test. The external partner/provider moved the money;
+              INRSettle recorded and controlled the operational layer.
+            </p>
+          ) : null}
+        </div>
 
         {/* Settlement summary */}
         <div className="rounded-xl border border-[var(--ops-line)] p-4">

@@ -3,6 +3,7 @@ import { jsonError, requireApiContext } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { assessFinality } from "@/lib/finality";
 import { buildFinalityInput } from "@/lib/finality-input";
+import { buildShadowChecklist, getShadowConfig, safetyFor } from "@/lib/shadow-mode";
 
 export const runtime = "nodejs";
 
@@ -43,8 +44,23 @@ export async function GET(
       return NextResponse.json({ error: "Settlement was not found." }, { status: 404 });
     }
 
+    const shadowConfig = getShadowConfig();
+    const safety = safetyFor(settlement, shadowConfig);
     const assessment = assessFinality(
-      buildFinalityInput(settlement, settlement.providerProofs, settlement.reconciliation, settlement.events),
+      buildFinalityInput(
+        settlement,
+        settlement.providerProofs,
+        settlement.reconciliation,
+        settlement.events,
+        safety,
+      ),
+    );
+    const checklist = buildShadowChecklist(
+      settlement,
+      settlement.providerProofs,
+      settlement.reconciliation,
+      settlement.events,
+      shadowConfig,
     );
 
     return NextResponse.json({
@@ -55,6 +71,7 @@ export async function GET(
           reference: settlement.reference,
           corridor: settlement.corridor,
           status: settlement.status,
+          mode: settlement.mode,
           sourceAmount: settlement.sourceAmount.toString(),
           sourceCurrency: settlement.sourceCurrency,
           targetAmount: settlement.targetAmount.toString(),
@@ -97,6 +114,16 @@ export async function GET(
           createdAt: event.createdAt.toISOString(),
         })),
         finality: assessment,
+        shadow: {
+          mode: settlement.mode,
+          movedFundsDirectly: false,
+          moneyMovement:
+            settlement.mode === "DEMO"
+              ? "Demo data — no real-world money anywhere."
+              : "INRSettle did not move funds directly — the external partner/provider moved the money.",
+          safety,
+          checklist,
+        },
       },
     });
   } catch (err) {

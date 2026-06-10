@@ -14,6 +14,7 @@ import { friendlyErrorMessage } from "@/lib/errors";
 import { assessFinality } from "@/lib/finality";
 import { buildFinalityInput, hasAuditApproval, latestProofOf, relevantReconciliationOf } from "@/lib/finality-input";
 import { RECONCILIATION_SOURCE_LABEL, isIndependentReconciliationSource } from "@/lib/reconciliation";
+import { MODE_LABEL, getShadowConfig, safetyFor, type SettlementMode } from "@/lib/shadow-mode";
 import { canApproveSettlement } from "@/lib/permissions";
 import { counterpartyForCorridor } from "@/lib/treasury";
 import { prisma } from "@/lib/prisma";
@@ -145,6 +146,27 @@ function demoSettlementWhere(organizationId: string) {
   };
 }
 
+const MODE_CHIP_CLASS: Record<SettlementMode, string> = {
+  DEMO: "border-slate-200 bg-slate-50 text-slate-500",
+  SHADOW: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  LIVE_TEST: "border-red-200 bg-red-50 text-red-700",
+};
+
+function ModeChip({ mode }: { mode: string }) {
+  const key = (mode in MODE_CHIP_CLASS ? mode : "DEMO") as SettlementMode;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]",
+        MODE_CHIP_CLASS[key],
+      )}
+      title="DEMO: fake data · SHADOW/LIVE TEST: money moves externally via the partner/provider — INRSettle does not move funds"
+    >
+      {MODE_LABEL[key]}
+    </span>
+  );
+}
+
 function DemoFocusBadge() {
   return (
     <span className="inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-amber-800">
@@ -169,7 +191,13 @@ type SettlementRow = Awaited<
  */
 function toFinalityReviewData(settlement: SettlementRow): SettlementDetail["finality"] {
   const assessment = assessFinality(
-    buildFinalityInput(settlement, settlement.providerProofs, settlement.reconciliation, settlement.events),
+    buildFinalityInput(
+      settlement,
+      settlement.providerProofs,
+      settlement.reconciliation,
+      settlement.events,
+      safetyFor(settlement, getShadowConfig()),
+    ),
   );
   const proof = latestProofOf(settlement.providerProofs);
   const reconciliation = relevantReconciliationOf(settlement.reconciliation);
@@ -533,7 +561,10 @@ export default async function SettlementsPage({
                     <SettlementRowFlightOverlay status={statusFlight} />
                   ) : null}
                   <DataGridTd>
-                    <p className="font-medium text-slate-950">{settlement.publicId}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-medium text-slate-950">{settlement.publicId}</p>
+                      <ModeChip mode={settlement.mode} />
+                    </div>
                     <p className="text-xs text-slate-500">{settlement.reference}</p>
                     <SettlementRowStatusSubtext
                       status={settlement.status}
@@ -650,6 +681,9 @@ export default async function SettlementsPage({
                       ) : null}
                       <Button asChild variant="outline" size="sm">
                         <Link href={`/settlements/${settlement.id}/report`}>Report</Link>
+                      </Button>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/settlements/${settlement.id}/shadow`}>Shadow</Link>
                       </Button>
                     </div>
                   </DataGridTd>
