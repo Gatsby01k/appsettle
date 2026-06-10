@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ReconciliationStatus } from "@prisma/client";
 import { jsonError, requireApiContext } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { assessFinality } from "@/lib/finality";
+import { buildFinalityInput } from "@/lib/finality-input";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/settlements/[id]/finality
  *
- * Read-only finality review for a settlement. Returns the deterministic
- * assessment from lib/finality.ts built from the three independent inputs:
- * latest provider proof, the linked reconciliation record, and the audit
- * trail's approval evidence. Never mutates anything — this is the minimal
- * surface for verifying the Phase 1A flow before any finality UI exists.
+ * Read-only "Proof-to-Settlement" case file for a settlement:
+ *  - settlement summary
+ *  - every provider proof record (append-only evidence)
+ *  - reconciliation records linked to the settlement
+ *  - lifecycle/audit events
+ *  - the deterministic finality assessment from lib/finality.ts
+ *
+ * Never mutates anything. The assessment input is built by the same shared
+ * builder the dashboard uses (lib/finality-input.ts), so API and UI always
+ * agree.
  */
 export async function GET(
   _request: NextRequest,
@@ -28,7 +33,7 @@ export async function GET(
     const settlement = await prisma.settlement.findFirst({
       where: { id, organizationId: context.organization.id },
       include: {
-        providerProofs: { orderBy: { receivedAt: "desc" }, take: 1 },
+        providerProofs: { orderBy: { receivedAt: "desc" } },
         reconciliation: { orderBy: { createdAt: "desc" } },
         events: { orderBy: { createdAt: "asc" } },
       },
@@ -38,86 +43,60 @@ export async function GET(
       return NextResponse.json({ error: "Settlement was not found." }, { status: 404 });
     }
 
-    const proof = settlement.providerProofs[0] ?? null;
-
-    // Prefer a MATCHED record; otherwise surface the most recent linked record
-    // (e.g. an EXCEPTION/UNMATCHED one) so contradictions are visible.
-    const linkedRecords = settlement.reconciliation;
-    const reconciliation =
-      linkedRecords.find((record) => record.status === ReconciliationStatus.MATCHED) ??
-      linkedRecords[0] ??
-      null;
-
-    // Audit approval evidence: an approval timestamp plus a lifecycle event
-    // that actually moved the settlement to APPROVED.
-    const auditApprovalPresent =
-      settlement.approvedAt !== null &&
-      settlement.events.some((event) => event.toStatus === "APPROVED");
-
-    const assessment = assessFinality({
-      settlement: {
-        publicId: settlement.publicId,
-        status: settlement.status,
-        sourceCurrency: settlement.sourceCurrency,
-        targetCurrency: settlement.targetCurrency,
-        sourceAmount: Number(settlement.sourceAmount),
-        targetAmount: Number(settlement.targetAmount),
-      },
-      proof: proof
-        ? {
-            provider: proof.provider,
-            providerStatus: proof.providerStatus,
-            providerTransactionId: proof.providerTransactionId,
-            utr: proof.utr,
-            actualAmount: proof.actualAmount === null ? null : Number(proof.actualAmount),
-            currency: proof.currency,
-            receivedVia: proof.receivedVia,
-          }
-        : null,
-      reconciliation: reconciliation
-        ? {
-            status: reconciliation.status,
-            externalRef: reconciliation.externalRef,
-            source: reconciliation.source,
-            amount: Number(reconciliation.amount),
-            currency: reconciliation.currency,
-          }
-        : null,
-      auditApprovalPresent,
-    });
+    const assessment = assessFinality(
+      buildFinalityInput(settlement, settlement.providerProofs, settlement.reconciliation, settlement.events),
+    );
 
     return NextResponse.json({
       data: {
-        settlementId: settlement.id,
-        publicId: settlement.publicId,
-        status: settlement.status,
-        assessment,
-        inputs: {
-          proof: proof
-            ? {
-                id: proof.id,
-                provider: proof.provider,
-                providerStatus: proof.providerStatus,
-                providerTransactionId: proof.providerTransactionId,
-                utr: proof.utr,
-                actualAmount: proof.actualAmount?.toString() ?? null,
-                currency: proof.currency,
-                receivedVia: proof.receivedVia,
-                receivedAt: proof.receivedAt.toISOString(),
-              }
-            : null,
-          reconciliation: reconciliation
-            ? {
-                id: reconciliation.id,
-                status: reconciliation.status,
-                externalRef: reconciliation.externalRef,
-                source: reconciliation.source,
-                amount: reconciliation.amount.toString(),
-                currency: reconciliation.currency,
-              }
-            : null,
-          auditApprovalPresent,
+        settlement: {
+          id: settlement.id,
+          publicId: settlement.publicId,
+          reference: settlement.reference,
+          corridor: settlement.corridor,
+          status: settlement.status,
+          sourceAmount: settlement.sourceAmount.toString(),
+          sourceCurrency: settlement.sourceCurrency,
+          targetAmount: settlement.targetAmount.toString(),
+          targetCurrency: settlement.targetCurrency,
+          feeAmount: settlement.feeAmount.toString(),
+          provider: settlement.provider,
+          providerTransactionId: settlement.providerTransactionId,
+          providerStatus: settlement.providerStatus,
+          createdAt: settlement.createdAt.toISOString(),
+          approvedAt: settlement.approvedAt?.toISOString() ?? null,
+          settledAt: settlement.settledAt?.toISOString() ?? null,
+          reconciledAt: settlement.reconciledAt?.toISOString() ?? null,
         },
+        providerProofs: settlement.providerProofs.map((proof) => ({
+          id: proof.id,
+          provider: proof.provider,
+          providerStatus: proof.providerStatus,
+          providerTransactionId: proof.providerTransactionId,
+          utr: proof.utr,
+          actualAmount: proof.actualAmount?.toString() ?? null,
+          currency: proof.currency,
+          receivedVia: proof.receivedVia,
+          receivedAt: proof.receivedAt.toISOString(),
+        })),
+        reconciliation: settlement.reconciliation.map((record) => ({
+          id: record.id,
+          status: record.status,
+          externalRef: record.externalRef,
+          source: record.source,
+          amount: record.amount.toString(),
+          currency: record.currency,
+          valueDate: record.valueDate.toISOString(),
+          exceptionReason: record.exceptionReason,
+        })),
+        auditEvents: settlement.events.map((event) => ({
+          id: event.id,
+          fromStatus: event.fromStatus,
+          toStatus: event.toStatus,
+          note: event.note,
+          createdAt: event.createdAt.toISOString(),
+        })),
+        finality: assessment,
       },
     });
   } catch (err) {

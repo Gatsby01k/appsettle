@@ -10,6 +10,8 @@ import {
   transitionSettlement,
 } from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
+import { assessFinality } from "@/lib/finality";
+import { buildFinalityInput, hasAuditApproval, latestProofOf, relevantReconciliationOf } from "@/lib/finality-input";
 import { canApproveSettlement } from "@/lib/permissions";
 import { counterpartyForCorridor } from "@/lib/treasury";
 import { prisma } from "@/lib/prisma";
@@ -151,10 +153,60 @@ function DemoFocusBadge() {
 type SettlementRow = Awaited<
   ReturnType<
     typeof prisma.settlement.findMany<{
-      include: { events: true; reconciliation: true };
+      include: { events: true; reconciliation: true; providerProofs: true };
     }>
   >
 >[number];
+
+/**
+ * Builds the serializable "Proof-to-Settlement" case file for the detail
+ * sheet. The decision itself comes from the deterministic engine
+ * (lib/finality.ts) over the same shared input builder the API route uses —
+ * the dashboard and GET /api/settlements/[id]/finality can never disagree.
+ */
+function toFinalityReviewData(settlement: SettlementRow): SettlementDetail["finality"] {
+  const assessment = assessFinality(
+    buildFinalityInput(settlement, settlement.providerProofs, settlement.reconciliation, settlement.events),
+  );
+  const proof = latestProofOf(settlement.providerProofs);
+  const reconciliation = relevantReconciliationOf(settlement.reconciliation);
+
+  return {
+    decision: assessment.decision,
+    riskLevel: assessment.riskLevel,
+    confidence: assessment.confidence,
+    summary: assessment.summary,
+    blockingIssues: assessment.blockingIssues,
+    warnings: assessment.warnings,
+    evidence: assessment.evidence,
+    recommendedActions: assessment.recommendedActions,
+    proof: proof
+      ? {
+          provider: proof.provider,
+          providerStatus: proof.providerStatus,
+          providerTransactionId: proof.providerTransactionId ?? undefined,
+          utr: proof.utr ?? undefined,
+          actualAmount:
+            proof.actualAmount != null && proof.currency
+              ? formatCurrencyFull(proof.actualAmount.toString(), proof.currency)
+              : undefined,
+          currency: proof.currency ?? undefined,
+          receivedVia: proof.receivedVia,
+          receivedAt: formatDateTime(proof.receivedAt),
+        }
+      : null,
+    proofCount: settlement.providerProofs.length,
+    reconciliation: reconciliation
+      ? {
+          status: reconciliation.status,
+          externalRef: reconciliation.externalRef,
+          source: reconciliation.source,
+          amount: formatCurrencyFull(String(reconciliation.amount), reconciliation.currency),
+        }
+      : null,
+    auditApprovalPresent: hasAuditApproval(settlement, settlement.events),
+  };
+}
 
 function toSettlementDetail(settlement: SettlementRow): SettlementDetail {
   const cp = counterpartyForCorridor(settlement.corridor);
@@ -187,6 +239,7 @@ function toSettlementDetail(settlement: SettlementRow): SettlementDetail {
       amount: formatCurrencyFull(String(record.amount), record.currency),
       valueDate: formatDateTime(record.valueDate),
     })),
+    finality: toFinalityReviewData(settlement),
   };
 }
 
@@ -358,6 +411,7 @@ export default async function SettlementsPage({
       include: {
         events: { orderBy: { createdAt: "asc" } },
         reconciliation: true,
+        providerProofs: { orderBy: { receivedAt: "desc" } },
       },
     }),
   ]);

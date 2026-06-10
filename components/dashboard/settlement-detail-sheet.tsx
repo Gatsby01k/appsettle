@@ -8,6 +8,7 @@ import { StatRow } from "@/components/ops/stat-row";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { FinalityReview, type FinalityReviewData } from "@/components/dashboard/finality-review";
 
 export type SettlementDetail = {
   publicId: string;
@@ -28,6 +29,7 @@ export type SettlementDetail = {
   counterparty: { name: string; type: string; country: string };
   events: { label: string; note?: string; at: string }[];
   reconciliation: { externalRef: string; source: string; status: string; amount: string; valueDate: string }[];
+  finality: FinalityReviewData;
 };
 
 export function SettlementDetailSheet({
@@ -36,7 +38,7 @@ export function SettlementDetailSheet({
   triggerLabel = "Details",
 }: {
   settlement: SettlementDetail;
-  defaultTab?: "overview" | "audit" | "reconciliation";
+  defaultTab?: "overview" | "audit" | "reconciliation" | "finality";
   triggerLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -72,6 +74,9 @@ export function SettlementDetailSheet({
             </TabsTrigger>
             <TabsTrigger value="reconciliation" className="flex-1">
               Reconciliation
+            </TabsTrigger>
+            <TabsTrigger value="finality" className="flex-1">
+              Finality
             </TabsTrigger>
           </TabsList>
 
@@ -143,6 +148,10 @@ export function SettlementDetailSheet({
                 No reconciliation records linked to this settlement.
               </p>
             )}
+          </TabsContent>
+
+          <TabsContent value="finality">
+            <FinalityReview data={settlement.finality} />
           </TabsContent>
         </Tabs>
       </SheetContent>
