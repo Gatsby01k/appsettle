@@ -17,6 +17,7 @@ import { cn, formatCurrencyCompact, formatCurrencyFull, formatDateTime } from "@
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
+import { StatusFlight, type StatusFlightStatus } from "@/components/ui/status-flight";
 import { EmptyState } from "@/components/ops/empty-state";
 import { FilterBar } from "@/components/ops/filter-bar";
 import { FormSelect } from "@/components/ops/form-select";
@@ -104,6 +105,19 @@ function rowShowsConsole(status: SettlementStatus) {
     SettlementStatus.SETTLED,
     SettlementStatus.RECONCILED,
   ]).has(status);
+}
+
+function settlementStatusFlight(status: SettlementStatus): { flight: StatusFlightStatus; trigger: boolean } | null {
+  switch (status) {
+    case SettlementStatus.SETTLED:
+      return { flight: "settled", trigger: true };
+    case SettlementStatus.RECONCILED:
+      return { flight: "reconciled", trigger: true };
+    case SettlementStatus.FAILED:
+      return { flight: "failed", trigger: true };
+    default:
+      return null;
+  }
 }
 
 function successMatchesRow(success: string | undefined, status: SettlementStatus) {
@@ -445,6 +459,7 @@ export default async function SettlementsPage({
 
                 const showConsole = rowShowsConsole(settlement.status);
                 const rowJustUpdated = successMatchesRow(params.success, settlement.status);
+                const statusFlight = settlementStatusFlight(settlement.status);
 
                 return (
                 <Fragment key={settlement.id}>
@@ -469,7 +484,17 @@ export default async function SettlementsPage({
                     {formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
                   </DataGridTd>
                   <DataGridTd>
-                    <StatusBadge status={settlement.status} />
+                    <span className="inline-flex items-center gap-1.5">
+                      <StatusBadge status={settlement.status} />
+                      {statusFlight ? (
+                        <StatusFlight
+                          status={statusFlight.flight}
+                          trigger={statusFlight.trigger}
+                          label=""
+                          className="shrink-0"
+                        />
+                      ) : null}
+                    </span>
                   </DataGridTd>
                   <DataGridTd className="min-w-[240px]">
                     <SettlementLifecycle status={settlement.status} compact />
