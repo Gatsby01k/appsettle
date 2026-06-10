@@ -119,6 +119,35 @@ describe("needs_review rules", () => {
   });
 });
 
+describe("independent reconciliation requirement", () => {
+  it("a MATCHED provider_claim record -> needs_review, never ready_to_finalize", () => {
+    const result = assessFinality(
+      input({ reconciliation: { ...matchedReconciliation, source: "provider_claim" } }),
+    );
+    expect(result.decision).toBe("needs_review");
+    expect(result.decision).not.toBe("ready_to_finalize");
+    expect(["medium", "high"]).toContain(result.riskLevel);
+    expect(result.blockingIssues.join(" ")).toMatch(/provider claims do not count/i);
+    expect(result.recommendedActions.join(" ")).toMatch(/independent evidence/i);
+  });
+
+  it("provider proof + provider_claim reconciliation + audit approval is still not enough", () => {
+    // The provider agreeing with itself twice must never finalize a settlement.
+    const result = assessFinality(
+      input({ reconciliation: { ...matchedReconciliation, source: "provider_claim" }, auditApprovalPresent: true }),
+    );
+    expect(result.decision).toBe("needs_review");
+    expect(result.confidence).toBeLessThan(100);
+  });
+
+  it("each independent source can satisfy finality", () => {
+    for (const source of ["bank_statement", "psp_report", "manual_operator", "manual", "chain_tx"]) {
+      const result = assessFinality(input({ reconciliation: { ...matchedReconciliation, source } }));
+      expect(result.decision).toBe("ready_to_finalize");
+    }
+  });
+});
+
 describe("ready_to_finalize", () => {
   it("requires proof + reconciliation + audit to agree", () => {
     const result = assessFinality(input());

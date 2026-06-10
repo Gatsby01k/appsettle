@@ -5,8 +5,10 @@ import { writeAuditLog } from "@/lib/audit";
 import { UserFacingError } from "@/lib/errors";
 import {
   AUTO_MATCH_MIN_CONFIDENCE,
+  PROVIDER_CLAIM_SOURCE,
   SUGGESTED_MIN_CONFIDENCE,
   computeConfidence,
+  isIndependentReconciliationSource,
   matchReasonFor,
   type MatchOrigin,
 } from "@/lib/reconciliation";
@@ -238,6 +240,16 @@ export async function createReconciliationRecord(input: unknown, userId: string,
 
   if (data.status === "MATCHED" && !matchedSettlement) {
     throw new UserFacingError("A MATCHED reconciliation record must be linked to a settlement.");
+  }
+
+  // Provider claims are never independent reconciliation evidence: a record
+  // that only restates the payout provider's own claim cannot be MATCHED to a
+  // settlement (and therefore can never reconcile one). It may exist as an
+  // OPEN/EXCEPTION record for visibility only.
+  if (data.source === PROVIDER_CLAIM_SOURCE && (data.status === "MATCHED" || matchedSettlement)) {
+    throw new UserFacingError(
+      "A provider_claim record cannot be matched to a settlement — reconciliation requires independent evidence (bank statement, PSP report, or operator confirmation).",
+    );
   }
 
   if (data.status === "MATCHED" && data.exceptionReason) {
@@ -593,6 +605,10 @@ export async function autoMatchReconciliation(userId: string, organizationId: st
   let matched = 0;
 
   for (const record of open) {
+    // Provider claims never reconcile settlements: the engine only matches
+    // independent evidence (bank statements, PSP reports, operator records).
+    if (!isIndependentReconciliationSource(record.source)) continue;
+
     const rejected = new Set(rejectedSettlementIdsOf(record.rawPayload));
 
     // Exact (100%) candidates: same amount + same currency + same value date, SETTLED,
@@ -678,6 +694,11 @@ export async function confirmReconciliationMatch(
   }
   if (record.status === ReconciliationStatus.EXCEPTION) {
     throw new UserFacingError("Exception records cannot be matched until the exception is resolved.");
+  }
+  if (!isIndependentReconciliationSource(record.source)) {
+    throw new UserFacingError(
+      "A provider_claim record cannot be confirmed as a match — reconciliation requires independent evidence (bank statement, PSP report, or operator confirmation).",
+    );
   }
 
   const settlement = await prisma.settlement.findFirst({

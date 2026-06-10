@@ -60,6 +60,17 @@ describe("relevantReconciliationOf", () => {
     expect(relevantReconciliationOf([unmatched, matchedRecord])?.status).toBe("MATCHED");
   });
 
+  it("prefers an independent MATCHED record over a provider_claim MATCHED record", () => {
+    const providerClaim = { ...matchedRecord, source: "provider_claim", externalRef: "PC-1" };
+    expect(relevantReconciliationOf([providerClaim, matchedRecord])?.source).toBe("bank_statement");
+    expect(relevantReconciliationOf([matchedRecord, providerClaim])?.source).toBe("bank_statement");
+  });
+
+  it("still surfaces a lone provider_claim match so finality can explain why it does not count", () => {
+    const providerClaim = { ...matchedRecord, source: "provider_claim", externalRef: "PC-1" };
+    expect(relevantReconciliationOf([providerClaim])?.source).toBe("provider_claim");
+  });
+
   it("surfaces a contradicting record instead of hiding it when nothing matched", () => {
     const exception = { ...matchedRecord, status: "EXCEPTION", externalRef: "X-2" };
     expect(relevantReconciliationOf([exception])?.status).toBe("EXCEPTION");

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTO_MATCH_MIN_CONFIDENCE,
+  PROVIDER_CLAIM_SOURCE,
   SUGGESTED_MIN_CONFIDENCE,
   computeConfidence,
+  isIndependentReconciliationSource,
   matchReasonFor,
   matchTypeFor,
   settlementLegAmount,
@@ -76,6 +78,23 @@ describe("matchTypeFor", () => {
   it("exceptions and resolved records keep their lifecycle type", () => {
     expect(matchTypeFor("EXCEPTION", 100, false)).toBe("EXCEPTION");
     expect(matchTypeFor("RESOLVED", 100, false)).toBe("RESOLVED");
+  });
+});
+
+describe("isIndependentReconciliationSource", () => {
+  it("bank_statement, psp_report, manual_operator (and legacy manual/chain_tx) are independent", () => {
+    for (const source of ["bank_statement", "psp_report", "manual_operator", "manual", "chain_tx"]) {
+      expect(isIndependentReconciliationSource(source)).toBe(true);
+    }
+  });
+
+  it("provider_claim and unknown/missing sources are never independent", () => {
+    expect(isIndependentReconciliationSource(PROVIDER_CLAIM_SOURCE)).toBe(false);
+    expect(isIndependentReconciliationSource("provider_claim")).toBe(false);
+    expect(isIndependentReconciliationSource("something_else")).toBe(false);
+    expect(isIndependentReconciliationSource(null)).toBe(false);
+    expect(isIndependentReconciliationSource(undefined)).toBe(false);
+    expect(isIndependentReconciliationSource("")).toBe(false);
   });
 });
 

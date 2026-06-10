@@ -24,7 +24,10 @@ export const reconciliationSchema = z.object({
       message: "External reference must be at least 3 characters.",
     })
     .optional(),
-  source: z.enum(["bank_statement", "chain_tx", "psp_report", "manual"]),
+  // bank_statement / chain_tx / psp_report / manual_operator ("manual" is the
+  // legacy alias) are independent evidence; provider_claim only restates the
+  // payout provider's own claim and never counts toward finality.
+  source: z.enum(["bank_statement", "chain_tx", "psp_report", "manual", "manual_operator", "provider_claim"]),
   amount: z.coerce.number().positive(),
   currency: z.enum(["INR", "USDT"]),
   settlementId: z.string().optional(),

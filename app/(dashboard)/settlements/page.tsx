@@ -12,6 +12,7 @@ import {
 import { friendlyErrorMessage } from "@/lib/errors";
 import { assessFinality } from "@/lib/finality";
 import { buildFinalityInput, hasAuditApproval, latestProofOf, relevantReconciliationOf } from "@/lib/finality-input";
+import { RECONCILIATION_SOURCE_LABEL, isIndependentReconciliationSource } from "@/lib/reconciliation";
 import { canApproveSettlement } from "@/lib/permissions";
 import { counterpartyForCorridor } from "@/lib/treasury";
 import { prisma } from "@/lib/prisma";
@@ -201,6 +202,8 @@ function toFinalityReviewData(settlement: SettlementRow): SettlementDetail["fina
           status: reconciliation.status,
           externalRef: reconciliation.externalRef,
           source: reconciliation.source,
+          sourceLabel: RECONCILIATION_SOURCE_LABEL[reconciliation.source] ?? reconciliation.source,
+          independent: isIndependentReconciliationSource(reconciliation.source),
           amount: formatCurrencyFull(String(reconciliation.amount), reconciliation.currency),
         }
       : null,

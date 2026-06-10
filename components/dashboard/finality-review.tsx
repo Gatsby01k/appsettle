@@ -31,6 +31,9 @@ export type FinalityReviewData = {
     status: string;
     externalRef: string;
     source: string;
+    sourceLabel: string;
+    /** True when the source counts as independent evidence (never provider_claim). */
+    independent: boolean;
     amount: string;
   } | null;
   auditApprovalPresent: boolean;
@@ -188,7 +191,7 @@ export function FinalityReview({ data }: { data: FinalityReviewData }) {
         {data.reconciliation ? (
           <div className="flex items-start gap-2 text-xs text-slate-600">
             <Landmark className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
-            <div className="space-y-0.5">
+            <div className="space-y-1">
               <p>
                 <span className="font-medium text-slate-900">{data.reconciliation.externalRef}</span>{" "}
                 <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.05em] text-slate-600">
@@ -196,8 +199,17 @@ export function FinalityReview({ data }: { data: FinalityReviewData }) {
                 </span>
               </p>
               <p>
-                {data.reconciliation.source} · {data.reconciliation.amount}
+                {data.reconciliation.sourceLabel} · {data.reconciliation.amount}
               </p>
+              {data.reconciliation.independent ? (
+                <p className="inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-emerald-700">
+                  Independent evidence
+                </p>
+              ) : (
+                <p className="inline-flex items-center rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-amber-800">
+                  Provider claim — does not count toward finality
+                </p>
+              )}
             </div>
           </div>
         ) : (

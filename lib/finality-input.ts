@@ -6,6 +6,7 @@
 // finalize.
 
 import type { FinalityInput } from "@/lib/finality";
+import { isIndependentReconciliationSource } from "@/lib/reconciliation";
 
 /** number, numeric string, or Prisma Decimal (anything with a numeric toString). */
 export type NumberLike = number | string | { toString(): string };
@@ -66,12 +67,21 @@ export function latestProofOf<T extends ProofLike>(proofs: T[]): T | null {
 }
 
 /**
- * The reconciliation record finality should judge: prefer a MATCHED record;
- * otherwise surface the first linked record (e.g. UNMATCHED / EXCEPTION) so
- * contradictions stay visible instead of being hidden by "no record".
+ * The reconciliation record finality should judge, in order of preference:
+ *  1. a MATCHED record from an INDEPENDENT source (the only kind that can
+ *     satisfy finality),
+ *  2. any other MATCHED record (e.g. a legacy provider_claim match — surfaced
+ *     so finality can explain why it does not count),
+ *  3. the first linked record (e.g. UNMATCHED / EXCEPTION) so contradictions
+ *     stay visible instead of being hidden by "no record".
  */
 export function relevantReconciliationOf<T extends ReconciliationLike>(records: T[]): T | null {
-  return records.find((record) => record.status === "MATCHED") ?? records[0] ?? null;
+  return (
+    records.find((record) => record.status === "MATCHED" && isIndependentReconciliationSource(record.source)) ??
+    records.find((record) => record.status === "MATCHED") ??
+    records[0] ??
+    null
+  );
 }
 
 /**

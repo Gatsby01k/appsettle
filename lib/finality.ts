@@ -4,13 +4,16 @@
 // completed. A settlement is only safe to finalize when three independent
 // inputs agree:
 //   1. provider proof   — structured evidence of what the provider reported
-//   2. reconciliation   — an independent record (bank statement / PSP report)
-//      matched to the settlement
+//   2. reconciliation   — an INDEPENDENT record (bank statement / PSP report /
+//      operator-verified) matched to the settlement. A provider_claim record
+//      never counts: the provider repeating its own claim corroborates nothing.
 //   3. audit trail      — the settlement was approved through the controlled
 //      lifecycle (approval recorded)
 //
 // The same input always produces the same output: no randomness, no clock
 // reads, no I/O.
+
+import { RECONCILIATION_SOURCE_LABEL, isIndependentReconciliationSource } from "@/lib/reconciliation";
 
 export type FinalityDecision = "ready_to_finalize" | "needs_review" | "not_ready";
 export type FinalityRiskLevel = "low" | "medium" | "high";
@@ -113,10 +116,13 @@ function maxRisk(a: FinalityRiskLevel, b: FinalityRiskLevel): FinalityRiskLevel 
  *  - provider status not completed            -> not_ready
  *  - provider proof missing                   -> needs_review (high risk)
  *  - reconciliation missing                   -> needs_review (medium risk)
+ *  - reconciliation is provider_claim only    -> needs_review (medium risk;
+ *      a provider claim is NOT independent evidence)
  *  - reconciliation unmatched / exception     -> needs_review (high risk)
  *  - expected vs reported amount differs      -> needs_review (high risk)
  *  - audit approval missing                   -> needs_review (high risk)
- *  - proof + reconciliation + audit agree     -> ready_to_finalize (low risk)
+ *  - proof + INDEPENDENT reconciliation +
+ *    audit agree                              -> ready_to_finalize (low risk)
  */
 export function assessFinality(input: FinalityInput): FinalityAssessment {
   const { settlement, proof, reconciliation, auditApprovalPresent } = input;
@@ -215,6 +221,16 @@ export function assessFinality(input: FinalityInput): FinalityAssessment {
       `Linked reconciliation record ${reconciliation.externalRef} is ${reconciliation.status}, not MATCHED.`,
     );
     recommendedActions.push("Complete reconciliation matching for this settlement.");
+    riskLevel = maxRisk(riskLevel, "medium");
+  } else if (!isIndependentReconciliationSource(reconciliation.source)) {
+    // MATCHED but the only evidence restates the provider's own claim. This
+    // never counts toward finality — independent corroboration is required.
+    blockingIssues.push(
+      `Reconciliation record ${reconciliation.externalRef} is a ${RECONCILIATION_SOURCE_LABEL[reconciliation.source] ?? reconciliation.source} — provider claims do not count as independent reconciliation evidence.`,
+    );
+    recommendedActions.push(
+      "Ingest independent evidence (bank statement, PSP report, or operator confirmation) and match it to this settlement.",
+    );
     riskLevel = maxRisk(riskLevel, "medium");
   } else {
     const expectedForRecon = settlementExpectedAmount(settlement, reconciliation.currency);

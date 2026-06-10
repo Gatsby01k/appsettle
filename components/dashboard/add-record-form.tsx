@@ -13,10 +13,14 @@ const NO_SETTLEMENT = "_none";
 
 type SettlementOption = { value: string; label: string };
 
+// All operator-recordable sources are independent evidence. provider_claim is
+// deliberately NOT offered here: provider claims arrive as provider proof, not
+// as reconciliation records, and never count toward finality.
 const SOURCES = [
   { value: "bank_statement", label: "Bank statement" },
   { value: "chain_tx", label: "Chain transfer" },
   { value: "psp_report", label: "PSP report" },
+  { value: "manual_operator", label: "Manual (operator)" },
 ];
 
 /** Format a Date as a local YYYY-MM-DD string (for native date inputs / value date). */

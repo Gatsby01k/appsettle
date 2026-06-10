@@ -15,6 +15,49 @@ export const SUGGESTED_MIN_CONFIDENCE = 80;
 /** Confidence required for the engine to auto-match and reconcile without operator action. */
 export const AUTO_MATCH_MIN_CONFIDENCE = 100;
 
+// --- Reconciliation source classification ---------------------------------------
+//
+// Core product rule: provider "completed" is provider proof/status, never
+// reconciliation. Reconciliation must be INDEPENDENT evidence — something the
+// provider cannot fabricate on its own.
+
+/** A record that merely restates what the payout provider claims. Never independent. */
+export const PROVIDER_CLAIM_SOURCE = "provider_claim";
+
+/**
+ * Sources that count as independent reconciliation evidence for finality:
+ *  - bank_statement   — the bank's own record of the money movement
+ *  - psp_report       — an external PSP/partner report
+ *  - manual_operator  — an operator attesting to independently verified evidence
+ *  - manual           — legacy alias of manual_operator (pre-classification records)
+ *  - chain_tx         — an on-chain transaction observed independently
+ */
+export const INDEPENDENT_RECONCILIATION_SOURCES = new Set([
+  "bank_statement",
+  "psp_report",
+  "manual_operator",
+  "manual",
+  "chain_tx",
+]);
+
+/**
+ * Whether a reconciliation source counts as independent evidence for finality.
+ * `provider_claim` (and anything unknown) does NOT count: a provider repeating
+ * its own claim can never corroborate that claim.
+ */
+export function isIndependentReconciliationSource(source: string | null | undefined): boolean {
+  return Boolean(source && INDEPENDENT_RECONCILIATION_SOURCES.has(source));
+}
+
+export const RECONCILIATION_SOURCE_LABEL: Record<string, string> = {
+  bank_statement: "Bank statement",
+  psp_report: "PSP report",
+  manual_operator: "Manual (operator)",
+  manual: "Manual (operator)",
+  chain_tx: "Chain transfer",
+  provider_claim: "Provider claim",
+};
+
 export type SettlementLegs = {
   sourceCurrency: string;
   targetCurrency: string;
