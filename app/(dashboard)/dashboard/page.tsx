@@ -305,7 +305,7 @@ export default async function DashboardPage({
     },
     settledAwaitingRecon > 0 && {
       label: `${settledAwaitingRecon} settled without independent reconciliation`,
-      detail: "Provider claims completion — uncorroborated until a bank/PSP record matches.",
+      detail: "Settled by provider. No matching bank/PSP record yet.",
       href: `/settlements?status=SETTLED${demoFocus ? "&demo=1" : ""}`,
       severity: "medium" as const,
     },
@@ -370,8 +370,7 @@ export default async function DashboardPage({
               Payment completed <span className="conf-hero__neq">≠</span> settlement finalized.
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-500">
-              {organization.displayName} settles on evidence, not provider claims: provider proof, independent
-              reconciliation and the audit trail must agree before finality.
+              Finality requires provider proof, a matched independent record, and a recorded approval.
             </p>
 
             <div className="mt-6 flex flex-wrap items-center gap-2.5">
@@ -450,7 +449,7 @@ export default async function DashboardPage({
             ) : (
               <div className="py-8 text-center">
                 <p className="text-sm font-medium text-slate-600">No completed settlement yet</p>
-                <p className="mt-1 text-xs text-slate-400">Create a quote to start the evidence chain.</p>
+                <p className="mt-1 text-xs text-slate-400">Create a quote to start your first settlement.</p>
               </div>
             )}
           </div>
@@ -503,8 +502,7 @@ export default async function DashboardPage({
           </div>
           <p className="mt-2 flex items-start gap-1.5 border-t border-[var(--ops-line-soft)] pt-2 text-[11px] leading-relaxed text-slate-400">
             <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-emerald-ink" />
-            INRSettle does not move funds. The partner/provider moves money externally; INRSettle controls the
-            operational layer.
+            Live payouts disabled. The provider moves funds; INRSettle records and verifies.
           </p>
         </div>
 
@@ -534,7 +532,7 @@ export default async function DashboardPage({
               icon={ShieldCheck}
               label="Needs review"
               value={settledAwaitingRecon}
-              hint={settledAwaitingRecon ? "Settled, not yet corroborated" : "All completed cases corroborated"}
+              hint={settledAwaitingRecon ? "Settled, not yet corroborated" : "All completed cases reconciled"}
               tone={settledAwaitingRecon ? "warning" : "success"}
             />
             <MetricCard variant="mission" icon={FileText} label="Reports generated" value={reportsGenerated} hint="Executive settlement reports" />
@@ -565,8 +563,8 @@ export default async function DashboardPage({
               key: "uncorroborated",
               title: "Unreconciled settlements",
               count: settledAwaitingRecon,
-              okText: "Every completed case is corroborated",
-              alertText: "Provider claims completion — awaiting bank/PSP record",
+              okText: "All completed cases reconciled",
+              alertText: "Settled by provider. No matching bank/PSP record yet.",
               href: `/settlements?status=SETTLED${demoFocus ? "&demo=1" : ""}`,
               severity: "medium" as const,
             },

@@ -329,11 +329,8 @@ export default async function SettlementReportPage({
           </div>
           {isShadowMode ? (
             <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">
-              INRSettle did not move funds directly in this test. The external partner/provider moved the money;
-              INRSettle recorded and controlled the operational layer.
-              {isLiveTest
-                ? " INRSettle did not automatically move funds and will not unless live payouts are explicitly enabled — no such switch is set."
-                : ""}
+              Funds were moved by the external provider. INRSettle recorded and verified the settlement.
+              {isLiveTest ? " Live payouts disabled." : ""}
             </p>
           ) : null}
         </div>
@@ -458,7 +455,7 @@ export default async function SettlementReportPage({
             </>
           ) : (
             <p className="text-sm text-slate-400">
-              No reconciliation record linked — the provider claim is uncorroborated.
+              Missing reconciliation record. Provider claim unverified.
             </p>
           )}
         </div>
@@ -513,8 +510,8 @@ export default async function SettlementReportPage({
         ) : null}
 
         <p className="report-footnote pt-3">
-          Finality is determined by deterministic review of provider proof, independent reconciliation, and the
-          audit trail. A provider-reported &quot;completed&quot; status alone never finalizes a settlement.
+          Finality requires provider proof, independent reconciliation and audit approval. Provider
+          &quot;completed&quot; alone never finalizes a settlement.
         </p>
       </div>
     </div>

@@ -239,7 +239,7 @@ export function FinalityReview({ data }: { data: FinalityReviewData }) {
           </div>
         ) : (
           <p className="text-xs text-slate-400">
-            No reconciliation record linked — provider claim is uncorroborated.
+            Missing reconciliation record. Provider claim unverified.
           </p>
         )}
       </div>

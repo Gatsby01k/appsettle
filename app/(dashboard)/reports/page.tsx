@@ -44,7 +44,7 @@ export default async function ReportsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Reports"
-        description="Generate enterprise settlement, reconciliation and audit exports for finance and compliance."
+        description="Settlement, reconciliation and audit exports for finance and compliance."
       />
 
       <div className="grid gap-3 sm:grid-cols-3">

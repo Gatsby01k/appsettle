@@ -380,9 +380,8 @@ export default async function ShadowConsolePage({
         <div className="flex items-start gap-2 rounded-xl border border-indigo-200 bg-indigo-50/60 p-3">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" />
           <p className="text-sm text-indigo-900">
-            <span className="font-semibold">INRSettle does not move funds.</span> In shadow and live-test modes the
-            external partner/provider moves the money; INRSettle records and controls the operational layer. Live
-            payouts remain disabled.
+            <span className="font-semibold">Live payouts disabled.</span> The provider moves funds; INRSettle
+            records proof, reconciliation and approvals.
           </p>
         </div>
 
@@ -613,11 +612,11 @@ export default async function ShadowConsolePage({
             </p>
           ) : (
             <p className="text-sm text-slate-600">
-              No record linked yet. Ingest the bank statement / PSP report (or add a manual operator record) on the{" "}
+              No record linked. Add a bank/PSP record on the{" "}
               <Link href="/reconciliation" className="font-medium text-slate-900 underline underline-offset-2">
                 Reconciliation page
-              </Link>{" "}
-              — provider claims never count as independent evidence.
+              </Link>
+              . Provider claims don&apos;t count.
             </p>
           )}
         </div>

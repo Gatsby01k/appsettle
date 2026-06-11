@@ -307,13 +307,12 @@ export default async function ReconciliationPage({
       {/* Independence rule, stated where matching happens */}
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
         <span className="case-chip border-emerald-200 bg-emerald-50 text-emerald-700">Independent evidence</span>
-        <span>Bank statements, PSP reports and operator records reconcile settlements.</span>
-        <span className="case-chip case-chip--gold">Provider claims never count</span>
+        <span className="case-chip case-chip--gold">Provider claims excluded</span>
       </div>
 
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {params.success === "created" ? (
-        <FlashMessage message="External record saved as OPEN — run auto-match to reconcile it." />
+        <FlashMessage message="Record saved as OPEN. Run auto-match to reconcile." />
       ) : null}
       {params.success === "manual" ? (
         <FlashMessage message="Manual match confirmed — record linked and settlement reconciled." />

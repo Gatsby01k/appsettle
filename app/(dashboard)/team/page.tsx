@@ -67,9 +67,8 @@ export default async function TeamPage() {
       <div className="flex items-start gap-2 rounded-xl border border-[var(--ops-line)] bg-white p-3">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand-emerald-ink" />
         <p className="text-xs leading-relaxed text-slate-600">
-          <span className="font-semibold text-slate-900">Dual control for live tests:</span> a LIVE_TEST settlement can
-          only reach finality when an approver-role member who is <span className="font-semibold">not</span> the
-          settlement creator explicitly approves it on the Shadow console. Creator self-approval is rejected.
+          <span className="font-semibold text-slate-900">Dual control:</span> LIVE_TEST finality requires approval by
+          a second operator. Creators can&apos;t approve their own settlements.
         </p>
       </div>
 
@@ -142,7 +141,7 @@ export default async function TeamPage() {
       {/* Demo roster — display-only sample data, clearly separated */}
       <div>
         <p className="ops-eyebrow mb-2">
-          Demo roster · sample directory <span className="case-chip case-chip--demo ml-1">display only</span>
+          Sample directory <span className="case-chip case-chip--demo ml-1">display only</span>
         </p>
         <DataGrid>
           <table className="w-full min-w-[680px]">

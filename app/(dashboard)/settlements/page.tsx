@@ -125,13 +125,13 @@ function caseOperationalSummary(
   finality: { decision: string; riskLevel: string; reconciliation: { status: string; independent: boolean } | null },
 ): string {
   if (status === SettlementStatus.REQUESTED) {
-    return "Settlement created. Operator approval is required before execution.";
+    return "Awaiting approval before execution.";
   }
   if (status === SettlementStatus.APPROVED) {
     return "Approved. Execute the payout via the provider to start tracking.";
   }
   if (status === SettlementStatus.EXECUTING) {
-    return "Payout submitted. INRSettle is tracking the provider status.";
+    return "Payout submitted. Tracking provider status.";
   }
   if (status === SettlementStatus.FAILED) {
     return "Provider reported a terminal failure before money moved.";
@@ -522,8 +522,7 @@ export default async function SettlementsPage({
             </div>
             <h1 className="conf-hero__headline mt-3">Settlements</h1>
             <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-slate-500">
-              Every settlement is a case file: provider proof, independent reconciliation and the audit trail must
-              agree before finality.
+              Track provider proof, reconciliation and approvals through to finality.
             </p>
           </div>
           <div className="grid shrink-0 grid-cols-3 gap-x-6 gap-y-3 sm:grid-cols-6 lg:grid-cols-3 xl:grid-cols-6">
@@ -901,7 +900,7 @@ export default async function SettlementsPage({
             <p className="text-sm font-semibold tracking-tight text-slate-900">No settlement cases match</p>
             <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
               {modeFilter
-                ? `No ${MODE_LABEL[modeFilter as keyof typeof MODE_LABEL]} cases yet — switch mode on a settlement's Shadow console.`
+                ? `No ${MODE_LABEL[modeFilter as keyof typeof MODE_LABEL]} settlements. Set mode from a settlement's Shadow console.`
                 : "Create a settlement from an active quote, or adjust search and filters."}
             </p>
           </div>

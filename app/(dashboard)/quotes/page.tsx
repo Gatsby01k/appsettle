@@ -228,11 +228,11 @@ function QuotePreviewPanel({ quote }: { quote?: PreviewQuote | null }) {
       ]
     : [
         { label: "Corridor", value: "USDT → INR" },
-        { label: "Source amount", value: "Awaiting input" },
-        { label: "Rate", value: "Locks on generation" },
+        { label: "Source amount", value: "—" },
+        { label: "Rate", value: "Set at lock" },
         { label: "Fee", value: "45 bps indicative" },
         { label: "Window", value: "Instant / same day" },
-        { label: "Valid until", value: "15:00 from lock" },
+        { label: "Valid until", value: "15 min" },
       ];
 
   return (
@@ -249,13 +249,13 @@ function QuotePreviewPanel({ quote }: { quote?: PreviewQuote | null }) {
             </p>
           ) : (
             <p className="mt-1">
-              <span className="qlock__source-tag">Draft preview · reflects standard quote terms</span>
+              <span className="qlock__source-tag">Draft preview</span>
             </p>
           )}
           <p className="mt-1 text-[11px] text-white/50">
             {isLocked
-              ? "Locked execution terms — independent of the draft form on the left."
-              : "Values lock when you generate the quote; the draft form does not move money."}
+              ? "Locked executable terms."
+              : "Indicative until generated."}
           </p>
         </div>
         <span className={cn("qlock__chip shrink-0", isLocked ? "qlock__chip--locked" : "qlock__chip--indicative")}>
@@ -374,8 +374,7 @@ export default async function QuotesPage({
           </div>
           <h1 className="conf-hero__headline mt-4">Lock executable settlement terms.</h1>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-500">
-            A settlement can only be created from a locked, unexpired quote — corridor, amount, rate and window are
-            fixed before any money moves on the external rail.
+            A settlement can only be created from a locked, unexpired quote.
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-[var(--ops-line-soft)] pt-4">
             {[
@@ -508,7 +507,7 @@ export default async function QuotesPage({
               </div>
               <div className="mt-1 flex items-center justify-between gap-3 sm:col-span-2 lg:col-span-3">
                 <p className="text-[11px] leading-snug text-slate-400">
-                  Generating locks rate, fee and window — the ticket becomes executable for settlement creation.
+                  Locks rate, fee and validity for 15 minutes.
                 </p>
                 <SubmitButton
                   type="submit"
@@ -532,7 +531,7 @@ export default async function QuotesPage({
           <div className="min-w-0">
             <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Quote inventory</p>
             <p className="truncate text-xs text-slate-400">
-              Locked executable tickets — promote to a settlement before expiry
+              Locked quotes. Create settlements before expiry.
             </p>
           </div>
           <TabLinks
@@ -557,7 +556,7 @@ export default async function QuotesPage({
         {tab === "expired" && filtered.length ? (
           <div className="flex flex-wrap items-center gap-2 border-b border-[var(--ops-line-soft)] bg-amber-50/40 px-3 py-2 text-xs text-slate-600">
             <span className="case-chip case-chip--gold">{expiredCount} expired</span>
-            <span>Stale quotes cannot create settlements — refresh to lock current terms.</span>
+            <span>Expired quotes can't create settlements. Refresh to re-lock terms.</span>
           </div>
         ) : null}
 
@@ -704,7 +703,7 @@ export default async function QuotesPage({
                                 </SubmitButton>
                               </form>
                               <p className="quote-cta-hint max-w-[196px] text-right text-[10px] leading-snug text-slate-400">
-                                Promotes this quote into the settlement lifecycle.
+                                Creates a settlement from this quote.
                               </p>
                               <div className="quote-cta-secondary-row mt-0.5 flex flex-wrap items-center justify-end gap-1">
                                 <form action={refreshQuote}>
