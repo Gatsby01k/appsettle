@@ -385,6 +385,22 @@ async function generateAndReconcile(formData: FormData) {
   const { user, organization, membership } = await requireSession();
   if (!canApproveSettlement(membership.role)) redirect("/settlements");
   const settlementId = String(formData.get("settlementId") ?? "");
+
+  // P0 guard: this helper FABRICATES an independent bank record. It must never
+  // run against SHADOW/LIVE_TEST settlements — real cases require a real
+  // bank/PSP record via the Reconciliation page.
+  const target = await prisma.settlement.findFirst({
+    where: { id: settlementId, organizationId: organization.id },
+    select: { testMode: true },
+  });
+  if (!target || target.testMode !== "DEMO") {
+    redirect(
+      `/settlements?reconcileRequired=${settlementId}&error=${encodeURIComponent(
+        "Demo reconciliation is only available in DEMO mode.",
+      )}`,
+    );
+  }
+
   try {
     await generateSettlementBankRecordAndReconcile(settlementId, user.id, organization.id);
   } catch (error) {
@@ -896,7 +912,7 @@ export default async function SettlementsPage({
                       autoRefresh={rowAutoRefresh}
                       canReconcile={canApprove}
                       autoMatchAction={runAutoMatch}
-                      generateReconcileAction={generateAndReconcile}
+                      generateReconcileAction={settlement.testMode === "DEMO" ? generateAndReconcile : undefined}
                       reconcileRequired={params.reconcileRequired === settlement.id}
                       inlineError={params.reconcileRequired === settlement.id ? params.error : undefined}
                     />
