@@ -22,7 +22,6 @@ import { cn, formatCurrencyCompact, formatCurrencyFull, formatDateTime } from "@
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
-import { SettlementRowFlightOverlay, type StatusFlightStatus } from "@/components/ui/status-flight";
 import { EmptyState } from "@/components/ops/empty-state";
 import { FilterBar } from "@/components/ops/filter-bar";
 import { FormSelect } from "@/components/ops/form-select";
@@ -111,19 +110,6 @@ function rowShowsConsole(status: SettlementStatus) {
     SettlementStatus.SETTLED,
     SettlementStatus.RECONCILED,
   ]).has(status);
-}
-
-function settlementStatusFlight(status: SettlementStatus): StatusFlightStatus | null {
-  switch (status) {
-    case SettlementStatus.SETTLED:
-      return "settled";
-    case SettlementStatus.RECONCILED:
-      return "reconciled";
-    case SettlementStatus.FAILED:
-      return "failed";
-    default:
-      return null;
-  }
 }
 
 function successMatchesRow(success: string | undefined, status: SettlementStatus) {
@@ -546,7 +532,6 @@ export default async function SettlementsPage({
 
                 const showConsole = rowShowsConsole(settlement.status);
                 const rowJustUpdated = successMatchesRow(params.success, settlement.status);
-                const statusFlight = settlementStatusFlight(settlement.status);
 
                 return (
                 <Fragment key={settlement.id}>
@@ -557,9 +542,6 @@ export default async function SettlementsPage({
                     rowJustUpdated && "settlement-row-highlight",
                   )}
                 >
-                  {statusFlight && rowJustUpdated ? (
-                    <SettlementRowFlightOverlay status={statusFlight} />
-                  ) : null}
                   <DataGridTd>
                     <div className="flex items-center gap-1.5">
                       <p className="font-medium text-slate-950">{settlement.publicId}</p>
