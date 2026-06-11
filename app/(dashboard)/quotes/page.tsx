@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { FileSearch, Lock } from "lucide-react";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { createQuote, createSettlement } from "@/lib/domain";
@@ -8,9 +9,7 @@ import { defaultAccountsForCorridor } from "@/lib/treasury";
 import { prisma } from "@/lib/prisma";
 import { displayQuoteStatus } from "@/lib/quotes";
 import { cn, formatCurrencyFull, formatDateTime } from "@/lib/utils";
-import { PageHeader } from "@/components/ops/page-header";
 import { StatusBadge } from "@/components/ops/status-badge";
-import { EmptyState } from "@/components/ops/empty-state";
 import { FlashMessage } from "@/components/ops/flash-message";
 import { TabLinks } from "@/components/ops/tab-links";
 import { FilterBar } from "@/components/ops/filter-bar";
@@ -311,43 +310,6 @@ function QuotePreviewPanel({ quote }: { quote?: PreviewQuote | null }) {
   );
 }
 
-function CompactQuoteMetrics({
-  active,
-  accepted,
-  expired,
-}: {
-  active: number;
-  accepted: number;
-  expired: number;
-}) {
-  const items = [
-    { label: "Active", value: active, tone: "success" as const },
-    { label: "Accepted", value: accepted, tone: "info" as const },
-    { label: "Expired", value: expired, tone: "warning" as const },
-  ];
-
-  return (
-    <div className="quote-metrics-compact flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-[var(--ops-line-soft)] bg-white/70 px-3 py-2">
-      {items.map((item, index) => (
-        <div key={item.label} className="flex items-center gap-2">
-          {index > 0 ? <span aria-hidden="true" className="hidden h-3 w-px bg-[var(--ops-line)] sm:block" /> : null}
-          <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-slate-400">{item.label}</span>
-          <span
-            className={cn(
-              "text-sm font-semibold tabular-nums leading-none",
-              item.tone === "success" && "text-brand-emerald-ink",
-              item.tone === "info" && "text-[#0a7d86]",
-              item.tone === "warning" && "text-[#9b6810]",
-            )}
-          >
-            {item.value}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default async function QuotesPage({
   searchParams,
 }: {
@@ -387,6 +349,16 @@ export default async function QuotesPage({
   const acceptedCount = quotes.filter((q) => quoteTab(q, "accepted")).length;
   const expiredCount = quotes.filter((q) => quoteTab(q, "expired")).length;
 
+  // Hero quick stats: average quote validity (TTL) and most recent quote time.
+  const avgValidityMin = quotes.length
+    ? Math.round(
+        quotes.reduce((sum, q) => sum + (q.expiresAt.getTime() - q.createdAt.getTime()), 0) /
+          quotes.length /
+          60000,
+      )
+    : null;
+  const lastQuoteAt = quotes[0]?.createdAt ?? null;
+
   const highlightNewQuote = params.success === "created" || params.success === "refreshed";
   const newestQuoteId =
     highlightNewQuote && tab === "active" && filtered.length > 0 ? filtered[0].id : null;
@@ -407,19 +379,58 @@ export default async function QuotesPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Quotes"
-        description="Lock executable terms before settlement creation."
-        className="gap-2"
-        actions={demoFocus ? <DemoFocusBadge /> : undefined}
-      />
+      {/* 1 ── Quote command hero ─────────────────────────────────────────── */}
+      <section className="conf-hero ov-reveal p-5 sm:p-7">
+        <div className="relative">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="case-chip case-chip--shadow">USDT treasury → INR bank settlement</span>
+            <span className="case-chip case-chip--demo">Sandbox</span>
+            <span className="case-chip case-chip--demo">isTest enforced</span>
+            <span className="case-chip case-chip--demo">Live payouts disabled</span>
+            {demoFocus ? <DemoFocusBadge /> : null}
+          </div>
+          <h1 className="conf-hero__headline mt-4">Lock executable settlement terms.</h1>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-500">
+            A settlement can only be created from a locked, unexpired quote — corridor, amount, rate and window are
+            fixed before any money moves on the external rail.
+          </p>
+          <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-[var(--ops-line-soft)] pt-4">
+            {[
+              { label: "Active", value: String(activeCount), tone: "text-brand-emerald-ink" },
+              { label: "Accepted", value: String(acceptedCount), tone: "text-[#0a7d86]" },
+              { label: "Expired", value: String(expiredCount), tone: "text-[#9b6810]" },
+              { label: "Avg validity", value: avgValidityMin !== null ? `${avgValidityMin} min` : "—", tone: "text-slate-700" },
+              { label: "Last quote", value: lastQuoteAt ? formatDateTime(lastQuoteAt) : "—", tone: "text-slate-700" },
+            ].map((stat) => (
+              <div key={stat.label}>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">{stat.label}</p>
+                <p className={cn("mt-0.5 text-sm font-semibold tabular-nums tracking-tight", stat.tone)}>{stat.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-      {/* Corridor rail: the institutional INR <-> USDT settlement corridor */}
-      <div className="corridor-rail max-w-xl" aria-hidden="true">
-        <span className="corridor-rail__node">USDT · Stablecoin treasury</span>
-        <span className="corridor-rail__line" />
-        <span className="corridor-rail__node">INR · Bank settlement</span>
-      </div>
+      {/* 2 ── Corridor visualizer (page anchor) ──────────────────────────── */}
+      <section className="corridor-viz ov-reveal ov-reveal-1" aria-label="Settlement corridor">
+        <div className="corridor-viz__station corridor-viz__station--source">
+          <span className="corridor-viz__label">Source</span>
+          <span className="corridor-viz__name">USDT Treasury</span>
+          <span className="corridor-viz__hint">Stablecoin float · Fireblocks vault</span>
+        </div>
+        <span className="corridor-viz__line corridor-viz__line--in" aria-hidden="true" />
+        <div className="corridor-viz__station corridor-viz__station--lock">
+          <span className="corridor-viz__label">Terms</span>
+          <span className="corridor-viz__name">Quote Lock</span>
+          <span className="corridor-viz__hint">Rate · fee · window fixed 15 min</span>
+        </div>
+        <span className="corridor-viz__line corridor-viz__line--out" aria-hidden="true" />
+        <div className="corridor-viz__station corridor-viz__station--target">
+          <span className="corridor-viz__label">Destination</span>
+          <span className="corridor-viz__name">INR Settlement</span>
+          <span className="corridor-viz__hint">Bank rail via external provider</span>
+        </div>
+      </section>
 
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {params.success === "created" ? (
@@ -429,9 +440,7 @@ export default async function QuotesPage({
         <FlashMessage message="Replacement quote generated — it is ACTIVE and ready for settlement." />
       ) : null}
 
-      <CompactQuoteMetrics active={activeCount} accepted={acceptedCount} expired={expiredCount} />
-
-      <div id="quote-ticket" className="quote-ticket ops-panel ops-panel-accent scroll-mt-4 overflow-hidden">
+      <div id="quote-ticket" className="quote-ticket ops-panel ops-panel-accent ov-reveal ov-reveal-2 scroll-mt-4 overflow-hidden">
         <div className="flex flex-col gap-2 border-b border-[var(--ops-line-soft)] px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Quote ticket</p>
@@ -497,7 +506,7 @@ export default async function QuotesPage({
         </div>
       </div>
 
-      <div className="ops-panel overflow-hidden">
+      <div className="ops-panel ov-reveal ov-reveal-3 overflow-hidden">
         <div className="flex flex-col gap-2 border-b border-[var(--ops-line-soft)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Quote inventory</p>
@@ -521,6 +530,13 @@ export default async function QuotesPage({
         <Suspense fallback={null}>
           <FilterBar embedded searchPlaceholder="Search corridor or ID..." />
         </Suspense>
+
+        {tab === "expired" && filtered.length ? (
+          <div className="flex flex-wrap items-center gap-2 border-b border-[var(--ops-line-soft)] bg-amber-50/40 px-3 py-2 text-xs text-slate-600">
+            <span className="case-chip case-chip--gold">{expiredCount} expired</span>
+            <span>Stale quotes cannot create settlements — refresh to lock current terms.</span>
+          </div>
+        ) : null}
 
         {filtered.length ? (
           <DataGrid className="rounded-none border-0 shadow-none">
@@ -801,15 +817,21 @@ export default async function QuotesPage({
             </table>
           </DataGrid>
         ) : (
-          <EmptyState
-            title={emptyTitle}
-            description={emptyDescription}
-            action={
-              tab === "active"
-                ? { label: "Generate quote", href: "#quote-ticket" }
-                : { label: tab === "expired" ? "View active" : "View active quotes", href: "/quotes?tab=active" }
-            }
-          />
+          <div className="empty-compact">
+            <span className="empty-compact__icon">
+              {tab === "active" ? <Lock className="h-[18px] w-[18px]" /> : <FileSearch className="h-[18px] w-[18px]" />}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold tracking-tight text-slate-900">{emptyTitle}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{emptyDescription}</p>
+            </div>
+            <Link
+              href={tab === "active" ? "#quote-ticket" : "/quotes?tab=active"}
+              className="shrink-0 rounded-lg border border-[var(--ops-line)] bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-ops-xs transition-colors hover:border-slate-300 hover:bg-slate-50"
+            >
+              {tab === "active" ? "Generate quote" : "View active"}
+            </Link>
+          </div>
         )}
       </div>
     </div>

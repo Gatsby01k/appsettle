@@ -3824,3 +3824,108 @@ details[open] > .reconciliation-details-content {
   .health-tile { transition: none; }
   .health-tile:hover { transform: none; }
 }
+
+/* =====================================================================
+   Quotes v2 — execution console kit
+   ===================================================================== */
+
+/* Corridor visualizer: USDT Treasury -> Quote Lock -> INR Settlement */
+.corridor-viz {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+}
+@media (max-width: 720px) {
+  .corridor-viz { grid-template-columns: 1fr; }
+  .corridor-viz__line { display: none; }
+}
+.corridor-viz__station {
+  position: relative;
+  border-radius: 0.85rem;
+  border: 1px solid var(--ops-line);
+  background: #ffffff;
+  padding: 0.7rem 0.85rem;
+  text-align: center;
+  box-shadow: var(--ops-shadow-xs);
+  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease);
+}
+.corridor-viz__station:hover { transform: translateY(-2px); box-shadow: var(--ops-shadow-sm); }
+.corridor-viz__station--source { border-color: rgba(11, 180, 196, 0.3); background: linear-gradient(180deg, #f0fbfc, #ffffff 60%); }
+.corridor-viz__station--lock { border-color: rgba(212, 160, 23, 0.35); background: linear-gradient(180deg, #fffaf0, #ffffff 60%); }
+.corridor-viz__station--target { border-color: rgba(0, 199, 157, 0.3); background: linear-gradient(180deg, #f0fdf9, #ffffff 60%); }
+.corridor-viz__label {
+  display: block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: rgba(7, 17, 31, 0.4);
+}
+.corridor-viz__name { display: block; margin-top: 0.15rem; font-size: 0.82rem; font-weight: 650; letter-spacing: -0.01em; color: var(--brand-ink); }
+.corridor-viz__station--source .corridor-viz__name { color: #086d77; }
+.corridor-viz__station--lock .corridor-viz__name { color: #8a6510; }
+.corridor-viz__station--target .corridor-viz__name { color: var(--brand-emerald-ink); }
+.corridor-viz__hint { display: block; margin-top: 0.1rem; font-size: 0.66rem; color: rgba(7, 17, 31, 0.4); }
+
+.corridor-viz__line {
+  position: relative;
+  width: clamp(2.5rem, 6vw, 5rem);
+  height: 2px;
+  border-radius: 999px;
+  overflow: visible;
+}
+.corridor-viz__line--in { background: linear-gradient(90deg, rgba(11, 180, 196, 0.5), rgba(212, 160, 23, 0.5)); }
+.corridor-viz__line--out { background: linear-gradient(90deg, rgba(212, 160, 23, 0.5), rgba(0, 199, 157, 0.5)); }
+.corridor-viz__line::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 6px;
+  width: 6px;
+  border-radius: 999px;
+  transform: translateY(-50%);
+  animation: corridor-pulse 2.6s var(--ease) infinite;
+}
+.corridor-viz__line--in::after { background: var(--brand-aqua); box-shadow: 0 0 8px rgba(11, 180, 196, 0.7); }
+.corridor-viz__line--out::after { background: var(--brand-emerald); box-shadow: 0 0 8px rgba(0, 199, 157, 0.7); animation-delay: 1.3s; }
+@keyframes corridor-pulse {
+  0% { left: -2px; opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { left: calc(100% - 4px); opacity: 0; }
+}
+
+/* Quote lifecycle: connected rail strip */
+.quote-execution-path { position: relative; }
+.quote-execution-step { position: relative; }
+.quote-execution-step-active { box-shadow: 0 0 12px rgba(0, 199, 157, 0.18); }
+
+/* Compact premium empty state */
+.empty-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1.1rem 1.2rem;
+}
+.empty-compact__icon {
+  position: relative;
+  display: grid;
+  height: 2.6rem;
+  width: 2.6rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 0.8rem;
+  color: var(--brand-emerald-ink);
+  background: linear-gradient(160deg, #f0fdf9, #ffffff);
+  box-shadow:
+    0 0 0 1px rgba(0, 199, 157, 0.22) inset,
+    0 0 18px rgba(0, 199, 157, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .corridor-viz__line::after { animation: none; opacity: 0.8; left: 50%; }
+  .corridor-viz__station { transition: none; }
+  .corridor-viz__station:hover { transform: none; }
+}
