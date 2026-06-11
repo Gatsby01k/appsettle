@@ -39,7 +39,7 @@ export type SettlementLike = {
   publicId: string;
   status: string;
   /** DEMO (default) | SHADOW | LIVE_TEST. */
-  mode?: string | null;
+  testMode?: string | null;
   sourceCurrency: string;
   targetCurrency: string;
   sourceAmount: NumberLike;
@@ -113,7 +113,7 @@ export function buildFinalityInput(
   const reconciliation = relevantReconciliationOf(reconciliationRecords);
 
   return {
-    mode: settlement.mode ?? "DEMO",
+    testMode: settlement.testMode ?? "DEMO",
     safety: safety ?? null,
     settlement: {
       publicId: settlement.publicId,

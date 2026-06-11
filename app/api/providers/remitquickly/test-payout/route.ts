@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
         context.organization.id,
         { overrides: input.overrides, simulateOutcome: input.outcome },
       );
-      return NextResponse.json({ mode: "settlement", data: result });
+      return NextResponse.json({ testMode: "settlement", data: result });
     }
 
     // Connectivity smoke test — no settlement is created or mutated.
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      mode: "connectivity",
+      testMode: "connectivity",
       data: {
         merchantRecognitionId,
         payoutId,

@@ -1,12 +1,38 @@
--- Settlement test mode for the real-money shadow test:
---   DEMO      — fake/demo data; no real-world money anywhere
---   SHADOW    — real-world operation tracked by INRSettle while a partner/
---               provider moves the money EXTERNALLY (INRSettle never moves
---               funds directly)
---   LIVE_TEST — tiny, capped, manually guarded provider test
---
--- Additive-only: every existing settlement (all demo/sandbox data) defaults to
--- DEMO. No existing table, column, or enum is modified.
-CREATE TYPE "SettlementTestMode" AS ENUM ('DEMO', 'SHADOW', 'LIVE_TEST');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type
+    WHERE typname = 'SettlementTestMode'
+  ) THEN
+    CREATE TYPE "SettlementTestMode" AS ENUM ('DEMO', 'SHADOW', 'LIVE_TEST');
+  END IF;
 
-ALTER TABLE "Settlement" ADD COLUMN "mode" "SettlementTestMode" NOT NULL DEFAULT 'DEMO';
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'Settlement'
+      AND column_name = 'test_mode'
+  ) THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'Settlement'
+        AND column_name = 'mode'
+    ) THEN
+      ALTER TABLE "Settlement" RENAME COLUMN "mode" TO "test_mode";
+
+    ELSIF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'Settlement'
+        AND column_name = 'testMode'
+    ) THEN
+      ALTER TABLE "Settlement" RENAME COLUMN "testMode" TO "test_mode";
+
+    ELSE
+      ALTER TABLE "Settlement"
+        ADD COLUMN "test_mode" "SettlementTestMode" NOT NULL DEFAULT 'DEMO';
+    END IF;
+  END IF;
+END $$;

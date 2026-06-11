@@ -1,4 +1,4 @@
-// Shadow test mode: caps, safety checks, and the readiness checklist for
+// Shadow test testMode: caps, safety checks, and the readiness checklist for
 // SHADOW / LIVE_TEST settlements.
 //
 // Core principle: INRSettle NEVER moves funds directly. In SHADOW and
@@ -78,7 +78,7 @@ export function getShadowConfig(): ShadowConfig {
 export type ShadowSettlementLike = {
   publicId: string;
   status: string;
-  mode?: string | null;
+  testMode?: string | null;
   provider?: string | null;
   sourceCurrency: string;
   targetCurrency: string;
@@ -111,14 +111,14 @@ export function modeCap(mode: string | null | undefined, config: ShadowConfig): 
 }
 
 export function isWithinCap(settlement: ShadowSettlementLike, config: ShadowConfig): boolean {
-  const cap = modeCap(settlement.mode, config);
+  const cap = modeCap(settlement.testMode, config);
   if (cap === null) return true;
   return inrLegOf(settlement) <= cap;
 }
 
 /** The safety block passed into the finality engine for SHADOW/LIVE_TEST settlements. */
 export function safetyFor(settlement: ShadowSettlementLike, config: ShadowConfig): FinalitySafetyInput {
-  const cap = modeCap(settlement.mode, config);
+  const cap = modeCap(settlement.testMode, config);
   return {
     withinCap: isWithinCap(settlement, config),
     capLabel: cap !== null ? `INR ${cap.toLocaleString("en-IN")}` : "uncapped",
@@ -147,7 +147,7 @@ export function buildShadowChecklist(
   config: ShadowConfig,
 ): ChecklistItem[] {
   const inrLeg = inrLegOf(settlement);
-  const cap = modeCap(settlement.mode, config);
+  const cap = modeCap(settlement.testMode, config);
   const independentLinked = reconciliationRecords.some((record) =>
     isIndependentReconciliationSource(record.source),
   );

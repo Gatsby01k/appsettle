@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
           },
         },
       );
-      return NextResponse.json({ mode: "settlement", data: result });
+      return NextResponse.json({ testMode: "settlement", data: result });
     }
 
     const payout: PontisPayoutRequest = {
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       shouldPoll && transactionId ? await getPayoutStatus(transactionId, jwt) : null;
 
     return NextResponse.json({
-      mode: "sandbox-connectivity",
+      testMode: "sandbox-connectivity",
       data: {
         idempotencyKey: payout.idempotency_key,
         transactionId,

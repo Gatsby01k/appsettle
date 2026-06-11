@@ -179,7 +179,7 @@ model Settlement {
   targetAmount      Decimal            @db.Decimal(20, 6)
   feeAmount         Decimal            @default(0) @db.Decimal(20, 2)
   status            SettlementStatus   @default(REQUESTED)
-  mode              SettlementTestMode @default(DEMO)
+  testMode          SettlementTestMode @default(DEMO) @map("test_mode")
   sourceAccount     String
   targetAccount     String
   provider          String?

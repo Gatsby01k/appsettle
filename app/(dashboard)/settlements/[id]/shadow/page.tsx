@@ -79,21 +79,21 @@ async function setMode(formData: FormData) {
     );
   }
 
-  const previousMode = settlement.mode;
+  const previousMode = settlement.testMode;
   await prisma.settlement.update({
     where: { id: settlement.id },
-    data: { mode: newMode as SettlementMode },
+    data: { testMode: newMode as SettlementMode },
   });
 
   await writeAuditLog({
-    action: "settlement.mode_changed",
+    action: "settlement.testMode_changed",
     resourceType: "settlement",
     resourceId: settlement.id,
     organizationId: organization.id,
     userId: user.id,
     actorType: AuditActorType.USER,
-    before: { publicId: settlement.publicId, mode: previousMode },
-    after: { publicId: settlement.publicId, mode: newMode, inrLeg: inrLegOf(settlement) },
+    before: { publicId: settlement.publicId, testMode: previousMode },
+    after: { publicId: settlement.publicId, testMode: newMode, inrLeg: inrLegOf(settlement) },
   });
 
   revalidatePath(`/settlements/${settlementId}/shadow`);
@@ -190,7 +190,7 @@ export default async function ShadowConsolePage({
     config,
   );
   const complete = checklistComplete(checklist);
-  const mode = (settlement.mode in MODE_LABEL ? settlement.mode : "DEMO") as SettlementMode;
+  const mode = (settlement.testMode in MODE_LABEL ? settlement.testMode : "DEMO") as SettlementMode;
   const assessment = assessFinality(
     buildFinalityInput(
       settlement,

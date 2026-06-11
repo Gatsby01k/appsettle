@@ -7,7 +7,7 @@ import { isPontisConfigured } from "./client";
  * so it can never be triggered from a public production build.
  *
  * - Explicit opt-in:  PONTIS_SANDBOX_TEST=true
- * - Demo mode:        NEXT_PUBLIC_DEMO_MODE=true (or any non-production env unless
+ * - Demo testMode:        NEXT_PUBLIC_DEMO_MODE=true (or any non-production env unless
  *                     explicitly disabled with NEXT_PUBLIC_DEMO_MODE=false)
  */
 export function isPrivateBetaMode(): boolean {

@@ -56,6 +56,7 @@ export type FinalitySafetyInput = {
 };
 
 export type FinalityInput = {
+  testMode: "DEMO" | "SHADOW" | "LIVE_TEST" | string;
   settlement: FinalitySettlementInput;
   /** Latest provider proof for the settlement, or null when none recorded. */
   proof: FinalityProofInput | null;
@@ -63,7 +64,7 @@ export type FinalityInput = {
   reconciliation: FinalityReconciliationInput | null;
   /** True when the audit trail records an approval for this settlement. */
   auditApprovalPresent: boolean;
-  /** Settlement mode: DEMO (default) | SHADOW | LIVE_TEST. */
+  /** Settlement testMode: DEMO (default) | SHADOW | LIVE_TEST. */
   mode?: string | null;
   /** Required when mode is SHADOW/LIVE_TEST; ignored for DEMO. */
   safety?: FinalitySafetyInput | null;
@@ -144,7 +145,7 @@ function maxRisk(a: FinalityRiskLevel, b: FinalityRiskLevel): FinalityRiskLevel 
  */
 export function assessFinality(input: FinalityInput): FinalityAssessment {
   const { settlement, proof, reconciliation, auditApprovalPresent } = input;
-  const isShadowMode = input.mode === "SHADOW" || input.mode === "LIVE_TEST";
+  const isShadowMode = input.testMode === "SHADOW" || input.testMode === "LIVE_TEST";
 
   const blockingIssues: string[] = [];
   const warnings: string[] = [];
@@ -180,7 +181,7 @@ export function assessFinality(input: FinalityInput): FinalityAssessment {
 
     if (isShadowMode) {
       evidence.push(
-        `${input.mode} mode: INRSettle did not move funds directly — the external partner/provider moved the money.`,
+        `${input.testMode} testMode: INRSettle did not move funds directly — the external partner/provider moved the money.`,
       );
     }
 
@@ -295,11 +296,11 @@ export function assessFinality(input: FinalityInput): FinalityAssessment {
   // violation blocks ready_to_finalize regardless of how good the evidence is.
   if (isShadowMode) {
     evidence.push(
-      `${input.mode} mode: INRSettle did not move funds directly — the external partner/provider moved the money.`,
+      `${input.testMode} testMode: INRSettle did not move funds directly — the external partner/provider moved the money.`,
     );
 
     if (!input.safety) {
-      blockingIssues.push(`Safety status was not evaluated for this ${input.mode} settlement.`);
+      blockingIssues.push(`Safety status was not evaluated for this ${input.testMode} settlement.`);
       recommendedActions.push("Evaluate the shadow-test safety caps before finality review.");
       riskLevel = "high";
     } else {
@@ -310,13 +311,13 @@ export function assessFinality(input: FinalityInput): FinalityAssessment {
       }
       if (!input.safety.withinCap) {
         blockingIssues.push(
-          `Settlement exceeds the ${input.mode} safety cap (${input.safety.capLabel}).`,
+          `Settlement exceeds the ${input.testMode} safety cap (${input.safety.capLabel}).`,
         );
         recommendedActions.push("Reduce the test amount below the cap; caps cannot be bypassed.");
         riskLevel = "high";
       }
       if (input.safety.withinCap && input.safety.livePayoutsDisabled) {
-        evidence.push(`Safety caps hold: amount within the ${input.mode} cap (${input.safety.capLabel}); live payouts disabled.`);
+        evidence.push(`Safety caps hold: amount within the ${input.testMode} cap (${input.safety.capLabel}); live payouts disabled.`);
       }
     }
   }

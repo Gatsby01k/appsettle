@@ -16,7 +16,7 @@ const config = { ...DEFAULT_SHADOW_CONFIG }; // shadow 10,000 / live test 1,000 
 const baseSettlement: ShadowSettlementLike = {
   publicId: "SET-SHADOW-1",
   status: "SETTLED",
-  mode: "SHADOW",
+  testMode: "SHADOW",
   provider: "remitquickly",
   sourceCurrency: "USDT",
   targetCurrency: "INR",
@@ -48,8 +48,8 @@ describe("caps", () => {
   it("checks the cap against the INR leg", () => {
     expect(isWithinCap(baseSettlement, config)).toBe(true); // 8,315 <= 10,000
     expect(isWithinCap({ ...baseSettlement, targetAmount: "10001" }, config)).toBe(false);
-    expect(isWithinCap({ ...baseSettlement, mode: "LIVE_TEST" }, config)).toBe(false); // 8,315 > 1,000
-    expect(isWithinCap({ ...baseSettlement, mode: "DEMO", targetAmount: "9999999" }, config)).toBe(true);
+    expect(isWithinCap({ ...baseSettlement, testMode: "LIVE_TEST" }, config)).toBe(false); // 8,315 > 1,000
+    expect(isWithinCap({ ...baseSettlement, testMode: "DEMO", targetAmount: "9999999" }, config)).toBe(true);
   });
 
   it("safetyFor reflects cap and live-payout tripwire", () => {

@@ -152,8 +152,8 @@ const MODE_CHIP_CLASS: Record<SettlementMode, string> = {
   LIVE_TEST: "border-red-200 bg-red-50 text-red-700",
 };
 
-function ModeChip({ mode }: { mode: string }) {
-  const key = (mode in MODE_CHIP_CLASS ? mode : "DEMO") as SettlementMode;
+function ModeChip({ testMode }: { testMode: string }) {
+  const key = (testMode in MODE_CHIP_CLASS ? testMode : "DEMO") as SettlementMode;
   return (
     <span
       className={cn(
@@ -563,7 +563,7 @@ export default async function SettlementsPage({
                   <DataGridTd>
                     <div className="flex items-center gap-1.5">
                       <p className="font-medium text-slate-950">{settlement.publicId}</p>
-                      <ModeChip mode={settlement.mode} />
+                      <ModeChip testMode={settlement.testMode} />
                     </div>
                     <p className="text-xs text-slate-500">{settlement.reference}</p>
                     <SettlementRowStatusSubtext

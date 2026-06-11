@@ -141,7 +141,7 @@ export default async function SettlementReportPage({
     settlement.events,
     shadowConfig,
   );
-  const mode = (settlement.mode in MODE_LABEL ? settlement.mode : "DEMO") as SettlementMode;
+  const mode = (settlement.testMode in MODE_LABEL ? settlement.testMode : "DEMO") as SettlementMode;
   const isShadowMode = mode === "SHADOW" || mode === "LIVE_TEST";
 
   const assessment = assessFinality(

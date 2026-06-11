@@ -77,7 +77,7 @@ export async function GET(
           reference: settlement.reference,
           corridor: settlement.corridor,
           status: settlement.status,
-          mode: settlement.mode,
+          testMode: settlement.testMode,
           sourceAmount: settlement.sourceAmount.toString(),
           sourceCurrency: settlement.sourceCurrency,
           targetAmount: settlement.targetAmount.toString(),
@@ -121,10 +121,10 @@ export async function GET(
         })),
         finality: assessment,
         shadow: {
-          mode: settlement.mode,
+          testMode: settlement.testMode,
           movedFundsDirectly: false,
           moneyMovement:
-            settlement.mode === "DEMO"
+            settlement.testMode === "DEMO"
               ? "Demo data — no real-world money anywhere."
               : "INRSettle did not move funds directly — the external partner/provider moved the money.",
           safety,
