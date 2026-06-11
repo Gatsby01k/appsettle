@@ -242,15 +242,34 @@ export function isSettlementMode(value: string): value is SettlementMode {
 }
 
 /**
+ * LIVE_TEST entry is gated by HARD GUARDRAILS only — checks that must hold
+ * BEFORE the external money movement: caps, the live-payout tripwire,
+ * beneficiary on file, operator approval, and (when known) an allowlisted
+ * provider.
+ *
+ * Post-execution EVIDENCE (provider proof, independent reconciliation,
+ * settlement report, second approval) deliberately does NOT gate entry: it is
+ * produced after the partner moves money, and it is strictly enforced where it
+ * belongs — finality review (lib/finality.ts) and live-pilot readiness
+ * (lib/live-pilot.ts). Splitting these lets the pilot enter LIVE_TEST first so
+ * caps and the allowlist bind during the actual money movement.
+ */
+const LIVE_TEST_ENTRY_CHECKLIST_KEYS = ["beneficiary_verified", "operator_approval"] as const;
+
+/**
  * Guard for switching a settlement's mode. Returns the list of violations
- * (empty when allowed). LIVE_TEST cannot be entered over the cap or with an
- * incomplete checklist — there is deliberately no override path.
+ * (empty when allowed). There is deliberately no override path for any
+ * guardrail violation.
  */
 export function modeChangeViolations(
   settlement: ShadowSettlementLike,
   newMode: SettlementMode,
   checklist: ChecklistItem[],
   config: ShadowConfig,
+  options: {
+    /** Today's LIVE_TEST INR volume excluding this settlement (daily cap check). */
+    dailyUsedInrExcludingThis?: number;
+  } = {},
 ): string[] {
   const violations: string[] = [];
 
@@ -271,9 +290,32 @@ export function modeChangeViolations(
   }
 
   if (newMode === "LIVE_TEST") {
-    const incomplete = checklist.filter((item) => !item.done);
-    for (const item of incomplete) {
-      violations.push(`Checklist incomplete: ${item.label}.`);
+    // Daily cap (when today's usage is supplied by the caller).
+    if (options.dailyUsedInrExcludingThis !== undefined && inrLeg > 0) {
+      const dailyTotal = options.dailyUsedInrExcludingThis + inrLeg;
+      if (dailyTotal > config.liveTestDailyMaxInr) {
+        violations.push(
+          `Daily LIVE_TEST cap exceeded: today's volume would reach INR ${dailyTotal.toLocaleString("en-IN")} of ${config.liveTestDailyMaxInr.toLocaleString("en-IN")}.`,
+        );
+      }
+    }
+
+    // Provider allowlist — enforced when a provider is already assigned.
+    // (The provider is often assigned at execution; live-pilot readiness
+    // re-checks it as a blocking guardrail after execution.)
+    const provider = settlement.provider?.trim();
+    if (provider && !config.liveTestAllowedProviders.some((a) => a.toLowerCase() === provider.toLowerCase())) {
+      violations.push(
+        `${provider} is not on the LIVE_TEST provider allowlist (${config.liveTestAllowedProviders.join(", ")}).`,
+      );
+    }
+
+    // Pre-execution entry requirements only — never proof/reconciliation/report.
+    for (const key of LIVE_TEST_ENTRY_CHECKLIST_KEYS) {
+      const item = checklist.find((entry) => entry.key === key);
+      if (item && !item.done) {
+        violations.push(`Entry requirement: ${item.label}.`);
+      }
     }
   }
 

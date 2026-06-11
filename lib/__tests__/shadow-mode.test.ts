@@ -107,7 +107,11 @@ describe("checklist", () => {
   });
 });
 
-describe("mode transitions (LIVE_TEST cannot bypass caps/checklist)", () => {
+describe("mode transitions: LIVE_TEST entry guardrails (pre-execution)", () => {
+  // A pilot-flow settlement BEFORE execution: approved, beneficiary on file,
+  // under the LIVE_TEST cap — but no provider proof and no reconciliation yet.
+  const preExecution = { ...baseSettlement, targetAmount: "500.00", provider: null };
+
   it("allows SHADOW within cap with basic data", () => {
     const checklist = buildShadowChecklist(baseSettlement, proof, independentRecon, approvedEvents, config);
     expect(modeChangeViolations(baseSettlement, "SHADOW", checklist, config)).toEqual([]);
@@ -120,29 +124,74 @@ describe("mode transitions (LIVE_TEST cannot bypass caps/checklist)", () => {
     expect(violations.join(" ")).toMatch(/exceeds the Shadow cap/);
   });
 
-  it("blocks LIVE_TEST over the tighter live-test cap even when the checklist is complete", () => {
+  it("LIVE_TEST can be entered BEFORE execution: no proof/reconciliation yet, guardrails pass", () => {
+    const checklist = buildShadowChecklist(preExecution, [], [], approvedEvents, config);
+    expect(modeChangeViolations(preExecution, "LIVE_TEST", checklist, config)).toEqual([]);
+  });
+
+  it("blocks LIVE_TEST over the per-settlement cap even with full evidence", () => {
     const checklist = buildShadowChecklist(baseSettlement, proof, independentRecon, approvedEvents, config);
     expect(checklistComplete(checklist)).toBe(true);
     const violations = modeChangeViolations(baseSettlement, "LIVE_TEST", checklist, config); // 8,315 > 1,000
     expect(violations.join(" ")).toMatch(/exceeds the Live test cap/);
   });
 
-  it("blocks LIVE_TEST with an incomplete checklist even under the cap", () => {
-    const tiny = { ...baseSettlement, targetAmount: "500.00" };
-    const checklist = buildShadowChecklist(tiny, [], [], approvedEvents, config);
-    const violations = modeChangeViolations(tiny, "LIVE_TEST", checklist, config);
-    expect(violations.join(" ")).toMatch(/Checklist incomplete: Provider proof captured/);
-    expect(violations.join(" ")).toMatch(/Checklist incomplete: Independent reconciliation/);
+  it("blocks LIVE_TEST when the daily cap would be exceeded", () => {
+    const checklist = buildShadowChecklist(preExecution, [], [], approvedEvents, config);
+    const violations = modeChangeViolations(preExecution, "LIVE_TEST", checklist, config, {
+      dailyUsedInrExcludingThis: 1_800, // 1,800 + 500 > 2,000
+    });
+    expect(violations.join(" ")).toMatch(/Daily LIVE_TEST cap exceeded/);
+    expect(
+      modeChangeViolations(preExecution, "LIVE_TEST", checklist, config, { dailyUsedInrExcludingThis: 1_000 }),
+    ).toEqual([]);
   });
 
-  it("blocks SHADOW and LIVE_TEST when live payouts are enabled", () => {
+  it("blocks LIVE_TEST when an assigned provider is not allowlisted", () => {
+    const offList = { ...preExecution, provider: "acme_pay" };
+    const checklist = buildShadowChecklist(offList, [], [], approvedEvents, config);
+    const violations = modeChangeViolations(offList, "LIVE_TEST", checklist, config);
+    expect(violations.join(" ")).toMatch(/not on the LIVE_TEST provider allowlist/);
+  });
+
+  it("allowlisted providers pass case-insensitively", () => {
+    const listed = { ...preExecution, provider: "PONTISGLOBE" };
+    const checklist = buildShadowChecklist(listed, [], [], approvedEvents, config);
+    expect(modeChangeViolations(listed, "LIVE_TEST", checklist, config)).toEqual([]);
+  });
+
+  it("blocks LIVE_TEST when operator approval or beneficiary is missing (entry requirements)", () => {
+    const unapproved = { ...preExecution, approvedAt: null };
+    let checklist = buildShadowChecklist(unapproved, [], [], [], config);
+    expect(modeChangeViolations(unapproved, "LIVE_TEST", checklist, config).join(" ")).toMatch(
+      /Entry requirement: Operator approval/,
+    );
+
+    const noBeneficiary = { ...preExecution, targetAccount: "" };
+    checklist = buildShadowChecklist(noBeneficiary, [], [], approvedEvents, config);
+    expect(modeChangeViolations(noBeneficiary, "LIVE_TEST", checklist, config).join(" ")).toMatch(
+      /Entry requirement: Beneficiary/,
+    );
+  });
+
+  it("blocks SHADOW and LIVE_TEST when live payouts are enabled (tripwire)", () => {
     const hot = { ...config, livePayoutsEnabled: true };
     const checklist = buildShadowChecklist(baseSettlement, proof, independentRecon, approvedEvents, hot);
     expect(modeChangeViolations(baseSettlement, "SHADOW", checklist, hot).join(" ")).toMatch(/LIVE_PAYOUTS_ENABLED/);
+    expect(modeChangeViolations(preExecution, "LIVE_TEST", checklist, hot).join(" ")).toMatch(/LIVE_PAYOUTS_ENABLED/);
   });
 
   it("switching back to DEMO is always allowed", () => {
     const checklist = buildShadowChecklist(baseSettlement, [], [], [], config);
     expect(modeChangeViolations(baseSettlement, "DEMO", checklist, config)).toEqual([]);
+  });
+});
+
+describe("evidence stays a finality concern (not an entry gate)", () => {
+  it("missing proof/reconciliation never appears in LIVE_TEST entry violations", () => {
+    const pre = { ...baseSettlement, targetAmount: "500.00", provider: null };
+    const checklist = buildShadowChecklist(pre, [], [], approvedEvents, config);
+    const violations = modeChangeViolations(pre, "LIVE_TEST", checklist, config);
+    expect(violations.join(" ")).not.toMatch(/proof|reconciliation|report/i);
   });
 });

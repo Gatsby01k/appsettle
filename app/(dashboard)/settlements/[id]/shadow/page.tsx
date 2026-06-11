@@ -74,7 +74,35 @@ async function setMode(formData: FormData) {
     settlement.events,
     config,
   );
-  const violations = modeChangeViolations(settlement, newMode as SettlementMode, checklist, config);
+
+  // Daily cap input for LIVE_TEST entry: today's other LIVE_TEST volume.
+  let dailyUsedInrExcludingThis: number | undefined;
+  if (newMode === "LIVE_TEST") {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const todaysLiveTests = await prisma.settlement.findMany({
+      where: {
+        organizationId: organization.id,
+        testMode: "LIVE_TEST",
+        id: { not: settlement.id },
+        createdAt: { gte: startOfToday },
+        status: { notIn: ["FAILED", "CANCELLED"] },
+      },
+      select: {
+        publicId: true,
+        status: true,
+        sourceCurrency: true,
+        targetCurrency: true,
+        sourceAmount: true,
+        targetAmount: true,
+      },
+    });
+    dailyUsedInrExcludingThis = todaysLiveTests.reduce((sum, row) => sum + inrLegOf(row), 0);
+  }
+
+  const violations = modeChangeViolations(settlement, newMode as SettlementMode, checklist, config, {
+    dailyUsedInrExcludingThis,
+  });
   if (violations.length > 0) {
     redirect(
       `/settlements/${settlementId}/shadow?error=${encodeURIComponent(`Cannot switch to ${MODE_LABEL[newMode as SettlementMode]}: ${violations.join(" ")}`)}`,
@@ -423,7 +451,8 @@ export default async function ShadowConsolePage({
                 Apply mode
               </SubmitButton>
               <p className="basis-full text-xs text-slate-400">
-                Live test requires the full checklist and the tighter cap — there is no override.
+                Live test entry checks caps, allowlist, beneficiary and approval. Proof and reconciliation are
+                enforced at finality.
               </p>
             </form>
           ) : (
