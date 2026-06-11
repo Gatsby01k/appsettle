@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canApproveSettlement } from "@/lib/permissions";
 import { ACCESS_ROLES, DEMO_TEAM } from "@/lib/treasury";
+import { formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
@@ -105,7 +106,7 @@ export default async function TeamPage() {
                     )}
                   </DataGridTd>
                   <DataGridTd className="text-xs text-slate-500">
-                    {member.lastLoginAt ? member.lastLoginAt.toLocaleString() : "Never"}
+                    {member.lastLoginAt ? formatDateTime(member.lastLoginAt) : "Never"}
                   </DataGridTd>
                 </DataGridRow>
               ))}
@@ -148,7 +149,7 @@ export default async function TeamPage() {
             <DataGridHead>
               <DataGridTh>Member</DataGridTh>
               <DataGridTh>Role</DataGridTh>
-              <DataGridTh>Last active</DataGridTh>
+              <DataGridTh>Last active (sample)</DataGridTh>
               <DataGridTh>Status</DataGridTh>
             </DataGridHead>
             <DataGridBody>

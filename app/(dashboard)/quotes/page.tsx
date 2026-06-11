@@ -14,6 +14,7 @@ import { FlashMessage } from "@/components/ops/flash-message";
 import { TabLinks } from "@/components/ops/tab-links";
 import { FilterBar } from "@/components/ops/filter-bar";
 import { FormSelect } from "@/components/ops/form-select";
+import { QuoteCountdown, QuotesAutoRefresh } from "@/components/ops/quote-countdown";
 import {
   DataGrid,
   DataGridBody,
@@ -150,20 +151,6 @@ function DemoFocusBadge() {
   );
 }
 
-function formatExpiryCountdown(expiresAt: Date) {
-  const ms = expiresAt.getTime() - Date.now();
-  if (ms <= 0) return null;
-  const totalSec = Math.floor(ms / 1000);
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  if (min >= 60) {
-    const hr = Math.floor(min / 60);
-    const remMin = min % 60;
-    return `${hr}h ${remMin}m left`;
-  }
-  return min > 0 ? `${min}m ${sec}s left` : `${sec}s left`;
-}
-
 const EXECUTION_PATH = [
   "Draft input",
   "Quote locked",
@@ -273,7 +260,16 @@ function QuotePreviewPanel({ quote }: { quote?: PreviewQuote | null }) {
       <div className="relative mt-3 flex items-center justify-between gap-2">
         <span className="qlock__timer">
           <span className="qlock__timer-dot" aria-hidden="true" />
-          {isLocked && quote ? `Valid · ${formatExpiryCountdown(quote.expiresAt) ?? "expired"}` : "Validity · 15:00 on lock"}
+          {isLocked && quote ? (
+            <QuoteCountdown
+              expiresAt={new Date(quote.expiresAt).toISOString()}
+              prefix="Valid · "
+              expiredText="Expired — refresh to re-lock"
+              expiredClassName="text-amber-300"
+            />
+          ) : (
+            "Validity · 15:00 on lock"
+          )}
         </span>
       </div>
 
@@ -392,6 +388,8 @@ export default async function QuotesPage({
           </div>
         </div>
       </section>
+
+      <QuotesAutoRefresh enabled={activeCount > 0} />
 
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {params.success === "created" ? (
@@ -578,7 +576,6 @@ export default async function QuotesPage({
                   const linkedSettlement = quote.settlements[0];
                   const publicId = quotePublicId(quote.id);
                   const isNewlyGenerated = quote.id === newestQuoteId;
-                  const expiryCountdown = isActive ? formatExpiryCountdown(quote.expiresAt) : null;
 
                   return (
                     <DataGridRow
@@ -662,10 +659,12 @@ export default async function QuotesPage({
                               <span className="font-medium tabular-nums text-slate-600">
                                 {formatDateTime(quote.expiresAt)}
                               </span>
-                              {expiryCountdown ? (
-                                <span className="quote-expiry-countdown ml-1.5 font-semibold tabular-nums text-brand-emerald-ink">
-                                  · {expiryCountdown}
-                                </span>
+                              {isActive ? (
+                                <QuoteCountdown
+                                  expiresAt={quote.expiresAt.toISOString()}
+                                  prefix="· "
+                                  className="quote-expiry-countdown ml-1.5 font-semibold tabular-nums text-brand-emerald-ink"
+                                />
                               ) : null}
                             </dd>
                           </div>

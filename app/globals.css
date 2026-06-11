@@ -4589,3 +4589,34 @@ details[open] > .reconciliation-details-content {
 @media (prefers-reduced-motion: reduce) {
   .corridor-inline__seg::after { animation: none; opacity: 0; }
 }
+
+/* =====================================================================
+   Micro-polish pass — focus states, popovers, tab transitions
+   ===================================================================== */
+
+/* Keyboard focus affordance on interactive cards/chips */
+.case-card:focus-visible,
+.health-tile:focus-visible,
+.mode-filter:focus-visible,
+.scase a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 199, 157, 0.45), var(--ops-shadow-xs);
+}
+
+/* Quote details popovers: smooth open + no mobile overflow */
+.quote-details-panel {
+  max-width: min(13rem, 82vw);
+  animation: check-item-enter 0.2s var(--ease) both;
+}
+
+/* Detail sheet tabs: gentle content transition */
+[role="tabpanel"][data-state="active"] {
+  animation: check-item-enter 0.22s var(--ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quote-details-panel,
+  [role="tabpanel"][data-state="active"] {
+    animation: none;
+  }
+}

@@ -805,7 +805,7 @@ export default async function SettlementsPage({
                       ) : null}
                     </SettlementActionForm>
                   ) : !canApprove ? (
-                    <span className="text-xs text-slate-400">Read only</span>
+                    <span className="case-chip case-chip--demo">Read-only role</span>
                   ) : null}
                   {awaitingRecon && settlement.status === SettlementStatus.SETTLED ? (
                     <>

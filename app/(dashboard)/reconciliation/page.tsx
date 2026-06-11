@@ -22,7 +22,7 @@ import {
   MATCH_LABEL,
 } from "@/lib/reconciliation";
 import { prisma } from "@/lib/prisma";
-import { cn, formatCurrencyFull, formatPercent } from "@/lib/utils";
+import { cn, formatCurrencyFull, formatDateTime, formatPercent } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
 import { FlashMessage } from "@/components/ops/flash-message";
@@ -280,7 +280,7 @@ export default async function ReconciliationPage({
       matchReason,
       confidence,
       exceptionReason: record.exceptionReason,
-      valueDate: record.valueDate.toLocaleDateString(),
+      valueDate: formatDateTime(record.valueDate),
       settlement: record.settlement
         ? { publicId: record.settlement.publicId, reference: record.settlement.reference }
         : null,

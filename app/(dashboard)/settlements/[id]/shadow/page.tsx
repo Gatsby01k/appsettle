@@ -27,6 +27,7 @@ import {
 } from "@/lib/shadow-mode";
 import { buildLivePilotReadiness } from "@/lib/live-pilot";
 import { cn, formatCurrencyFull, formatDateTime } from "@/lib/utils";
+import { FormSelect } from "@/components/ops/form-select";
 import { StatusBadge } from "@/components/ops/status-badge";
 import { StatRow } from "@/components/ops/stat-row";
 import { FlashMessage } from "@/components/ops/flash-message";
@@ -403,20 +404,20 @@ export default async function ShadowConsolePage({
               <input type="hidden" name="settlementId" value={settlement.id} />
               <div className="grid gap-1.5">
                 <Label htmlFor="mode">Switch mode</Label>
-                <select
-                  id="mode"
+                <FormSelect
                   name="mode"
                   defaultValue={mode}
-                  className="h-9 rounded-md border border-[var(--ops-line)] bg-white px-2 text-sm text-slate-900"
-                >
-                  {SETTLEMENT_MODES.map((value) => (
-                    <option key={value} value={value}>
-                      {MODE_LABEL[value]}
-                      {value === "SHADOW" ? ` (cap ${config.shadowMaxInr.toLocaleString("en-IN")} INR)` : ""}
-                      {value === "LIVE_TEST" ? ` (cap ${config.liveTestMaxInr.toLocaleString("en-IN")} INR)` : ""}
-                    </option>
-                  ))}
-                </select>
+                  options={SETTLEMENT_MODES.map((value) => ({
+                    value,
+                    label: `${MODE_LABEL[value]}${
+                      value === "SHADOW"
+                        ? ` (cap ${config.shadowMaxInr.toLocaleString("en-IN")} INR)`
+                        : value === "LIVE_TEST"
+                          ? ` (cap ${config.liveTestMaxInr.toLocaleString("en-IN")} INR)`
+                          : ""
+                    }`,
+                  }))}
+                />
               </div>
               <SubmitButton variant="outline" size="sm" pendingText="Switching...">
                 Apply mode
