@@ -482,7 +482,7 @@ export default async function QuotesPage({
                 <dl className="mt-1">
                   <div className="ticket-term">
                     <dt>Reference</dt>
-                    <dd>Treasury desk rate</dd>
+                    <dd>Manual desk rate · no live FX feed</dd>
                   </div>
                   <div className="ticket-term">
                     <dt>Fee</dt>

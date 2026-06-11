@@ -14,17 +14,23 @@ import {
 } from "@/lib/reconciliation";
 import { quoteSchema, reconciliationSchema, settlementSchema, settingsSchema } from "@/lib/validators";
 import { assertValidSettlementTransition } from "@/lib/settlement-lifecycle";
-
-const RATE_BY_CORRIDOR = {
-  INR_USDT: 83.5,
-  USDT_INR: 83.15,
-} as const;
+import { resolveQuoteRates } from "@/lib/quote-rate";
 
 export async function createQuote(input: unknown, userId: string, organizationId: string) {
   const data = quoteSchema.parse(input);
   const sourceCurrency = data.corridor === "INR_USDT" ? "INR" : "USDT";
   const targetCurrency = data.corridor === "INR_USDT" ? "USDT" : "INR";
-  const rate = RATE_BY_CORRIDOR[data.corridor];
+
+  // Quote rate: env-configured manual desk rate (QUOTE_RATE_USDT_INR). There
+  // is NO live FX feed; production without a configured rate fails closed —
+  // see lib/quote-rate.ts.
+  let rates: ReturnType<typeof resolveQuoteRates>;
+  try {
+    rates = resolveQuoteRates();
+  } catch (error) {
+    throw new UserFacingError(error instanceof Error ? error.message : "Quote rate is not configured.");
+  }
+  const rate = rates[data.corridor];
   const feeBps = 45;
   const feeAmount = data.sourceAmount * (feeBps / 10000);
   const targetAmount =
@@ -56,7 +62,7 @@ export async function createQuote(input: unknown, userId: string, organizationId
     resourceId: quote.id,
     organizationId,
     userId,
-    after: quote,
+    after: { ...quote, rateSource: rates.source, rateSourceLabel: rates.label },
   });
 
   return quote;
