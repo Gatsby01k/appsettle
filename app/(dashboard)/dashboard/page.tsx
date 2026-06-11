@@ -150,13 +150,18 @@ export default async function DashboardPage({
     // Non-fatal: dashboard still renders current state if matching fails transiently.
   }
 
-  const proofInclude = { reconciliation: { take: 1, orderBy: { createdAt: "desc" as const } } };
   const completedStatus = { in: [SettlementStatus.SETTLED, SettlementStatus.RECONCILED] };
 
+  // NOTE: settlements are intentionally fetched WITHOUT a nested
+  // `include: { reconciliation: { take, orderBy } }`. That construct triggers a
+  // Prisma 7 + @prisma/adapter-pg DriverAdapterError (Postgres 42809,
+  // "WITHIN GROUP is required for ordered-set aggregate mode"). The latest
+  // linked reconciliation record is fetched in a separate flat query below and
+  // attached manually, preserving the same `reconciliation: [latest?]` shape.
   const [
-    recentSettlements,
-    latestProofPreferred,
-    latestProofFallback,
+    recentSettlementsRaw,
+    latestProofPreferredRaw,
+    latestProofFallbackRaw,
     reconExceptions,
     auditLogs,
     expiredQuotes,
@@ -169,7 +174,6 @@ export default async function DashboardPage({
         where: settlementWhere,
         orderBy: { createdAt: "desc" },
         take: 6,
-        include: proofInclude,
       }),
       demoFocus
         ? prisma.settlement.findFirst({
@@ -178,13 +182,11 @@ export default async function DashboardPage({
               publicId: "SET-DEMO-001",
               status: completedStatus,
             },
-            include: proofInclude,
           })
         : Promise.resolve(null),
       prisma.settlement.findFirst({
         where: { ...settlementWhere, status: completedStatus },
         orderBy: [{ reconciledAt: "desc" }, { settledAt: "desc" }],
-        include: proofInclude,
       }),
       prisma.reconciliationRecord.count({
         where: demoFocus
@@ -225,6 +227,47 @@ export default async function DashboardPage({
         where: { ...settlementWhere, status: SettlementStatus.RECONCILED },
       }),
     ]);
+
+  // Latest linked reconciliation record per settlement, fetched flat (no nested
+  // include) and attached manually.
+  const proofSettlementIds = Array.from(
+    new Set(
+      [
+        ...recentSettlementsRaw.map((settlement) => settlement.id),
+        latestProofPreferredRaw?.id,
+        latestProofFallbackRaw?.id,
+      ].filter((id): id is string => Boolean(id)),
+    ),
+  );
+
+  const reconciliationRecords = proofSettlementIds.length
+    ? await prisma.reconciliationRecord.findMany({
+        where: { settlementId: { in: proofSettlementIds } },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
+
+  // Records are ordered newest-first, so the first one seen per settlement is
+  // the latest — equivalent to the old nested `take: 1, orderBy createdAt desc`.
+  const latestReconciliationBySettlementId = new Map<string, (typeof reconciliationRecords)[number]>();
+  for (const record of reconciliationRecords) {
+    if (record.settlementId && !latestReconciliationBySettlementId.has(record.settlementId)) {
+      latestReconciliationBySettlementId.set(record.settlementId, record);
+    }
+  }
+
+  const withLatestReconciliation = <T extends { id: string }>(settlement: T) => {
+    const latest = latestReconciliationBySettlementId.get(settlement.id);
+    return { ...settlement, reconciliation: latest ? [latest] : [] };
+  };
+
+  const recentSettlements = recentSettlementsRaw.map(withLatestReconciliation);
+  const latestProofPreferred = latestProofPreferredRaw
+    ? withLatestReconciliation(latestProofPreferredRaw)
+    : null;
+  const latestProofFallback = latestProofFallbackRaw
+    ? withLatestReconciliation(latestProofFallbackRaw)
+    : null;
 
   const latestProof = demoFocus ? (latestProofPreferred ?? latestProofFallback) : latestProofFallback;
 

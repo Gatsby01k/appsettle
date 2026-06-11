@@ -168,18 +168,24 @@ export default async function ShadowConsolePage({
     where: { id, organizationId: organization.id },
     include: {
       providerProofs: { orderBy: { receivedAt: "desc" } },
-      reconciliation: { orderBy: { createdAt: "desc" } },
+      // No nested orderBy on this relation: combined with take it triggers a
+      // Prisma 7 + @prisma/adapter-pg bug (Postgres 42809) — sorted in JS below.
+      reconciliation: true,
       events: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!settlement) notFound();
+
+  const reconciliationRecords = [...settlement.reconciliation].sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+  );
 
   const config = getShadowConfig();
   const safety = safetyFor(settlement, config);
   const checklist = buildShadowChecklist(
     settlement,
     settlement.providerProofs,
-    settlement.reconciliation,
+    reconciliationRecords,
     settlement.events,
     config,
   );
@@ -189,7 +195,7 @@ export default async function ShadowConsolePage({
     buildFinalityInput(
       settlement,
       settlement.providerProofs,
-      settlement.reconciliation,
+      reconciliationRecords,
       settlement.events,
       safety,
     ),

@@ -35,7 +35,9 @@ export async function GET(
       where: { id, organizationId: context.organization.id },
       include: {
         providerProofs: { orderBy: { receivedAt: "desc" } },
-        reconciliation: { orderBy: { createdAt: "desc" } },
+        // No nested orderBy on this relation: combined with take it triggers a
+        // Prisma 7 + @prisma/adapter-pg bug (Postgres 42809) — sorted in JS below.
+        reconciliation: true,
         events: { orderBy: { createdAt: "asc" } },
       },
     });
@@ -44,13 +46,17 @@ export async function GET(
       return NextResponse.json({ error: "Settlement was not found." }, { status: 404 });
     }
 
+    const reconciliationRecords = [...settlement.reconciliation].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
+
     const shadowConfig = getShadowConfig();
     const safety = safetyFor(settlement, shadowConfig);
     const assessment = assessFinality(
       buildFinalityInput(
         settlement,
         settlement.providerProofs,
-        settlement.reconciliation,
+        reconciliationRecords,
         settlement.events,
         safety,
       ),
@@ -58,7 +64,7 @@ export async function GET(
     const checklist = buildShadowChecklist(
       settlement,
       settlement.providerProofs,
-      settlement.reconciliation,
+      reconciliationRecords,
       settlement.events,
       shadowConfig,
     );
@@ -96,7 +102,7 @@ export async function GET(
           receivedVia: proof.receivedVia,
           receivedAt: proof.receivedAt.toISOString(),
         })),
-        reconciliation: settlement.reconciliation.map((record) => ({
+        reconciliation: reconciliationRecords.map((record) => ({
           id: record.id,
           status: record.status,
           externalRef: record.externalRef,
