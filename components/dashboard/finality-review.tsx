@@ -43,20 +43,20 @@ const DECISION_META = {
   ready_to_finalize: {
     label: "Ready to finalize",
     icon: CheckCircle2,
-    banner: "border-emerald-200 bg-emerald-50 text-emerald-900",
-    chip: "bg-emerald-100 text-emerald-800",
+    banner: "finality-banner finality-banner--ready text-emerald-900",
+    fill: "confidence-meter__fill--ready",
   },
   needs_review: {
     label: "Needs review",
     icon: AlertTriangle,
-    banner: "border-amber-200 bg-amber-50 text-amber-900",
-    chip: "bg-amber-100 text-amber-800",
+    banner: "finality-banner finality-banner--review text-amber-900",
+    fill: "confidence-meter__fill--review",
   },
   not_ready: {
     label: "Not ready",
     icon: CircleDashed,
-    banner: "border-slate-200 bg-slate-50 text-slate-700",
-    chip: "bg-slate-200 text-slate-700",
+    banner: "finality-banner finality-banner--neutral text-slate-700",
+    fill: "confidence-meter__fill--neutral",
   },
 } as const;
 
@@ -93,19 +93,38 @@ function IssueList({ items, tone }: { items: string[]; tone: "danger" | "warning
   );
 }
 
+function chainState(data: FinalityReviewData) {
+  const proofOk = Boolean(data.proof);
+  const reconOk = Boolean(
+    data.reconciliation && data.reconciliation.independent && data.reconciliation.status === "MATCHED",
+  );
+  const reconBad = Boolean(
+    data.reconciliation &&
+      (["UNMATCHED", "EXCEPTION"].includes(data.reconciliation.status) || !data.reconciliation.independent),
+  );
+  return {
+    proof: proofOk ? ("ok" as const) : ("pending" as const),
+    recon: reconOk ? ("ok" as const) : reconBad ? ("bad" as const) : ("pending" as const),
+    audit: data.auditApprovalPresent ? ("ok" as const) : ("pending" as const),
+  };
+}
+
+const CHAIN_STATE_LABEL = { ok: "Verified", pending: "Pending", bad: "Disputed" } as const;
+
 export function FinalityReview({ data }: { data: FinalityReviewData }) {
   const meta = DECISION_META[data.decision];
   const Icon = meta.icon;
   const confidence = Math.max(0, Math.min(100, data.confidence));
+  const chain = chainState(data);
 
   return (
     <div className="space-y-3">
       {/* Decision banner */}
-      <div className={cn("rounded-xl border p-3", meta.banner)}>
-        <div className="flex items-center justify-between gap-2">
+      <div className={meta.banner}>
+        <div className="flex items-center justify-between gap-2 pl-2">
           <div className="flex items-center gap-2">
             <Icon className="h-4 w-4 shrink-0" />
-            <p className="text-sm font-semibold">{meta.label}</p>
+            <p className="text-sm font-semibold tracking-tight">{meta.label}</p>
           </div>
           <span
             className={cn(
@@ -116,25 +135,31 @@ export function FinalityReview({ data }: { data: FinalityReviewData }) {
             {data.riskLevel} risk
           </span>
         </div>
-        <p className="mt-1.5 text-xs leading-relaxed opacity-90">{data.summary}</p>
-        <div className="mt-2.5">
+        <p className="mt-1.5 pl-2 text-xs leading-relaxed opacity-90">{data.summary}</p>
+        <div className="mt-2.5 pl-2">
           <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.08em] opacity-70">
             <span>Finality confidence</span>
             <span className="tabular-nums">{confidence}%</span>
           </div>
-          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/60">
-            <div
-              className={cn(
-                "h-full rounded-full transition-all",
-                data.decision === "ready_to_finalize"
-                  ? "bg-emerald-500"
-                  : data.decision === "needs_review"
-                    ? "bg-amber-500"
-                    : "bg-slate-400",
-              )}
-              style={{ width: `${confidence}%` }}
-            />
+          <div className="confidence-meter mt-1">
+            <div className={cn("confidence-meter__fill", meta.fill)} style={{ width: `${confidence}%` }} />
           </div>
+        </div>
+      </div>
+
+      {/* Evidence chain: the product thesis, visualized */}
+      <div className="evidence-chain" aria-label="Settlement confidence evidence chain">
+        <div className={cn("evidence-chain__pillar", `evidence-chain__pillar--${chain.proof}`)}>
+          <span className="evidence-chain__label">Provider proof</span>
+          <span className="evidence-chain__state">{CHAIN_STATE_LABEL[chain.proof]}</span>
+        </div>
+        <div className={cn("evidence-chain__pillar", `evidence-chain__pillar--${chain.recon}`)}>
+          <span className="evidence-chain__label">Independent recon</span>
+          <span className="evidence-chain__state">{CHAIN_STATE_LABEL[chain.recon]}</span>
+        </div>
+        <div className={cn("evidence-chain__pillar", `evidence-chain__pillar--${chain.audit}`)}>
+          <span className="evidence-chain__label">Audit trail</span>
+          <span className="evidence-chain__state">{CHAIN_STATE_LABEL[chain.audit]}</span>
         </div>
       </div>
 

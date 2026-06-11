@@ -3122,3 +3122,251 @@ details[open] > .reconciliation-details-content {
     transition: none;
   }
 }
+
+/* =====================================================================
+   Settlement Confidence kit (Phase 1–5 surfaces)
+   Visual language for the product thesis:
+   Provider Proof → Independent Reconciliation → Audit Trail →
+   Finality Review → Settlement Report → Live Pilot Readiness.
+   Extends the existing ops system; reuses --ease, --ops-* tokens.
+   ===================================================================== */
+
+:root {
+  --brand-gold: #d4a017;
+  --brand-gold-soft: rgba(212, 160, 23, 0.14);
+  --finality-ready: #0a8f6c;
+  --finality-ready-soft: #ecfdf5;
+  --finality-ready-line: rgba(10, 143, 108, 0.28);
+  --finality-review: #a5670a;
+  --finality-review-soft: #fffbeb;
+  --finality-review-line: rgba(165, 103, 10, 0.26);
+  --finality-blocked: #b42318;
+  --finality-blocked-soft: #fef3f2;
+  --finality-blocked-line: rgba(180, 35, 24, 0.26);
+}
+
+/* --- Finality decision banner ---------------------------------------- */
+.finality-banner {
+  position: relative;
+  border-radius: 0.9rem;
+  border: 1px solid var(--ops-line);
+  padding: 1rem;
+  overflow: hidden;
+  transition: box-shadow 0.3s var(--ease);
+}
+.finality-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+}
+.finality-banner--ready {
+  background: linear-gradient(135deg, var(--finality-ready-soft), #ffffff 70%);
+  border-color: var(--finality-ready-line);
+  box-shadow: 0 0 0 1px rgba(10, 143, 108, 0.04), 0 10px 30px rgba(10, 143, 108, 0.08);
+}
+.finality-banner--ready::before { background: linear-gradient(180deg, var(--brand-emerald), var(--brand-aqua)); }
+.finality-banner--review {
+  background: linear-gradient(135deg, var(--finality-review-soft), #ffffff 70%);
+  border-color: var(--finality-review-line);
+  box-shadow: 0 0 0 1px rgba(165, 103, 10, 0.04), 0 10px 30px rgba(165, 103, 10, 0.07);
+}
+.finality-banner--review::before { background: linear-gradient(180deg, var(--brand-amber), var(--brand-gold)); }
+.finality-banner--blocked {
+  background: linear-gradient(135deg, var(--finality-blocked-soft), #ffffff 70%);
+  border-color: var(--finality-blocked-line);
+  box-shadow: 0 0 0 1px rgba(180, 35, 24, 0.04), 0 10px 30px rgba(180, 35, 24, 0.07);
+}
+.finality-banner--blocked::before { background: var(--finality-blocked); }
+.finality-banner--neutral {
+  background: linear-gradient(135deg, #f8fafc, #ffffff 70%);
+}
+.finality-banner--neutral::before { background: rgba(7, 17, 31, 0.16); }
+
+/* --- Confidence meter -------------------------------------------------- */
+.confidence-meter {
+  height: 0.45rem;
+  border-radius: 999px;
+  background: rgba(7, 17, 31, 0.07);
+  overflow: hidden;
+}
+.confidence-meter__fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.7s var(--ease);
+}
+.confidence-meter__fill--ready { background: linear-gradient(90deg, var(--brand-emerald), var(--brand-aqua)); }
+.confidence-meter__fill--review { background: linear-gradient(90deg, var(--brand-amber), var(--brand-gold)); }
+.confidence-meter__fill--blocked { background: var(--finality-blocked); }
+.confidence-meter__fill--neutral { background: rgba(7, 17, 31, 0.25); }
+
+/* --- Evidence chain (the thesis, visualized) --------------------------- */
+.evidence-chain {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.evidence-chain__pillar {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  border: 1px solid var(--ops-line);
+  background: #ffffff;
+  padding: 0.6rem 0.7rem;
+  text-align: center;
+}
+.evidence-chain__pillar:first-child { border-radius: 0.7rem 0 0 0.7rem; }
+.evidence-chain__pillar:last-child { border-radius: 0 0.7rem 0.7rem 0; }
+.evidence-chain__pillar + .evidence-chain__pillar { border-left: none; }
+.evidence-chain__pillar--ok {
+  background: linear-gradient(180deg, #f0fdf9, #ffffff);
+  border-color: var(--finality-ready-line);
+}
+.evidence-chain__pillar--pending {
+  background: linear-gradient(180deg, #fffbeb, #ffffff);
+  border-color: var(--finality-review-line);
+}
+.evidence-chain__pillar--bad {
+  background: linear-gradient(180deg, var(--finality-blocked-soft), #ffffff);
+  border-color: var(--finality-blocked-line);
+}
+.evidence-chain__label {
+  display: block;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(7, 17, 31, 0.45);
+}
+.evidence-chain__state {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--brand-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.evidence-chain__pillar--ok .evidence-chain__state { color: var(--finality-ready); }
+.evidence-chain__pillar--pending .evidence-chain__state { color: var(--finality-review); }
+.evidence-chain__pillar--bad .evidence-chain__state { color: var(--finality-blocked); }
+
+/* --- Checklist language ------------------------------------------------- */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.6rem;
+  transition: background-color 0.25s var(--ease);
+  animation: check-item-enter 0.35s var(--ease) both;
+}
+.check-item:hover { background: rgba(7, 17, 31, 0.025); }
+.check-item:nth-child(2) { animation-delay: 0.03s; }
+.check-item:nth-child(3) { animation-delay: 0.06s; }
+.check-item:nth-child(4) { animation-delay: 0.09s; }
+.check-item:nth-child(5) { animation-delay: 0.12s; }
+.check-item:nth-child(6) { animation-delay: 0.15s; }
+.check-item:nth-child(7) { animation-delay: 0.18s; }
+.check-item:nth-child(8) { animation-delay: 0.21s; }
+.check-item:nth-child(9) { animation-delay: 0.24s; }
+.check-item:nth-child(10) { animation-delay: 0.27s; }
+@keyframes check-item-enter {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.check-dot {
+  margin-top: 0.1rem;
+  display: inline-flex;
+  height: 1.05rem;
+  width: 1.05rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+.check-dot--done {
+  background: var(--finality-ready-soft);
+  color: var(--finality-ready);
+  box-shadow: 0 0 0 1px var(--finality-ready-line) inset;
+}
+.check-dot--pending {
+  background: var(--finality-review-soft);
+  color: var(--finality-review);
+  box-shadow: 0 0 0 1px var(--finality-review-line) inset;
+}
+.check-dot--blocked {
+  background: var(--finality-blocked-soft);
+  color: var(--finality-blocked);
+  box-shadow: 0 0 0 1px var(--finality-blocked-line) inset;
+}
+
+/* --- Case chips (mode / guardrail) -------------------------------------- */
+.case-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.case-chip--demo { border-color: rgba(7, 17, 31, 0.12); background: #f8fafc; color: rgba(7, 17, 31, 0.5); }
+.case-chip--shadow { border-color: rgba(11, 180, 196, 0.3); background: rgba(11, 180, 196, 0.08); color: #086d77; }
+.case-chip--live { border-color: var(--finality-blocked-line); background: var(--finality-blocked-soft); color: var(--finality-blocked); }
+.case-chip--gold { border-color: rgba(212, 160, 23, 0.35); background: var(--brand-gold-soft); color: #8a6510; }
+
+/* --- Executive report kit ------------------------------------------------ */
+.report-sheet {
+  position: relative;
+  border-radius: 1.1rem;
+  border: 1px solid var(--ops-line);
+  background:
+    radial-gradient(900px 280px at 85% -8%, rgba(11, 180, 196, 0.05), transparent 60%),
+    radial-gradient(700px 240px at 0% 0%, rgba(0, 199, 157, 0.05), transparent 55%),
+    #ffffff;
+  box-shadow: var(--ops-shadow-md);
+}
+.report-band {
+  border-bottom: 1px solid var(--ops-line-soft);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.8), rgba(255, 255, 255, 0));
+  border-radius: 1.1rem 1.1rem 0 0;
+}
+.report-section {
+  border-radius: 0.85rem;
+  border: 1px solid var(--ops-line);
+  background: #ffffff;
+  transition: border-color 0.25s var(--ease), box-shadow 0.25s var(--ease);
+}
+.report-section:hover {
+  border-color: var(--ops-line-strong);
+  box-shadow: var(--ops-shadow-xs);
+}
+.report-footnote {
+  border-top: 1px solid var(--ops-line-soft);
+  font-size: 0.6875rem;
+  line-height: 1.6;
+  color: rgba(7, 17, 31, 0.42);
+}
+
+@media print {
+  .report-sheet { box-shadow: none; border-color: rgba(7, 17, 31, 0.2); }
+  .report-section:hover { box-shadow: none; }
+  .report-print-hide { display: none !important; }
+}
+
+/* --- Reduced motion for the confidence kit -------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .check-item { animation: none; }
+  .confidence-meter__fill { transition: none; }
+  .finality-banner,
+  .report-section,
+  .check-item { transition: none; }
+}

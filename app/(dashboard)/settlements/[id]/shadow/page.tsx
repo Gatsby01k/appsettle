@@ -446,15 +446,10 @@ export default async function ShadowConsolePage({
               {checklist.filter((item) => item.done).length}/{checklist.length} ready
             </span>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-0.5">
             {checklist.map((item) => (
-              <div key={item.key} className="flex items-start gap-2 text-sm">
-                <span
-                  className={cn(
-                    "mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
-                    item.done ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700",
-                  )}
-                >
+              <div key={item.key} className="check-item text-sm">
+                <span className={cn("check-dot", item.done ? "check-dot--done" : "check-dot--pending")}>
                   {item.done ? "✓" : "•"}
                 </span>
                 <div>
@@ -488,17 +483,13 @@ export default async function ShadowConsolePage({
                     : "Blocked"}
               </span>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-0.5">
               {pilot.items.map((item) => (
-                <div key={item.key} className="flex items-start gap-2 text-sm">
+                <div key={item.key} className="check-item text-sm">
                   <span
                     className={cn(
-                      "mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
-                      item.done
-                        ? "bg-emerald-100 text-emerald-700"
-                        : item.blocking
-                          ? "bg-red-100 text-red-700"
-                          : "bg-amber-100 text-amber-700",
+                      "check-dot",
+                      item.done ? "check-dot--done" : item.blocking ? "check-dot--blocked" : "check-dot--pending",
                     )}
                   >
                     {item.done ? "✓" : item.blocking ? "✕" : "•"}
@@ -506,11 +497,7 @@ export default async function ShadowConsolePage({
                   <div>
                     <span className={item.done ? "text-slate-700" : "font-medium text-slate-900"}>
                       {item.label}
-                      {item.blocking ? (
-                        <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-slate-400">
-                          guardrail
-                        </span>
-                      ) : null}
+                      {item.blocking ? <span className="case-chip case-chip--gold ml-1.5">guardrail</span> : null}
                     </span>
                     <span className="block text-xs text-slate-400">{item.detail}</span>
                   </div>

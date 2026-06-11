@@ -133,19 +133,16 @@ function demoSettlementWhere(organizationId: string) {
 }
 
 const MODE_CHIP_CLASS: Record<SettlementMode, string> = {
-  DEMO: "border-slate-200 bg-slate-50 text-slate-500",
-  SHADOW: "border-indigo-200 bg-indigo-50 text-indigo-700",
-  LIVE_TEST: "border-red-200 bg-red-50 text-red-700",
+  DEMO: "case-chip--demo",
+  SHADOW: "case-chip--shadow",
+  LIVE_TEST: "case-chip--live",
 };
 
 function ModeChip({ testMode }: { testMode: string }) {
   const key = (testMode in MODE_CHIP_CLASS ? testMode : "DEMO") as SettlementMode;
   return (
     <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]",
-        MODE_CHIP_CLASS[key],
-      )}
+      className={cn("case-chip", MODE_CHIP_CLASS[key])}
       title="DEMO: fake data · SHADOW/LIVE TEST: money moves externally via the partner/provider — INRSettle does not move funds"
     >
       {MODE_LABEL[key]}

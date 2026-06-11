@@ -33,20 +33,20 @@ const DECISION_META = {
   ready_to_finalize: {
     label: "Ready to finalize",
     icon: CheckCircle2,
-    banner: "border-emerald-200 bg-emerald-50 text-emerald-900",
-    bar: "bg-emerald-500",
+    banner: "finality-banner finality-banner--ready text-emerald-900",
+    fill: "confidence-meter__fill--ready",
   },
   needs_review: {
     label: "Needs review",
     icon: AlertTriangle,
-    banner: "border-amber-200 bg-amber-50 text-amber-900",
-    bar: "bg-amber-500",
+    banner: "finality-banner finality-banner--review text-amber-900",
+    fill: "confidence-meter__fill--review",
   },
   not_ready: {
     label: "Not ready",
     icon: CircleDashed,
-    banner: "border-slate-200 bg-slate-50 text-slate-700",
-    bar: "bg-slate-400",
+    banner: "finality-banner finality-banner--neutral text-slate-700",
+    fill: "confidence-meter__fill--neutral",
   },
 } as const;
 
@@ -81,11 +81,11 @@ function DecisionBanner({ assessment }: { assessment: FinalityAssessment }) {
   const confidence = Math.max(0, Math.min(100, assessment.confidence));
 
   return (
-    <div className={cn("rounded-xl border p-4", meta.banner)}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className={meta.banner}>
+      <div className="flex flex-wrap items-center justify-between gap-2 pl-2">
         <div className="flex items-center gap-2">
           <Icon className="h-5 w-5 shrink-0" />
-          <p className="text-base font-semibold">{meta.label}</p>
+          <p className="text-base font-semibold tracking-tight">{meta.label}</p>
         </div>
         <span
           className={cn(
@@ -96,14 +96,14 @@ function DecisionBanner({ assessment }: { assessment: FinalityAssessment }) {
           {assessment.riskLevel} risk
         </span>
       </div>
-      <p className="mt-2 text-sm leading-relaxed opacity-90">{assessment.summary}</p>
-      <div className="mt-3">
+      <p className="mt-2 pl-2 text-sm leading-relaxed opacity-90">{assessment.summary}</p>
+      <div className="mt-3 pl-2">
         <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.08em] opacity-70">
           <span>Finality confidence</span>
           <span className="tabular-nums">{confidence}%</span>
         </div>
-        <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/60">
-          <div className={cn("h-full rounded-full", meta.bar)} style={{ width: `${confidence}%` }} />
+        <div className="confidence-meter mt-1">
+          <div className={cn("confidence-meter__fill", meta.fill)} style={{ width: `${confidence}%` }} />
         </div>
       </div>
     </div>
@@ -250,7 +250,7 @@ export default async function SettlementReportPage({
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="report-print-hide flex items-center justify-between gap-2">
         <Button asChild variant="outline" size="sm">
           <Link href="/settlements" className="inline-flex items-center gap-1.5">
             <ArrowLeft className="h-3.5 w-3.5" />
@@ -262,9 +262,9 @@ export default async function SettlementReportPage({
         </p>
       </div>
 
-      <div className="ops-panel space-y-5 p-5">
+      <div className="report-sheet space-y-5 p-5 sm:p-6">
         {/* Header */}
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--ops-line-soft)] pb-4">
+        <div className="report-band -mx-5 -mt-5 flex flex-wrap items-start justify-between gap-3 px-5 pb-4 pt-5 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
               Settlement report
@@ -276,10 +276,10 @@ export default async function SettlementReportPage({
             <StatusBadge status={settlement.status} />
             <span
               className={cn(
-                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]",
-                mode === "DEMO" && "border-slate-200 bg-slate-50 text-slate-500",
-                mode === "SHADOW" && "border-indigo-200 bg-indigo-50 text-indigo-700",
-                mode === "LIVE_TEST" && "border-red-200 bg-red-50 text-red-700",
+                "case-chip",
+                mode === "DEMO" && "case-chip--demo",
+                mode === "SHADOW" && "case-chip--shadow",
+                mode === "LIVE_TEST" && "case-chip--live",
               )}
             >
               {MODE_LABEL[mode]} mode
@@ -292,7 +292,7 @@ export default async function SettlementReportPage({
         <DecisionBanner assessment={assessment} />
 
         {/* Mode + money movement + safety checklist */}
-        <div className="rounded-xl border border-[var(--ops-line)] p-4">
+        <div className="report-section p-4">
           <SectionTitle>Test mode &amp; safety</SectionTitle>
           <StatRow label="Mode" value={`${MODE_LABEL[mode]} — ${MODE_DESCRIPTION[mode]}`} />
           <StatRow
@@ -316,13 +316,8 @@ export default async function SettlementReportPage({
               Shadow test checklist
             </p>
             {checklist.map((item) => (
-              <div key={item.key} className="flex items-start gap-2 text-sm">
-                <span
-                  className={cn(
-                    "mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
-                    item.done ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700",
-                  )}
-                >
+              <div key={item.key} className="check-item text-sm">
+                <span className={cn("check-dot", item.done ? "check-dot--done" : "check-dot--pending")}>
                   {item.done ? "✓" : "•"}
                 </span>
                 <div>
@@ -345,7 +340,7 @@ export default async function SettlementReportPage({
 
         {/* Live pilot readiness (LIVE_TEST only) */}
         {pilot ? (
-          <div className="rounded-xl border border-red-200 p-4">
+          <div className="report-section p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <SectionTitle>Live pilot readiness</SectionTitle>
               <span
@@ -365,15 +360,11 @@ export default async function SettlementReportPage({
             </div>
             <div className="space-y-2">
               {pilot.items.map((item) => (
-                <div key={item.key} className="flex items-start gap-2 text-sm">
+                <div key={item.key} className="check-item text-sm">
                   <span
                     className={cn(
-                      "mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
-                      item.done
-                        ? "bg-emerald-100 text-emerald-700"
-                        : item.blocking
-                          ? "bg-red-100 text-red-700"
-                          : "bg-amber-100 text-amber-700",
+                      "check-dot",
+                      item.done ? "check-dot--done" : item.blocking ? "check-dot--blocked" : "check-dot--pending",
                     )}
                   >
                     {item.done ? "✓" : item.blocking ? "✕" : "•"}
@@ -389,7 +380,7 @@ export default async function SettlementReportPage({
         ) : null}
 
         {/* Settlement summary */}
-        <div className="rounded-xl border border-[var(--ops-line)] p-4">
+        <div className="report-section p-4">
           <SectionTitle>Settlement summary</SectionTitle>
           <StatRow
             label="Source"
@@ -410,7 +401,7 @@ export default async function SettlementReportPage({
         </div>
 
         {/* Provider proof */}
-        <div className="rounded-xl border border-[var(--ops-line)] p-4">
+        <div className="report-section p-4">
           <SectionTitle>Provider proof</SectionTitle>
           {proof ? (
             <>
@@ -438,7 +429,7 @@ export default async function SettlementReportPage({
         </div>
 
         {/* Independent reconciliation */}
-        <div className="rounded-xl border border-[var(--ops-line)] p-4">
+        <div className="report-section p-4">
           <SectionTitle>Independent reconciliation</SectionTitle>
           {reconciliation ? (
             <>
@@ -473,7 +464,7 @@ export default async function SettlementReportPage({
         </div>
 
         {/* Audit trail */}
-        <div className="rounded-xl border border-[var(--ops-line)] p-4">
+        <div className="report-section p-4">
           <SectionTitle>Audit trail</SectionTitle>
           <StatRow label="Approval recorded" value={approvalRecorded ? "Yes" : "No"} />
           {settlement.events.length ? (
@@ -497,31 +488,31 @@ export default async function SettlementReportPage({
 
         {/* Finality detail */}
         {assessment.blockingIssues.length > 0 ? (
-          <div className="rounded-xl border border-[var(--ops-line)] p-4">
+          <div className="report-section p-4">
             <SectionTitle>Blocking issues</SectionTitle>
             <ReportList items={assessment.blockingIssues} dot="bg-red-500" />
           </div>
         ) : null}
         {assessment.warnings.length > 0 ? (
-          <div className="rounded-xl border border-[var(--ops-line)] p-4">
+          <div className="report-section p-4">
             <SectionTitle>Warnings</SectionTitle>
             <ReportList items={assessment.warnings} dot="bg-amber-500" />
           </div>
         ) : null}
         {assessment.evidence.length > 0 ? (
-          <div className="rounded-xl border border-[var(--ops-line)] p-4">
+          <div className="report-section p-4">
             <SectionTitle>Evidence</SectionTitle>
             <ReportList items={assessment.evidence} dot="bg-emerald-500" />
           </div>
         ) : null}
         {assessment.recommendedActions.length > 0 ? (
-          <div className="rounded-xl border border-[var(--ops-line)] p-4">
+          <div className="report-section p-4">
             <SectionTitle>Recommended actions</SectionTitle>
             <ReportList items={assessment.recommendedActions} dot="bg-slate-400" />
           </div>
         ) : null}
 
-        <p className="border-t border-[var(--ops-line-soft)] pt-3 text-[11px] leading-relaxed text-slate-400">
+        <p className="report-footnote pt-3">
           Finality is determined by deterministic review of provider proof, independent reconciliation, and the
           audit trail. A provider-reported &quot;completed&quot; status alone never finalizes a settlement.
         </p>
