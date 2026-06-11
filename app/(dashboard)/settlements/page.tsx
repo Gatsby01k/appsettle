@@ -619,20 +619,29 @@ export default async function SettlementsPage({
               { name: "Audit trail", state: finality.auditApprovalPresent ? "ok" : "pending" },
               {
                 name: "Finality",
-                state:
-                  finality.decision === "ready_to_finalize" ? "ok" : finality.riskLevel === "high" ? "bad" : "pending",
+                // "Mismatch" is reserved for real evidence contradictions; an
+                // in-flight settlement with no proof yet is simply not ready.
+                state: finality.decision === "ready_to_finalize" ? "ok" : reconBad ? "bad" : "pending",
               },
             ] as const;
             // The blocker is the FIRST non-verified step; later steps are consequences.
             const blockerIndex = chain.findIndex((step) => step.state !== "ok");
             const operationalSummary = caseOperationalSummary(settlement.status, finality);
+            const inFlightCase = (["REQUESTED", "APPROVED", "EXECUTING"] as string[]).includes(settlement.status);
             const awaitingRecon =
               (settlement.status === SettlementStatus.SETTLED || settlement.status === SettlementStatus.RECONCILED) &&
               finality.decision !== "ready_to_finalize";
+            // Display-only recommendation, matched to the settlement's actual state.
             const recommendedAction =
-              finality.decision === "ready_to_finalize"
-                ? "Generate the settlement report and finalize — all three evidence sources agree."
-                : finality.recommendedActions[0] ?? null;
+              settlement.status === SettlementStatus.REQUESTED
+                ? "Approve the settlement to continue."
+                : settlement.status === SettlementStatus.EXECUTING
+                  ? "Check provider status and record proof when available."
+                  : awaitingRecon && settlement.status === SettlementStatus.SETTLED && !reconBad
+                    ? "Match this settlement with a bank or PSP record."
+                    : finality.decision === "ready_to_finalize"
+                      ? "Generate the settlement report and finalize — all three evidence sources agree."
+                      : finality.recommendedActions[0] ?? null;
 
             return (
               <article
@@ -721,12 +730,18 @@ export default async function SettlementsPage({
                           <span className="evidence-chain__label">{step.name}</span>
                           <span className="evidence-chain__state">
                             {step.state === "ok"
-                              ? "Verified"
+                              ? step.name === "Finality"
+                                ? "Ready"
+                                : "Verified"
                               : step.state === "bad"
                                 ? "Mismatch"
-                                : isDownstream
-                                  ? "Awaiting previous"
-                                  : "Pending"}
+                                : step.name === "Reconciliation" && !finality.proof
+                                  ? "Waiting for proof"
+                                  : step.name === "Finality"
+                                    ? inFlightCase
+                                      ? "Not ready"
+                                      : "Pending"
+                                    : "Pending"}
                           </span>
                         </div>
                       );

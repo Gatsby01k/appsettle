@@ -24,11 +24,32 @@ export type SettlementOperationConsoleData = {
 const CONSOLE_STATUSES = new Set(["APPROVED", "EXECUTING", "SETTLED", "RECONCILED"]);
 
 const EXECUTING_STEPS = [
-  "Payout request created",
-  "Waiting for provider status",
+  "Request sent",
+  "Provider confirmation",
   "Settlement update",
-  "Auto-reconciliation",
+  "Reconciliation",
 ];
+
+
+function TrackLane({ steps, activeIndex }: { steps: string[]; activeIndex: number }) {
+  return (
+    <ol className="ptrack" aria-label="Provider tracking">
+      {steps.map((step, index) => {
+        const isDone = index < activeIndex;
+        const isActive = index === activeIndex;
+        return (
+          <li key={step} className={cn("ptrack__step", isDone && "ptrack__step--done", isActive && "ptrack__step--active")}>
+            <span className="ptrack__dot" aria-hidden="true">
+              {isDone ? "✓" : ""}
+            </span>
+            <span className="ptrack__label">{step}</span>
+            <span className="ptrack__state">{isDone ? "Done" : isActive ? "Waiting" : "Next"}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 
 type ConsoleMode = "approved" | "executing" | "settled" | "reconcile_required" | "reconciled";
 
@@ -85,57 +106,6 @@ function ConsolePanel({
     >
       {children}
     </div>
-  );
-}
-
-function CompactStepper({ steps, activeIndex }: { steps: string[]; activeIndex: number }) {
-  return (
-    <ol className="flex flex-wrap items-center gap-1">
-      {steps.map((step, index) => {
-        const isDone = index < activeIndex;
-        const isActive = index === activeIndex;
-        const stateLabel = isDone ? "completed" : isActive ? "active" : "upcoming";
-
-        return (
-          <li
-            key={step}
-            className="flex items-center gap-1 settlement-proof-enter"
-            style={{ animationDelay: `${index * 50}ms` }}
-          >
-            <div
-              className={cn(
-                "flex min-w-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors",
-                isActive && "border-cyan-200 bg-cyan-50 text-cyan-800 settlement-step-active",
-                isDone && "border-emerald-200 bg-emerald-50 text-emerald-700",
-                !isActive && !isDone && "border-slate-200 bg-white text-slate-400",
-              )}
-            >
-              <span
-                className={cn(
-                  "h-1.5 w-1.5 shrink-0 rounded-full",
-                  isActive && "bg-cyan-500 settlement-live-dot text-cyan-500",
-                  isDone && "bg-emerald-500",
-                  !isActive && !isDone && "bg-slate-300",
-                )}
-              />
-              <span className={isActive ? "font-medium" : undefined}>{step}</span>
-              <span className="hidden text-[10px] uppercase tracking-wide opacity-70 sm:inline">
-                — {stateLabel}
-              </span>
-            </div>
-            {index < steps.length - 1 ? (
-              <span
-                className={cn(
-                  "hidden h-px w-2 sm:inline",
-                  isDone ? "bg-emerald-300" : isActive ? "settlement-connector-active" : "bg-slate-200",
-                )}
-                aria-hidden="true"
-              />
-            ) : null}
-          </li>
-        );
-      })}
-    </ol>
   );
 }
 
@@ -391,9 +361,9 @@ export function SettlementOperationConsoleRow({
           <ConsolePanel mode="executing">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-900">Provider execution in progress</p>
+                <p className="text-xs font-semibold text-slate-900">Provider tracking</p>
                 <p className="mt-0.5 text-[11px] text-slate-600">
-                  Payout submitted via PontisGlobe. INRSettle is tracking provider status automatically.
+                  Payout submitted via PontisGlobe. Waiting for provider confirmation.
                 </p>
               </div>
               {autoRefresh ? (
@@ -402,16 +372,16 @@ export function SettlementOperationConsoleRow({
                     <span className="settlement-live-dot absolute inset-0 rounded-full bg-cyan-500 text-cyan-500" />
                     <span className="relative h-1.5 w-1.5 rounded-full bg-cyan-500" />
                   </span>
-                  Live refresh
+                  Tracking
                 </span>
               ) : null}
             </div>
-            <div className="mt-1.5">
-              <CompactStepper steps={EXECUTING_STEPS} activeIndex={executingActiveIndex} />
+            <div className="mt-2">
+              <TrackLane steps={EXECUTING_STEPS} activeIndex={executingActiveIndex} />
             </div>
             {settlement.providerTransactionId ? (
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 border-t border-cyan-100/80 pt-1.5">
-                <span className="text-[10px] text-slate-500">Transaction</span>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-cyan-100/80 pt-1.5">
+                <span className="text-[10px] text-slate-500">Provider transaction</span>
                 <TransactionIdPill value={settlement.providerTransactionId} />
               </div>
             ) : null}
@@ -421,13 +391,19 @@ export function SettlementOperationConsoleRow({
         {mode === "settled" ? (
           <ConsolePanel mode="settled">
             <div>
-              <p className="text-xs font-semibold text-slate-900">Payout completed — ready for reconciliation</p>
+              <p className="text-xs font-semibold text-slate-900">Ready for reconciliation</p>
               <p className="mt-0.5 text-[11px] text-slate-600">
-                Provider execution completed. Match this settlement with a bank record to close the workflow.
+                Provider payout completed. Match this settlement with an independent bank or PSP record.
               </p>
             </div>
             <ReconciliationProofGrid settlement={settlement} providerStatus={providerStatus} />
             <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-emerald-100/80 pt-2">
+              <Link
+                href="/reconciliation"
+                className="inline-flex h-8 items-center rounded-lg bg-brand-emerald px-3 text-xs font-semibold text-white shadow-ops-xs transition-colors hover:bg-brand-emerald-ink"
+              >
+                Open reconciliation
+              </Link>
               {canReconcile && autoMatchAction ? (
                 <SettlementActionForm
                   settlementId={settlementId}
@@ -437,22 +413,16 @@ export function SettlementOperationConsoleRow({
                   <input type="hidden" name="settlementId" value={settlementId} />
                   <SubmitButton
                     type="submit"
-                    variant="primary"
+                    variant="outline"
                     size="sm"
                     pendingText="Matching..."
                     settlementId={settlementId}
                     action="reconcile"
                   >
-                    Auto-match reconciliation
+                    Auto-match
                   </SubmitButton>
                 </SettlementActionForm>
               ) : null}
-              <Link
-                href="/reconciliation"
-                className="text-[11px] font-medium text-cyan-700 underline-offset-2 hover:text-cyan-800 hover:underline"
-              >
-                Open reconciliation
-              </Link>
             </div>
           </ConsolePanel>
         ) : null}

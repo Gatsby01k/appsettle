@@ -4620,3 +4620,81 @@ details[open] > .reconciliation-details-content {
     animation: none;
   }
 }
+
+/* =====================================================================
+   Provider tracking lane (settlement console)
+   ===================================================================== */
+.ptrack {
+  display: grid;
+  gap: 0.25rem;
+}
+@media (min-width: 640px) {
+  .ptrack { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.3rem 0.75rem; }
+}
+.ptrack__step {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  font-size: 0.7rem;
+  color: rgba(7, 17, 31, 0.45);
+}
+.ptrack__dot {
+  display: inline-grid;
+  height: 0.85rem;
+  width: 0.85rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 0.5rem;
+  font-weight: 800;
+  background: rgba(7, 17, 31, 0.05);
+  box-shadow: 0 0 0 1px var(--ops-line-strong) inset;
+  color: transparent;
+}
+.ptrack__step--done .ptrack__dot {
+  background: var(--finality-ready-soft);
+  box-shadow: 0 0 0 1px var(--finality-ready-line) inset;
+  color: var(--finality-ready);
+}
+.ptrack__step--active .ptrack__dot {
+  background: rgba(11, 180, 196, 0.12);
+  box-shadow: 0 0 0 1px rgba(11, 180, 196, 0.4) inset;
+}
+.ptrack__step--active .ptrack__dot::after {
+  content: "";
+  height: 0.3rem;
+  width: 0.3rem;
+  border-radius: 999px;
+  background: var(--brand-aqua);
+  animation: ptrack-pulse 1.6s var(--ease) infinite;
+}
+@keyframes ptrack-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.75); }
+}
+.ptrack__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+  color: rgba(7, 17, 31, 0.55);
+}
+.ptrack__step--done .ptrack__label { color: rgba(7, 17, 31, 0.45); }
+.ptrack__step--active .ptrack__label { color: var(--brand-ink); font-weight: 650; }
+.ptrack__state {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.ptrack__step--done .ptrack__state { color: var(--finality-ready); }
+.ptrack__step--active .ptrack__state { color: #086d77; }
+.ptrack__step:not(.ptrack__step--done):not(.ptrack__step--active) .ptrack__state { color: rgba(7, 17, 31, 0.3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ptrack__step--active .ptrack__dot::after { animation: none; }
+}
