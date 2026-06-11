@@ -1,5 +1,6 @@
-import { Fragment, Suspense } from "react";
+import { Suspense } from "react";
 import Link from "next/link";
+import { Landmark } from "lucide-react";
 import { SettlementStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -19,21 +20,10 @@ import { canApproveSettlement } from "@/lib/permissions";
 import { counterpartyForCorridor } from "@/lib/treasury";
 import { prisma } from "@/lib/prisma";
 import { cn, formatCurrencyCompact, formatCurrencyFull, formatDateTime } from "@/lib/utils";
-import { PageHeader } from "@/components/ops/page-header";
-import { MetricCard } from "@/components/ops/metric-card";
 import { StatusBadge } from "@/components/ops/status-badge";
-import { EmptyState } from "@/components/ops/empty-state";
 import { FilterBar } from "@/components/ops/filter-bar";
 import { FormSelect } from "@/components/ops/form-select";
 import { SettlementLifecycle } from "@/components/ops/settlement-lifecycle";
-import {
-  DataGrid,
-  DataGridBody,
-  DataGridHead,
-  DataGridRow,
-  DataGridTd,
-  DataGridTh,
-} from "@/components/ops/data-grid";
 import {
   SettlementDetailSheet,
   type SettlementDetail,
@@ -396,6 +386,7 @@ export default async function SettlementsPage({
   searchParams,
 }: {
   searchParams: Promise<{
+    mode?: string;
     error?: string;
     success?: string;
     q?: string;
@@ -433,18 +424,41 @@ export default async function SettlementsPage({
   ]);
 
   const query = params.q?.toLowerCase().trim() ?? "";
-  const filteredSettlements = settlements.filter((settlement) => {
+  const modeFilter = params.mode && ["DEMO", "SHADOW", "LIVE_TEST"].includes(params.mode) ? params.mode : null;
+
+  // Case files: settlement + its full deterministic finality detail, computed
+  // once and reused for stats, cards, evidence strips and the detail sheet.
+  const caseFiles = settlements.map((settlement) => ({
+    settlement,
+    detail: toSettlementDetail(settlement),
+  }));
+
+  const filteredCases = caseFiles.filter(({ settlement }) => {
     const matchesSearch =
       !query ||
       settlement.publicId.toLowerCase().includes(query) ||
       settlement.reference.toLowerCase().includes(query);
     const matchesStatus = !params.status || settlement.status === params.status;
-    return matchesSearch && matchesStatus;
+    const matchesMode = !modeFilter || settlement.testMode === modeFilter;
+    return matchesSearch && matchesStatus && matchesMode;
   });
 
   const requested = settlements.filter((s) => s.status === SettlementStatus.REQUESTED).length;
   const inFlight = settlements.filter((s) => isInFlight(s.status)).length;
-  const settled = settlements.filter((s) => isCompleted(s.status)).length;
+  const reconciledCount = settlements.filter((s) => s.status === SettlementStatus.RECONCILED).length;
+  const finalityReadyCount = caseFiles.filter(({ detail }) => detail.finality.decision === "ready_to_finalize").length;
+  const needsReviewCount = caseFiles.filter(({ detail }) => detail.finality.decision === "needs_review").length;
+  const liveTestCases = settlements.filter((s) => s.testMode === "LIVE_TEST").length;
+
+  const modeHref = (mode: string | null) => {
+    const sp = new URLSearchParams();
+    if (params.q) sp.set("q", params.q);
+    if (params.status) sp.set("status", params.status);
+    if (demoFocus) sp.set("demo", "1");
+    if (mode) sp.set("mode", mode);
+    const qs = sp.toString();
+    return qs ? `/settlements?${qs}` : "/settlements";
+  };
   const autoRefreshSettlements = settlements.some(
     (s) =>
       s.status === SettlementStatus.EXECUTING ||
@@ -458,11 +472,40 @@ export default async function SettlementsPage({
   return (
     <SettlementActionsProvider>
     <div className="space-y-4">
-      <PageHeader
-        title="Settlements"
-        className="gap-3"
-        actions={demoFocus ? <DemoFocusBadge /> : undefined}
-      />
+      {/* Command header: operations console band */}
+      <section className="conf-hero ov-reveal p-5 sm:p-6">
+        <div className="relative flex flex-wrap items-start justify-between gap-5">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="overview-live-badge inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-emerald-700">
+                <span className="ops-pulse ops-pulse--subtle" aria-hidden="true" />
+                Operations console
+              </span>
+              {demoFocus ? <DemoFocusBadge /> : null}
+            </div>
+            <h1 className="conf-hero__headline mt-3">Settlements</h1>
+            <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-slate-500">
+              Every settlement is a case file: provider proof, independent reconciliation and the audit trail must
+              agree before finality.
+            </p>
+          </div>
+          <div className="grid shrink-0 grid-cols-3 gap-x-6 gap-y-3 sm:grid-cols-6 lg:grid-cols-3 xl:grid-cols-6">
+            {[
+              { label: "Requested", value: requested, tone: "text-[#9b6810]" },
+              { label: "In flight", value: inFlight, tone: "text-[#0a7d86]" },
+              { label: "Needs review", value: needsReviewCount, tone: needsReviewCount ? "text-[#9b6810]" : "text-slate-400" },
+              { label: "Finality ready", value: finalityReadyCount, tone: "text-brand-emerald-ink" },
+              { label: "Reconciled", value: reconciledCount, tone: "text-brand-emerald-ink" },
+              { label: "Live test", value: liveTestCases, tone: liveTestCases ? "text-rose-600" : "text-slate-400" },
+            ].map((stat) => (
+              <div key={stat.label} className="scase-stat">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.09em] text-slate-400">{stat.label}</p>
+                <p className={cn("scase-stat__value mt-1", stat.tone)}>{stat.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <SettlementAutoRefresh enabled={autoRefreshSettlements} />
 
@@ -486,228 +529,276 @@ export default async function SettlementsPage({
         </Card>
       ) : null}
 
-      <div className="grid gap-2 sm:grid-cols-3">
-        <MetricCard label="Requested" value={requested} hint="Awaiting approval" tone="warning" />
-        <MetricCard label="In flight" value={inFlight} hint="Approved or executing" tone="info" />
-        <MetricCard
-          label="Completed"
-          value={settled}
-          hint={justCompleted ? "Settled or reconciled · +1 just now" : "Settled or reconciled"}
-          tone="success"
-        />
+      {/* Control bar: search + status + mode filters */}
+      <div className="ov-reveal ov-reveal-1 space-y-2">
+        <Suspense fallback={null}>
+          <FilterBar
+            searchPlaceholder="Search ID or reference..."
+            statusOptions={["REQUESTED", "APPROVED", "EXECUTING", "SETTLED", "RECONCILED"]}
+          />
+        </Suspense>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.09em] text-slate-400">Mode</span>
+          <Link href={modeHref(null)} className={cn("mode-filter", !modeFilter && "mode-filter--on")}>
+            All
+          </Link>
+          {(["DEMO", "SHADOW", "LIVE_TEST"] as const).map((mode) => (
+            <Link
+              key={mode}
+              href={modeHref(mode)}
+              className={cn("mode-filter", modeFilter === mode && "mode-filter--on")}
+            >
+              {MODE_LABEL[mode]}
+            </Link>
+          ))}
+          {justCompleted ? (
+            <span className="ml-auto case-chip border-emerald-200 bg-emerald-50 text-emerald-700">+1 completed just now</span>
+          ) : null}
+        </div>
       </div>
 
-      <Suspense fallback={null}>
-        <FilterBar
-          searchPlaceholder="Search ID or reference..."
-          statusOptions={["REQUESTED", "APPROVED", "EXECUTING", "SETTLED", "RECONCILED"]}
-        />
-      </Suspense>
+      {filteredCases.length ? (
+        <div className="space-y-3">
+          {filteredCases.map(({ settlement, detail }) => {
+            const rowAutoRefresh =
+              settlement.status === SettlementStatus.EXECUTING ||
+              Boolean(
+                settlement.provider &&
+                  settlement.providerStatus &&
+                  !["completed", "failed", "settled", "reconciled"].includes(
+                    settlement.providerStatus.toLowerCase(),
+                  ),
+              );
+            const showConsole = rowShowsConsole(settlement.status);
+            const rowJustUpdated = successMatchesRow(params.success, settlement.status);
+            const finality = detail.finality;
+            const reconBad =
+              finality.reconciliation &&
+              (["UNMATCHED", "EXCEPTION"].includes(finality.reconciliation.status) || !finality.reconciliation.independent);
+            const reconOk =
+              finality.reconciliation && finality.reconciliation.independent && finality.reconciliation.status === "MATCHED";
+            const chain = [
+              { name: "Provider proof", state: finality.proof ? "ok" : "pending" },
+              { name: "Reconciliation", state: reconOk ? "ok" : reconBad ? "bad" : "pending" },
+              { name: "Audit trail", state: finality.auditApprovalPresent ? "ok" : "pending" },
+              {
+                name: "Finality",
+                state:
+                  finality.decision === "ready_to_finalize" ? "ok" : finality.riskLevel === "high" ? "bad" : "pending",
+              },
+            ] as const;
 
-      {filteredSettlements.length ? (
-        <DataGrid>
-          <table className="w-full min-w-[960px]">
-            <DataGridHead>
-              <DataGridTh>Settlement</DataGridTh>
-              <DataGridTh>Amount</DataGridTh>
-              <DataGridTh>Status</DataGridTh>
-              <DataGridTh>Lifecycle</DataGridTh>
-              <DataGridTh className="text-right">Actions</DataGridTh>
-            </DataGridHead>
-            <DataGridBody>
-              {filteredSettlements.map((settlement) => {
-                const rowAutoRefresh =
-                  settlement.status === SettlementStatus.EXECUTING ||
-                  Boolean(
-                    settlement.provider &&
-                      settlement.providerStatus &&
-                      !["completed", "failed", "settled", "reconciled"].includes(
-                        settlement.providerStatus.toLowerCase(),
-                      ),
-                  );
-                const settlementDetail = toSettlementDetail(settlement);
-
-                const showConsole = rowShowsConsole(settlement.status);
-                const rowJustUpdated = successMatchesRow(params.success, settlement.status);
-
-                return (
-                <Fragment key={settlement.id}>
-                <DataGridRow
-                  className={cn(
-                    "relative isolate overflow-hidden",
-                    showConsole && "settlement-row-active",
-                    rowJustUpdated && "settlement-row-highlight",
-                  )}
-                >
-                  <DataGridTd>
-                    <div className="flex items-center gap-1.5">
-                      <p className="font-medium text-slate-950">{settlement.publicId}</p>
+            return (
+              <article
+                key={settlement.id}
+                className={cn(
+                  "scase",
+                  `scase--${settlement.testMode in MODE_CHIP_CLASS ? settlement.testMode : "DEMO"}`,
+                  showConsole && "settlement-row-active",
+                  rowJustUpdated && "settlement-row-highlight",
+                )}
+              >
+                {/* Case header */}
+                <div className="scase__header">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="text-[15px] font-semibold tracking-tight text-slate-950">{settlement.publicId}</p>
                       <ModeChip testMode={settlement.testMode} />
-                    </div>
-                    <p className="text-xs text-slate-500">{settlement.reference}</p>
-                    <SettlementRowStatusSubtext
-                      status={settlement.status}
-                      settlementId={settlement.id}
-                    />
-                  </DataGridTd>
-                  <DataGridTd
-                    className="whitespace-nowrap tabular-nums"
-                    title={formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
-                  >
-                    {formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
-                  </DataGridTd>
-                  <DataGridTd>
-                    <div className="flex flex-col items-start gap-1">
                       <StatusBadge status={settlement.status} />
                       <span
                         className={cn(
-                          "case-chip",
-                          settlementDetail.finality.decision === "ready_to_finalize" && "border-emerald-200 bg-emerald-50 text-emerald-700",
-                          settlementDetail.finality.decision === "needs_review" && "case-chip--gold",
-                          settlementDetail.finality.decision === "not_ready" && "case-chip--demo",
+                          "state-chip",
+                          finality.decision === "ready_to_finalize" && "state-chip--ready",
+                          finality.decision === "needs_review" && "state-chip--review",
+                          finality.decision === "not_ready" && "state-chip--pending",
                         )}
-                        title={settlementDetail.finality.summary}
+                        title={finality.summary}
                       >
-                        {settlementDetail.finality.decision === "ready_to_finalize"
-                          ? "Finality ready"
-                          : settlementDetail.finality.decision === "needs_review"
-                            ? "Finality review"
+                        {finality.decision === "ready_to_finalize"
+                          ? "✓ Finality ready"
+                          : finality.decision === "needs_review"
+                            ? "Needs review"
                             : "Finality pending"}
                       </span>
+                      {finality.riskLevel === "high" ? <span className="state-chip state-chip--risk">High risk</span> : null}
                     </div>
-                  </DataGridTd>
-                  <DataGridTd className="min-w-[240px]">
-                    <SettlementLifecycle status={settlement.status} compact />
-                  </DataGridTd>
-                  <DataGridTd>
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      {canApprove && hasWorkflowAction(settlement.status) ? (
-                        <SettlementActionForm
+                    <p className="mt-1 text-xs text-slate-500">
+                      {settlement.reference}
+                      {settlement.provider ? <span className="text-slate-400"> · {settlement.provider}</span> : null}
+                      {settlement.providerTransactionId ? (
+                        <span className="text-slate-400"> · tx {settlement.providerTransactionId.slice(0, 16)}</span>
+                      ) : null}
+                    </p>
+                    <SettlementRowStatusSubtext status={settlement.status} settlementId={settlement.id} />
+                  </div>
+                  <div className="text-right">
+                    <p className="scase__amount" title={formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}>
+                      {formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-400">{settlement.corridor.replace("_", " → ")}</p>
+                  </div>
+                </div>
+
+                {/* Evidence strip + lifecycle rail */}
+                <div className="scase__body grid gap-2.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+                  <div className="evidence-chain evidence-chain--mini" aria-label="Evidence chain">
+                    {chain.map((step) => (
+                      <div key={step.name} className={cn("evidence-chain__pillar", `evidence-chain__pillar--${step.state}`)}>
+                        <span className="evidence-chain__label">{step.name}</span>
+                        <span className="evidence-chain__state">
+                          {step.state === "ok" ? "Verified" : step.state === "bad" ? "Mismatch" : "Pending"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="scase__rail">
+                    <SettlementLifecycle status={settlement.status} />
+                  </div>
+                </div>
+
+                {/* Case actions */}
+                <div className="scase__actions">
+                  {canApprove && hasWorkflowAction(settlement.status) ? (
+                    <SettlementActionForm
+                      settlementId={settlement.id}
+                      action={
+                        settlement.status === SettlementStatus.REQUESTED
+                          ? "approve"
+                          : settlement.status === SettlementStatus.APPROVED
+                            ? "execute"
+                            : "settle"
+                      }
+                      serverAction={transition}
+                      className="flex flex-wrap gap-1.5"
+                    >
+                      <input type="hidden" name="settlementId" value={settlement.id} />
+                      {settlement.status === SettlementStatus.REQUESTED ? (
+                        <SubmitButton
+                          name="status"
+                          value="APPROVED"
+                          variant="primary"
+                          size="sm"
+                          pendingText="Approving..."
                           settlementId={settlement.id}
-                          action={
-                            settlement.status === SettlementStatus.REQUESTED
-                              ? "approve"
-                              : settlement.status === SettlementStatus.APPROVED
-                                ? "execute"
-                                : "settle"
-                          }
-                          serverAction={transition}
-                          className="flex flex-wrap gap-1"
+                          action="approve"
                         >
-                          <input type="hidden" name="settlementId" value={settlement.id} />
-                          {settlement.status === SettlementStatus.REQUESTED ? (
-                            <SubmitButton
-                              name="status"
-                              value="APPROVED"
-                              variant="outline"
-                              size="sm"
-                              pendingText="Approving..."
-                              settlementId={settlement.id}
-                              action="approve"
-                            >
-                              Approve
-                            </SubmitButton>
-                          ) : null}
-                          {settlement.status === SettlementStatus.APPROVED ? (
-                            <SubmitButton
-                              name="status"
-                              value="EXECUTING"
-                              variant="outline"
-                              size="sm"
-                              pendingText="Executing..."
-                              settlementId={settlement.id}
-                              action="execute"
-                            >
-                              {pontisConfigured ? "Execute via PontisGlobe" : "Execute"}
-                            </SubmitButton>
-                          ) : null}
-                          {settlement.status === SettlementStatus.EXECUTING && !(pontisConfigured && settlement.provider) ? (
-                            <SubmitButton
-                              name="status"
-                              value="SETTLED"
-                              variant="outline"
-                              size="sm"
-                              pendingText="Settling..."
-                              settlementId={settlement.id}
-                              action="settle"
-                            >
-                              Settle
-                            </SubmitButton>
-                          ) : null}
-                        </SettlementActionForm>
-                      ) : !canApprove ? (
-                        <span className="text-xs text-slate-400">Read only</span>
+                          Approve settlement
+                        </SubmitButton>
                       ) : null}
-                      {canApprove &&
-                      settlement.status === SettlementStatus.EXECUTING &&
-                      pontisConfigured &&
-                      settlement.provider ? (
-                        <SettlementActionForm
+                      {settlement.status === SettlementStatus.APPROVED ? (
+                        <SubmitButton
+                          name="status"
+                          value="EXECUTING"
+                          variant="primary"
+                          size="sm"
+                          pendingText="Executing..."
                           settlementId={settlement.id}
-                          action="check"
-                          serverAction={checkStatus}
+                          action="execute"
                         >
-                          <input type="hidden" name="settlementId" value={settlement.id} />
-                          <SubmitButton
-                            type="submit"
-                            variant="outline"
-                            size="sm"
-                            pendingText="Checking..."
-                            settlementId={settlement.id}
-                            action="check"
-                          >
-                            Check status
-                          </SubmitButton>
-                        </SettlementActionForm>
+                          {pontisConfigured ? "Execute via PontisGlobe" : "Execute"}
+                        </SubmitButton>
                       ) : null}
-                      <SettlementDetailSheet
-                        key={`${settlement.id}-${settlement.status}-${settlement.providerTransactionId ?? ""}-${settlement.events.length}`}
-                        settlement={settlementDetail}
-                        triggerLabel={
-                          isCompleted(settlement.status) ? "View proof" : "Details"
-                        }
-                      />
-                      {settlement.status === SettlementStatus.RECONCILED ? (
-                        <SettlementDetailSheet
-                          key={`${settlement.id}-audit-${settlement.events.length}`}
-                          settlement={settlementDetail}
-                          defaultTab="audit"
-                          triggerLabel="Audit trail"
-                        />
+                      {settlement.status === SettlementStatus.EXECUTING && !(pontisConfigured && settlement.provider) ? (
+                        <SubmitButton
+                          name="status"
+                          value="SETTLED"
+                          variant="primary"
+                          size="sm"
+                          pendingText="Settling..."
+                          settlementId={settlement.id}
+                          action="settle"
+                        >
+                          Settle
+                        </SubmitButton>
                       ) : null}
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/settlements/${settlement.id}/report`}>Report</Link>
-                      </Button>
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/settlements/${settlement.id}/shadow`}>Shadow</Link>
-                      </Button>
-                    </div>
-                  </DataGridTd>
-                </DataGridRow>
-                <SettlementOperationConsoleRow
-                  settlementId={settlement.id}
-                  settlement={toOperationConsoleData(settlement)}
-                  autoRefresh={rowAutoRefresh}
-                  canReconcile={canApprove}
-                  autoMatchAction={runAutoMatch}
-                  generateReconcileAction={generateAndReconcile}
-                  reconcileRequired={params.reconcileRequired === settlement.id}
-                  inlineError={
-                    params.reconcileRequired === settlement.id ? params.error : undefined
-                  }
-                />
-                </Fragment>
-                );
-              })}
-            </DataGridBody>
-          </table>
-        </DataGrid>
+                    </SettlementActionForm>
+                  ) : !canApprove ? (
+                    <span className="text-xs text-slate-400">Read only</span>
+                  ) : null}
+                  {canApprove &&
+                  settlement.status === SettlementStatus.EXECUTING &&
+                  pontisConfigured &&
+                  settlement.provider ? (
+                    <SettlementActionForm settlementId={settlement.id} action="check" serverAction={checkStatus}>
+                      <input type="hidden" name="settlementId" value={settlement.id} />
+                      <SubmitButton
+                        type="submit"
+                        variant="primary"
+                        size="sm"
+                        pendingText="Checking..."
+                        settlementId={settlement.id}
+                        action="check"
+                      >
+                        Check provider status
+                      </SubmitButton>
+                    </SettlementActionForm>
+                  ) : null}
+
+                  <span className="scase__actions-spacer" aria-hidden="true" />
+
+                  <SettlementDetailSheet
+                    key={`${settlement.id}-${settlement.status}-${settlement.providerTransactionId ?? ""}-${settlement.events.length}`}
+                    settlement={detail}
+                    triggerLabel={isCompleted(settlement.status) ? "View proof" : "Case details"}
+                  />
+                  {settlement.status === SettlementStatus.RECONCILED ? (
+                    <SettlementDetailSheet
+                      key={`${settlement.id}-audit-${settlement.events.length}`}
+                      settlement={detail}
+                      defaultTab="audit"
+                      triggerLabel="Audit trail"
+                    />
+                  ) : null}
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/settlements/${settlement.id}/report`}>Report</Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/settlements/${settlement.id}/shadow`}>
+                      {settlement.testMode === "LIVE_TEST" ? "Live pilot" : "Shadow"}
+                    </Link>
+                  </Button>
+                </div>
+
+                {/* Embedded case console (provider tracking / reconcile) */}
+                {showConsole ? (
+                  <div className="scase__console">
+                    <SettlementOperationConsoleRow
+                      asCard
+                      settlementId={settlement.id}
+                      settlement={toOperationConsoleData(settlement)}
+                      autoRefresh={rowAutoRefresh}
+                      canReconcile={canApprove}
+                      autoMatchAction={runAutoMatch}
+                      generateReconcileAction={generateAndReconcile}
+                      reconcileRequired={params.reconcileRequired === settlement.id}
+                      inlineError={params.reconcileRequired === settlement.id ? params.error : undefined}
+                    />
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
       ) : (
-        <EmptyState
-          title="No settlements match"
-          description="Create from an active quote or adjust filters."
-          action={{ label: "View quotes", href: "/quotes" }}
-        />
+        <div className="empty-compact ops-panel">
+          <span className="empty-compact__icon">
+            <Landmark className="h-[18px] w-[18px]" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold tracking-tight text-slate-900">No settlement cases match</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+              {modeFilter
+                ? `No ${MODE_LABEL[modeFilter as keyof typeof MODE_LABEL]} cases yet — switch mode on a settlement's Shadow console.`
+                : "Create a settlement from an active quote, or adjust search and filters."}
+            </p>
+          </div>
+          <Link
+            href="/quotes"
+            className="shrink-0 rounded-lg border border-[var(--ops-line)] bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-ops-xs transition-colors hover:border-slate-300 hover:bg-slate-50"
+          >
+            View quotes
+          </Link>
+        </div>
       )}
 
       <Card>

@@ -4169,3 +4169,159 @@ details[open] > .reconciliation-details-content {
   .quote-ticket, .ticket-param, .qlock__payout, .qlock__row dd { transition: none; }
   .qpath__step { animation: none; }
 }
+
+/* =====================================================================
+   Settlements v2 — case-management console kit
+   ===================================================================== */
+
+/* Command band stat strip */
+.scase-stat {
+  min-width: 0;
+}
+.scase-stat__value {
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* Mode filter chips (links) */
+.mode-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--ops-line);
+  background: rgba(255, 255, 255, 0.8);
+  padding: 0.25rem 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: rgba(7, 17, 31, 0.5);
+  transition: border-color 0.2s var(--ease), background-color 0.2s var(--ease), color 0.2s var(--ease);
+}
+.mode-filter:hover { border-color: var(--ops-line-strong); color: var(--brand-ink); }
+.mode-filter--on {
+  border-color: rgba(0, 199, 157, 0.4);
+  background: linear-gradient(180deg, #f0fdf9, #ffffff);
+  color: var(--brand-emerald-ink);
+  box-shadow: 0 0 10px rgba(0, 199, 157, 0.12);
+}
+
+/* Settlement case card shell */
+.scase {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 1px solid var(--ops-line);
+  background: #ffffff;
+  box-shadow: var(--ops-shadow-xs);
+  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease), border-color 0.25s var(--ease);
+  animation: ov-reveal 0.45s var(--ease) both;
+}
+.scase:nth-child(2) { animation-delay: 0.05s; }
+.scase:nth-child(3) { animation-delay: 0.1s; }
+.scase:nth-child(4) { animation-delay: 0.15s; }
+.scase:nth-child(5) { animation-delay: 0.2s; }
+.scase:nth-child(n + 6) { animation-delay: 0.25s; }
+.scase:hover {
+  transform: translateY(-2px);
+  border-color: var(--ops-line-strong);
+  box-shadow: var(--ops-shadow-sm);
+}
+.scase::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3.5px;
+  z-index: 1;
+}
+.scase--DEMO::before { background: rgba(7, 17, 31, 0.12); }
+.scase--SHADOW::before { background: linear-gradient(180deg, var(--brand-aqua), #086d77); }
+.scase--LIVE_TEST::before { background: linear-gradient(180deg, #ef4444, var(--brand-amber)); }
+.scase--SHADOW { border-color: rgba(11, 180, 196, 0.25); }
+.scase--LIVE_TEST {
+  border-color: rgba(239, 68, 68, 0.3);
+  box-shadow: var(--ops-shadow-xs), 0 8px 26px rgba(239, 68, 68, 0.06);
+}
+.scase__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem 0.7rem 1.1rem;
+}
+.scase--SHADOW .scase__header { background: linear-gradient(180deg, rgba(11, 180, 196, 0.05), transparent); }
+.scase--LIVE_TEST .scase__header { background: linear-gradient(180deg, rgba(239, 68, 68, 0.05), transparent); }
+.scase__amount {
+  font-size: 1.2rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  font-variant-numeric: tabular-nums;
+  color: var(--brand-ink);
+}
+.scase__body { padding: 0 1rem 0.75rem 1.1rem; }
+.scase__rail {
+  border-radius: 0.75rem;
+  border: 1px solid var(--ops-line-soft);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(255, 255, 255, 0.6));
+  padding: 0.7rem 0.85rem;
+}
+.scase__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  border-top: 1px dashed var(--ops-line-strong);
+  margin: 0.75rem 1rem 0 1.1rem;
+  padding: 0.7rem 0 0.85rem;
+}
+.scase__actions-spacer { flex: 1; min-width: 0.5rem; }
+.scase__console { padding: 0 1rem 0.85rem 1.1rem; }
+
+/* Mini evidence chain inside cards */
+.evidence-chain--mini .evidence-chain__pillar { padding: 0.4rem 0.5rem; }
+.evidence-chain--mini .evidence-chain__label { font-size: 0.52rem; letter-spacing: 0.07em; }
+.evidence-chain--mini .evidence-chain__state { font-size: 0.62rem; margin-top: 0.05rem; }
+
+/* Strong finality/risk state chips */
+.state-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 0.5rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.62rem;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.state-chip--ready {
+  color: var(--finality-ready);
+  background: var(--finality-ready-soft);
+  box-shadow: 0 0 0 1px var(--finality-ready-line) inset, 0 0 12px rgba(0, 199, 157, 0.14);
+}
+.state-chip--review {
+  color: var(--finality-review);
+  background: var(--finality-review-soft);
+  box-shadow: 0 0 0 1px var(--finality-review-line) inset;
+}
+.state-chip--pending {
+  color: rgba(7, 17, 31, 0.45);
+  background: #f8fafc;
+  box-shadow: 0 0 0 1px var(--ops-line-strong) inset;
+}
+.state-chip--risk {
+  color: var(--finality-blocked);
+  background: var(--finality-blocked-soft);
+  box-shadow: 0 0 0 1px var(--finality-blocked-line) inset, 0 0 12px rgba(180, 35, 24, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scase { animation: none; transition: none; }
+  .scase:hover { transform: none; }
+  .mode-filter { transition: none; }
+}

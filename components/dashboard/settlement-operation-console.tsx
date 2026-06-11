@@ -328,6 +328,7 @@ export function SettlementOperationConsoleRow({
   reconcileRequired = false,
   inlineError,
   colSpan = 5,
+  asCard = false,
 }: {
   settlementId: string;
   settlement: SettlementOperationConsoleData;
@@ -338,6 +339,8 @@ export function SettlementOperationConsoleRow({
   reconcileRequired?: boolean;
   inlineError?: string;
   colSpan?: number;
+  /** Render as a plain block (for case-card layouts) instead of a table row. */
+  asCard?: boolean;
 }) {
   const actions = useSettlementActionsOptional();
   const pending = actions?.pendingAction;
@@ -363,9 +366,8 @@ export function SettlementOperationConsoleRow({
 
   const providerStatus = settlement.providerStatus ?? "completed";
 
-  return (
-    <tr className="text-sm">
-      <td colSpan={colSpan} className="px-4 pb-2 pt-0 first:pl-5 last:pr-5">
+  const content = (
+    <>
         {mode === "approved" ? (
           <ConsolePanel mode="approved">
             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -516,6 +518,17 @@ export function SettlementOperationConsoleRow({
             <ReconciledProofGrid settlement={settlement} providerStatus={providerStatus} />
           </ConsolePanel>
         ) : null}
+    </>
+  );
+
+  if (asCard) {
+    return <div className="text-sm">{content}</div>;
+  }
+
+  return (
+    <tr className="text-sm">
+      <td colSpan={colSpan} className="px-4 pb-2 pt-0 first:pl-5 last:pr-5">
+        {content}
       </td>
     </tr>
   );
