@@ -46,11 +46,28 @@ function asDecimal(value: number | string | null | undefined): Prisma.Decimal | 
  * settlement lifecycle by itself — reconciliation against an independent source
  * and the audit trail must agree before finality review can pass (lib/finality.ts).
  *
+ * IDEMPOTENT on the natural key (settlement + provider + transaction + status +
+ * channel): re-delivered webhooks and repeated polls return the existing row
+ * instead of duplicating evidence or audit entries. A *changed* provider status
+ * is new evidence and gets its own row.
+ *
  * Callers should record proof BEFORE applying any lifecycle transition so a
  * failed write leaves the settlement in a retryable state rather than settled
  * without evidence.
  */
 export async function recordProviderProof(input: RecordProviderProofInput): Promise<ProviderProof> {
+  const duplicate = await prisma.providerProof.findFirst({
+    where: {
+      settlementId: input.settlementId,
+      provider: input.provider,
+      providerTransactionId: input.providerTransactionId?.trim() || null,
+      providerStatus: { equals: input.providerStatus.trim(), mode: "insensitive" },
+      receivedVia: input.receivedVia,
+    },
+    orderBy: { receivedAt: "desc" },
+  });
+  if (duplicate) return duplicate;
+
   const proof = await prisma.providerProof.create({
     data: {
       settlementId: input.settlementId,

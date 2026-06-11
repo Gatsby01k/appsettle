@@ -11,9 +11,12 @@ import {
   MODE_LABEL,
   buildShadowChecklist,
   getShadowConfig,
+  inrLegOf,
   safetyFor,
   type SettlementMode,
 } from "@/lib/shadow-mode";
+import { buildLivePilotReadiness } from "@/lib/live-pilot";
+import { writeAuditLog } from "@/lib/audit";
 import { cn, formatCurrencyFull, formatDateTime } from "@/lib/utils";
 import { StatusBadge } from "@/components/ops/status-badge";
 import { StatRow } from "@/components/ops/stat-row";
@@ -112,7 +115,7 @@ export default async function SettlementReportPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { organization } = await requireSession();
+  const { user, organization } = await requireSession();
   const { id } = await params;
 
   const settlement = await prisma.settlement.findFirst({
@@ -133,7 +136,77 @@ export default async function SettlementReportPage({
   );
 
   const shadowConfig = getShadowConfig();
-  const safety = safetyFor(settlement, shadowConfig);
+  const isLiveTest = settlement.testMode === "LIVE_TEST";
+
+  // "Settlement report generated" is itself pilot evidence: record it once in
+  // the append-only audit trail (deduped; best-effort — a failed write never
+  // blocks rendering the report).
+  try {
+    const existingReportLog = await prisma.auditLog.findFirst({
+      where: {
+        organizationId: organization.id,
+        action: "settlement.report_generated",
+        resourceType: "settlement",
+        resourceId: settlement.id,
+      },
+    });
+    if (!existingReportLog) {
+      await writeAuditLog({
+        action: "settlement.report_generated",
+        resourceType: "settlement",
+        resourceId: settlement.id,
+        organizationId: organization.id,
+        userId: user.id,
+        after: { publicId: settlement.publicId, testMode: settlement.testMode },
+      });
+    }
+  } catch {
+    // Non-fatal: the report still renders; the checklist item simply stays open.
+  }
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const [finalityApproval, todaysLiveTests] = await Promise.all([
+    prisma.auditLog.findFirst({
+      where: {
+        organizationId: organization.id,
+        action: "settlement.finality_approved",
+        resourceType: "settlement",
+        resourceId: settlement.id,
+      },
+    }),
+    isLiveTest
+      ? prisma.settlement.findMany({
+          where: {
+            organizationId: organization.id,
+            testMode: "LIVE_TEST",
+            id: { not: settlement.id },
+            createdAt: { gte: startOfToday },
+            status: { notIn: ["FAILED", "CANCELLED"] },
+          },
+          select: {
+            publicId: true,
+            status: true,
+            sourceCurrency: true,
+            targetCurrency: true,
+            sourceAmount: true,
+            targetAmount: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+  const dailyUsedInrExcludingThis = todaysLiveTests.reduce((sum, row) => sum + inrLegOf(row), 0);
+
+  const safety = {
+    ...safetyFor(settlement, shadowConfig),
+    ...(isLiveTest
+      ? {
+          withinDailyCap:
+            dailyUsedInrExcludingThis + inrLegOf(settlement) <= shadowConfig.liveTestDailyMaxInr,
+          dailyCapLabel: `INR ${shadowConfig.liveTestDailyMaxInr.toLocaleString("en-IN")}`,
+        }
+      : {}),
+  };
   const checklist = buildShadowChecklist(
     settlement,
     settlement.providerProofs,
@@ -157,6 +230,23 @@ export default async function SettlementReportPage({
   const reconciliation = relevantReconciliationOf(reconciliationRecords);
   const approvalRecorded = hasAuditApproval(settlement, settlement.events);
   const generatedAt = new Date();
+
+  const pilot = isLiveTest
+    ? buildLivePilotReadiness(
+        settlement,
+        settlement.providerProofs,
+        reconciliationRecords,
+        settlement.events,
+        {
+          finalityApprovedById: finalityApproval?.userId ?? null,
+          createdById: settlement.createdById,
+          reportGenerated: true, // this render just recorded it
+          dailyUsedInrExcludingThis,
+        },
+        shadowConfig,
+        assessment.decision,
+      )
+    : null;
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -246,9 +336,57 @@ export default async function SettlementReportPage({
             <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">
               INRSettle did not move funds directly in this test. The external partner/provider moved the money;
               INRSettle recorded and controlled the operational layer.
+              {isLiveTest
+                ? " INRSettle did not automatically move funds and will not unless live payouts are explicitly enabled — no such switch is set."
+                : ""}
             </p>
           ) : null}
         </div>
+
+        {/* Live pilot readiness (LIVE_TEST only) */}
+        {pilot ? (
+          <div className="rounded-xl border border-red-200 p-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <SectionTitle>Live pilot readiness</SectionTitle>
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]",
+                  pilot.decision === "ready" && "bg-emerald-100 text-emerald-800",
+                  pilot.decision === "needs_review" && "bg-amber-100 text-amber-800",
+                  pilot.decision === "blocked" && "bg-red-100 text-red-800",
+                )}
+              >
+                {pilot.decision === "ready"
+                  ? "Ready"
+                  : pilot.decision === "needs_review"
+                    ? "Needs review"
+                    : "Blocked"}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {pilot.items.map((item) => (
+                <div key={item.key} className="flex items-start gap-2 text-sm">
+                  <span
+                    className={cn(
+                      "mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
+                      item.done
+                        ? "bg-emerald-100 text-emerald-700"
+                        : item.blocking
+                          ? "bg-red-100 text-red-700"
+                          : "bg-amber-100 text-amber-700",
+                    )}
+                  >
+                    {item.done ? "✓" : item.blocking ? "✕" : "•"}
+                  </span>
+                  <div>
+                    <span className={item.done ? "text-slate-700" : "font-medium text-slate-900"}>{item.label}</span>
+                    <span className="block text-xs text-slate-400">{item.detail}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {/* Settlement summary */}
         <div className="rounded-xl border border-[var(--ops-line)] p-4">

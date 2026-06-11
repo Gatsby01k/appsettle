@@ -6,6 +6,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { UserFacingError } from "@/lib/errors";
 import { transitionSettlement } from "@/lib/domain";
 import { recordProviderProof } from "@/lib/provider-proof";
+import { classifyPontisStatus, pontisIdempotencyKeyFor, type ProviderOutcome } from "@/lib/providers/outcome";
 import {
   getPayoutStatus,
   loginOrThrow,
@@ -71,7 +72,9 @@ export function buildPayoutRequest(
   overrides?: PontisPayoutOverrides,
 ): PontisPayoutRequest {
   return {
-    idempotency_key: globalThis.crypto.randomUUID(),
+    // STABLE per settlement (never random): a retry after a timeout reuses the
+    // same key, so the provider deduplicates instead of paying out twice.
+    idempotency_key: pontisIdempotencyKeyFor(settlement.publicId),
     country_code: overrides?.country_code ?? "IN",
     currency_code: overrides?.currency_code ?? "INR",
     payment_method: overrides?.payment_method ?? "bank_local",
@@ -308,7 +311,7 @@ export async function checkPayoutStatus(
 
 type ResolutionInput = {
   settlement: Settlement;
-  outcome: "success" | "failed";
+  outcome: Exclude<ProviderOutcome, "pending">;
   userId: string;
   organizationId: string;
   transactionId?: string | null;
@@ -392,6 +395,42 @@ export async function applyPayoutResolution(input: ResolutionInput) {
     });
 
     return { settlementId: fresh.id, status: SettlementStatus.SETTLED };
+  }
+
+  if (outcome === "reversed") {
+    // A reversal means money may have moved and come back — the true state is
+    // UNCERTAIN, so the settlement is NEVER auto-failed. Record the provider's
+    // claim as proof and flag for operator review; the lifecycle stays put.
+    await recordProviderProof({
+      settlementId: fresh.id,
+      organizationId,
+      userId,
+      provider: PROVIDER,
+      providerTransactionId: input.transactionId,
+      providerStatus: input.providerStatus ?? "reversed",
+      actualAmount: null,
+      currency: null,
+      rawResponse: input.rawResponse,
+      receivedVia,
+      actorType,
+    });
+
+    await writeAuditLog({
+      action: "pontis.payout.reversed_review_required",
+      resourceType: "settlement",
+      resourceId: fresh.id,
+      organizationId,
+      userId,
+      actorType,
+      after: {
+        provider: PROVIDER,
+        transactionId: input.transactionId,
+        statusMessage: input.statusMessage ?? null,
+        note: "Provider reports a reversal — money movement uncertain. Operator review required; settlement not auto-failed.",
+      },
+    });
+
+    return { settlementId: fresh.id, status: fresh.status, reviewRequired: true };
   }
 
   // outcome === "failed"
@@ -480,14 +519,13 @@ export async function resolvePayoutByTransaction(
 }
 
 /**
- * Maps a PontisGlobe payout status to our resolution outcome. Final statuses are
- * `completed` (success) and `failed`/`reversed`/`rejected`/`canceled` (failed);
- * everything else (pending, processing, ...) is still in flight.
+ * Maps a PontisGlobe payout status to our resolution outcome.
+ *
+ * Live-pilot safety: `reversed` is its OWN outcome (money may have moved and
+ * come back — operator review, never an automatic FAILED), and unknown
+ * statuses are `pending`, never failed. Only an explicit failure before money
+ * moved (`failed`/`rejected`/`cancelled`) may fail the settlement.
  */
-export function mapPontisStatus(status: string | undefined | null): "success" | "failed" | "pending" {
-  if (!status) return "pending";
-  const value = status.toLowerCase();
-  if (value === "completed" || value === "success" || value === "settled") return "success";
-  if (["failed", "reversed", "rejected", "canceled", "cancelled"].includes(value)) return "failed";
-  return "pending";
+export function mapPontisStatus(status: string | undefined | null): ProviderOutcome {
+  return classifyPontisStatus(status);
 }

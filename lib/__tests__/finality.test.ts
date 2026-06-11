@@ -222,6 +222,26 @@ describe("shadow / live-test mode", () => {
     expect(result.blockingIssues.join(" ")).toMatch(/LIVE_PAYOUTS_ENABLED/);
   });
 
+  it("LIVE_TEST over the DAILY cap blocks ready_to_finalize even with perfect evidence", () => {
+    const result = assessFinality(
+      input({
+        testMode: "LIVE_TEST",
+        safety: { ...safeShadow, withinDailyCap: false, dailyCapLabel: "INR 2,000" },
+      }),
+    );
+    expect(result.decision).toBe("needs_review");
+    expect(result.riskLevel).toBe("high");
+    expect(result.blockingIssues.join(" ")).toMatch(/daily pilot cap/);
+  });
+
+  it("uncertain provider outcome (reversed) is never treated as safe to finalize", () => {
+    const result = assessFinality(
+      input({ testMode: "LIVE_TEST", safety: safeShadow, proof: { ...completedProof, providerStatus: "reversed" } }),
+    );
+    expect(result.decision).toBe("not_ready");
+    expect(result.decision).not.toBe("ready_to_finalize");
+  });
+
   it("missing safety evaluation blocks a SHADOW settlement", () => {
     const result = assessFinality(input({ testMode: "SHADOW", safety: null }));
     expect(result.decision).toBe("needs_review");

@@ -53,10 +53,16 @@ export type FinalitySafetyInput = {
   capLabel: string;
   /** True unless someone explicitly enabled live payouts (tripwire). */
   livePayoutsDisabled: boolean;
+  /**
+   * LIVE_TEST only: today's cumulative LIVE_TEST INR volume (including this
+   * settlement) stays within the daily pilot cap. Omitted for other modes.
+   */
+  withinDailyCap?: boolean;
+  /** Human-readable daily cap for messages (LIVE_TEST only). */
+  dailyCapLabel?: string;
 };
 
 export type FinalityInput = {
-  testMode: "DEMO" | "SHADOW" | "LIVE_TEST" | string;
   settlement: FinalitySettlementInput;
   /** Latest provider proof for the settlement, or null when none recorded. */
   proof: FinalityProofInput | null;
@@ -64,9 +70,9 @@ export type FinalityInput = {
   reconciliation: FinalityReconciliationInput | null;
   /** True when the audit trail records an approval for this settlement. */
   auditApprovalPresent: boolean;
-  /** Settlement testMode: DEMO (default) | SHADOW | LIVE_TEST. */
-  mode?: string | null;
-  /** Required when mode is SHADOW/LIVE_TEST; ignored for DEMO. */
+  /** Settlement test mode: DEMO (default) | SHADOW | LIVE_TEST. */
+  testMode?: string | null;
+  /** Required when testMode is SHADOW/LIVE_TEST; ignored for DEMO. */
   safety?: FinalitySafetyInput | null;
 };
 
@@ -181,7 +187,7 @@ export function assessFinality(input: FinalityInput): FinalityAssessment {
 
     if (isShadowMode) {
       evidence.push(
-        `${input.testMode} testMode: INRSettle did not move funds directly — the external partner/provider moved the money.`,
+        `${input.testMode} mode: INRSettle did not move funds directly — the external partner/provider moved the money.`,
       );
     }
 
@@ -316,7 +322,14 @@ export function assessFinality(input: FinalityInput): FinalityAssessment {
         recommendedActions.push("Reduce the test amount below the cap; caps cannot be bypassed.");
         riskLevel = "high";
       }
-      if (input.safety.withinCap && input.safety.livePayoutsDisabled) {
+      if (input.safety.withinDailyCap === false) {
+        blockingIssues.push(
+          `Today's cumulative LIVE_TEST volume exceeds the daily pilot cap${input.safety.dailyCapLabel ? ` (${input.safety.dailyCapLabel})` : ""}.`,
+        );
+        recommendedActions.push("Wait for the next day or reduce pilot volume; the daily cap cannot be bypassed.");
+        riskLevel = "high";
+      }
+      if (input.safety.withinCap && input.safety.livePayoutsDisabled && input.safety.withinDailyCap !== false) {
         evidence.push(`Safety caps hold: amount within the ${input.testMode} cap (${input.safety.capLabel}); live payouts disabled.`);
       }
     }

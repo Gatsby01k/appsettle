@@ -35,6 +35,10 @@ export type ShadowConfig = {
   shadowMaxInr: number;
   /** Maximum INR leg for a LIVE_TEST settlement (tighter than shadow). */
   liveTestMaxInr: number;
+  /** Maximum cumulative LIVE_TEST INR volume per calendar day. */
+  liveTestDailyMaxInr: number;
+  /** Providers allowed to participate in LIVE_TEST pilots. */
+  liveTestAllowedProviders: string[];
   /** Manual proof entry must be available/required for shadow tests. */
   requireManualProof: boolean;
   /** Independent reconciliation is required for shadow finality. */
@@ -50,6 +54,8 @@ export type ShadowConfig = {
 export const DEFAULT_SHADOW_CONFIG: ShadowConfig = {
   shadowMaxInr: 10_000,
   liveTestMaxInr: 1_000,
+  liveTestDailyMaxInr: 2_000,
+  liveTestAllowedProviders: ["remitquickly", "PontisGlobe"],
   requireManualProof: true,
   requireIndependentReconciliation: true,
   livePayoutsEnabled: false,
@@ -64,9 +70,14 @@ function envNumber(name: string, fallback: number): number {
 
 /** Reads the shadow-test configuration from the environment (with safe defaults). */
 export function getShadowConfig(): ShadowConfig {
+  const allowedRaw = process.env.LIVE_TEST_ALLOWED_PROVIDERS?.trim();
   return {
     shadowMaxInr: envNumber("SHADOW_MAX_INR", DEFAULT_SHADOW_CONFIG.shadowMaxInr),
     liveTestMaxInr: envNumber("LIVE_TEST_MAX_INR", DEFAULT_SHADOW_CONFIG.liveTestMaxInr),
+    liveTestDailyMaxInr: envNumber("LIVE_TEST_DAILY_MAX_INR", DEFAULT_SHADOW_CONFIG.liveTestDailyMaxInr),
+    liveTestAllowedProviders: allowedRaw
+      ? allowedRaw.split(",").map((value) => value.trim()).filter(Boolean)
+      : DEFAULT_SHADOW_CONFIG.liveTestAllowedProviders,
     requireManualProof: true,
     requireIndependentReconciliation: true,
     livePayoutsEnabled: process.env.LIVE_PAYOUTS_ENABLED === "true",

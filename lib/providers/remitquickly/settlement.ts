@@ -6,6 +6,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { UserFacingError } from "@/lib/errors";
 import { transitionSettlement } from "@/lib/domain";
 import { recordProviderProof } from "@/lib/provider-proof";
+import { classifyRemitQuicklyStatus, type ProviderOutcome } from "@/lib/providers/outcome";
 import {
   extractPayoutId,
   simulatePayoutOutcome,
@@ -132,7 +133,7 @@ export async function executeApprovedSettlement(
 
 type ResolutionInput = {
   settlement: Settlement;
-  outcome: "success" | "failed";
+  outcome: Exclude<ProviderOutcome, "pending">;
   userId: string;
   organizationId: string;
   payoutId?: number | string | null;
@@ -230,6 +231,43 @@ export async function applyPayoutResolution(input: ResolutionInput) {
     return { settlementId: fresh.id, status: SettlementStatus.SETTLED, proofId: proof.id };
   }
 
+  if (outcome === "reversed") {
+    // A reversal means money may have moved and come back — the true state is
+    // UNCERTAIN, so the settlement is NEVER auto-failed. Record the provider's
+    // claim as proof and flag for operator review; the lifecycle stays put.
+    await recordProviderProof({
+      settlementId: fresh.id,
+      organizationId,
+      userId,
+      provider: PROVIDER,
+      providerTransactionId: input.payoutId != null ? String(input.payoutId) : null,
+      utr: input.utr,
+      providerStatus: input.providerStatus ?? "reversed",
+      actualAmount: input.actualAmount ?? null,
+      currency: input.actualAmount != null ? "INR" : null,
+      rawResponse: input.rawResponse,
+      receivedVia,
+      actorType,
+    });
+
+    await writeAuditLog({
+      action: "remitquickly.payout.reversed_review_required",
+      resourceType: "settlement",
+      resourceId: fresh.id,
+      organizationId,
+      userId,
+      actorType,
+      after: {
+        provider: PROVIDER,
+        payoutId: input.payoutId,
+        utr: input.utr,
+        note: "Provider reports a reversal — money movement uncertain. Operator review required; settlement not auto-failed.",
+      },
+    });
+
+    return { settlementId: fresh.id, status: fresh.status, reviewRequired: true };
+  }
+
   // outcome === "failed"
   if (fresh.status === SettlementStatus.FAILED) {
     return { settlementId: fresh.id, status: fresh.status, skipped: true };
@@ -282,11 +320,12 @@ export async function applyPayoutResolution(input: ResolutionInput) {
   return { settlementId: fresh.id, status: SettlementStatus.FAILED, reason };
 }
 
-/** Maps a RemitQuickly payout status string to our resolution outcome. */
-export function mapPayoutStatus(status: string | undefined | null): "success" | "failed" | "pending" {
-  if (!status) return "pending";
-  const value = status.toLowerCase();
-  if (value.includes("fail")) return "failed";
-  if (value.includes("success") || value.includes("processed")) return "success";
-  return "pending";
+/**
+ * Maps a RemitQuickly payout status string to our resolution outcome.
+ *
+ * Live-pilot safety: `reversed` is its own outcome (operator review, never an
+ * automatic FAILED) and unknown statuses are `pending`, never failed.
+ */
+export function mapPayoutStatus(status: string | undefined | null): ProviderOutcome {
+  return classifyRemitQuicklyStatus(status);
 }

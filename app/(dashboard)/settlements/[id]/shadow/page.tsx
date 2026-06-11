@@ -25,6 +25,7 @@ import {
   safetyFor,
   type SettlementMode,
 } from "@/lib/shadow-mode";
+import { buildLivePilotReadiness } from "@/lib/live-pilot";
 import { cn, formatCurrencyFull, formatDateTime } from "@/lib/utils";
 import { StatusBadge } from "@/components/ops/status-badge";
 import { StatRow } from "@/components/ops/stat-row";
@@ -153,6 +154,69 @@ async function recordManualProof(formData: FormData) {
   redirect(`/settlements/${settlementId}/shadow?success=proof`);
 }
 
+/**
+ * Dual-control foundation: an EXPLICIT finality approval, recorded in the
+ * append-only audit trail, by an approver-role user who is NOT the settlement
+ * creator. Limitations (by design, smallest safe foundation): approval is the
+ * presence of an audit entry — there is no revocation workflow or second-channel
+ * confirmation yet, and in a single-user organization the dual-control item can
+ * never pass.
+ */
+async function approveFinality(formData: FormData) {
+  "use server";
+  const { user, organization, membership } = await requireSession();
+  const settlementId = String(formData.get("settlementId") ?? "");
+
+  if (!canApproveSettlement(membership.role)) {
+    redirect(`/settlements/${settlementId}/shadow?error=${encodeURIComponent("Only approvers can approve finality.")}`);
+  }
+
+  const settlement = await prisma.settlement.findFirst({
+    where: { id: settlementId, organizationId: organization.id },
+  });
+  if (!settlement) {
+    redirect(`/settlements?error=${encodeURIComponent("Settlement was not found.")}`);
+  }
+
+  if (settlement.createdById === user.id) {
+    redirect(
+      `/settlements/${settlementId}/shadow?error=${encodeURIComponent(
+        "Dual control: the settlement creator cannot approve finality — a different operator must approve.",
+      )}`,
+    );
+  }
+
+  const existing = await prisma.auditLog.findFirst({
+    where: {
+      organizationId: organization.id,
+      action: "settlement.finality_approved",
+      resourceType: "settlement",
+      resourceId: settlement.id,
+    },
+  });
+  if (existing) {
+    redirect(`/settlements/${settlementId}/shadow?success=finality_approved`);
+  }
+
+  await writeAuditLog({
+    action: "settlement.finality_approved",
+    resourceType: "settlement",
+    resourceId: settlement.id,
+    organizationId: organization.id,
+    userId: user.id,
+    actorType: AuditActorType.USER,
+    after: {
+      publicId: settlement.publicId,
+      approvedBy: user.email,
+      createdById: settlement.createdById,
+      dualControl: true,
+    },
+  });
+
+  revalidatePath(`/settlements/${settlementId}/shadow`);
+  redirect(`/settlements/${settlementId}/shadow?success=finality_approved`);
+}
+
 export default async function ShadowConsolePage({
   params,
   searchParams,
@@ -181,7 +245,60 @@ export default async function ShadowConsolePage({
   );
 
   const config = getShadowConfig();
-  const safety = safetyFor(settlement, config);
+  const isLiveTest = settlement.testMode === "LIVE_TEST";
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const [finalityApproval, reportGeneratedLog, todaysLiveTests] = await Promise.all([
+    prisma.auditLog.findFirst({
+      where: {
+        organizationId: organization.id,
+        action: "settlement.finality_approved",
+        resourceType: "settlement",
+        resourceId: settlement.id,
+      },
+    }),
+    prisma.auditLog.findFirst({
+      where: {
+        organizationId: organization.id,
+        action: "settlement.report_generated",
+        resourceType: "settlement",
+        resourceId: settlement.id,
+      },
+    }),
+    isLiveTest
+      ? prisma.settlement.findMany({
+          where: {
+            organizationId: organization.id,
+            testMode: "LIVE_TEST",
+            id: { not: settlement.id },
+            createdAt: { gte: startOfToday },
+            status: { notIn: ["FAILED", "CANCELLED"] },
+          },
+          select: {
+            publicId: true,
+            status: true,
+            sourceCurrency: true,
+            targetCurrency: true,
+            sourceAmount: true,
+            targetAmount: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+  const dailyUsedInrExcludingThis = todaysLiveTests.reduce((sum, row) => sum + inrLegOf(row), 0);
+
+  const safety = {
+    ...safetyFor(settlement, config),
+    ...(isLiveTest
+      ? {
+          withinDailyCap:
+            dailyUsedInrExcludingThis + inrLegOf(settlement) <= config.liveTestDailyMaxInr,
+          dailyCapLabel: `INR ${config.liveTestDailyMaxInr.toLocaleString("en-IN")}`,
+        }
+      : {}),
+  };
   const checklist = buildShadowChecklist(
     settlement,
     settlement.providerProofs,
@@ -203,6 +320,23 @@ export default async function ShadowConsolePage({
   const canChangeMode = canApproveSettlement(membership.role);
   const canRecordProof = canWriteSettlement(membership.role);
 
+  const pilot = isLiveTest
+    ? buildLivePilotReadiness(
+        settlement,
+        settlement.providerProofs,
+        reconciliationRecords,
+        settlement.events,
+        {
+          finalityApprovedById: finalityApproval?.userId ?? null,
+          createdById: settlement.createdById,
+          reportGenerated: Boolean(reportGeneratedLog),
+          dailyUsedInrExcludingThis,
+        },
+        config,
+        assessment.decision,
+      )
+    : null;
+
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -221,6 +355,9 @@ export default async function ShadowConsolePage({
       {query.success === "mode" ? <FlashMessage message="Settlement mode updated (audit-logged)." /> : null}
       {query.success === "proof" ? (
         <FlashMessage message="Manual provider proof recorded — it is now part of the finality evidence." />
+      ) : null}
+      {query.success === "finality_approved" ? (
+        <FlashMessage message="Finality approval recorded (dual-control, audit-logged)." />
       ) : null}
 
       <div className="ops-panel space-y-5 p-5">
@@ -328,6 +465,77 @@ export default async function ShadowConsolePage({
             ))}
           </div>
         </div>
+
+        {/* Live pilot readiness (LIVE_TEST only) */}
+        {pilot ? (
+          <div className="rounded-xl border border-red-200 p-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                Live pilot readiness — LIVE_TEST
+              </p>
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]",
+                  pilot.decision === "ready" && "bg-emerald-100 text-emerald-800",
+                  pilot.decision === "needs_review" && "bg-amber-100 text-amber-800",
+                  pilot.decision === "blocked" && "bg-red-100 text-red-800",
+                )}
+              >
+                {pilot.decision === "ready"
+                  ? "Ready"
+                  : pilot.decision === "needs_review"
+                    ? "Needs review"
+                    : "Blocked"}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {pilot.items.map((item) => (
+                <div key={item.key} className="flex items-start gap-2 text-sm">
+                  <span
+                    className={cn(
+                      "mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
+                      item.done
+                        ? "bg-emerald-100 text-emerald-700"
+                        : item.blocking
+                          ? "bg-red-100 text-red-700"
+                          : "bg-amber-100 text-amber-700",
+                    )}
+                  >
+                    {item.done ? "✓" : item.blocking ? "✕" : "•"}
+                  </span>
+                  <div>
+                    <span className={item.done ? "text-slate-700" : "font-medium text-slate-900"}>
+                      {item.label}
+                      {item.blocking ? (
+                        <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-slate-400">
+                          guardrail
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="block text-xs text-slate-400">{item.detail}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {canChangeMode ? (
+              finalityApproval ? (
+                <p className="mt-3 text-xs text-slate-500">
+                  Finality approval recorded {formatDateTime(finalityApproval.createdAt)} (audit-logged).
+                </p>
+              ) : (
+                <form action={approveFinality} className="mt-3 flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="settlementId" value={settlement.id} />
+                  <SubmitButton variant="primary" size="sm" pendingText="Approving...">
+                    Approve finality (dual-control)
+                  </SubmitButton>
+                  <p className="text-xs text-slate-400">
+                    Must be a different operator than the settlement creator.
+                  </p>
+                </form>
+              )
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Manual proof entry */}
         <div className="rounded-xl border border-[var(--ops-line)] p-4">
