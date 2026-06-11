@@ -4414,3 +4414,55 @@ details[open] > .reconciliation-details-content {
 @media (prefers-reduced-motion: reduce) {
   .evidence-chain__pillar--focus { transform: none; }
 }
+
+/* =====================================================================
+   Quotes v2.2 — precision terminal polish
+   ===================================================================== */
+
+/* Locked-state glow on the dark preview panel */
+.qlock--locked {
+  box-shadow:
+    0 0 0 1px rgba(0, 199, 157, 0.35) inset,
+    0 0 34px rgba(0, 199, 157, 0.12) inset,
+    0 14px 40px rgba(7, 17, 31, 0.35);
+}
+.qlock__source-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 0.45rem;
+  padding: 0.18rem 0.5rem;
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+}
+.qlock__quoteid {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #7fe2cb;
+}
+
+/* Quote terms list (rate basis) */
+.ticket-term {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.68rem;
+  color: rgba(7, 17, 31, 0.45);
+  padding: 0.18rem 0;
+}
+.ticket-term dd { font-weight: 600; color: rgba(7, 17, 31, 0.72); font-variant-numeric: tabular-nums; }
+
+/* Inventory: stronger executable ticket header */
+.quote-ticket-id {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--brand-ink);
+}

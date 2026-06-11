@@ -165,11 +165,11 @@ function formatExpiryCountdown(expiresAt: Date) {
 }
 
 const EXECUTION_PATH = [
-  "Quote",
-  "Lock terms",
-  "Create settlement",
-  "Execute payout",
-  "Reconcile",
+  "Draft input",
+  "Quote locked",
+  "Settlement created",
+  "Provider execution",
+  "Reconciliation",
 ] as const;
 
 function ExecutionPathStrip({ activeStep }: { activeStep: number }) {
@@ -202,6 +202,7 @@ function ExecutionPathStrip({ activeStep }: { activeStep: number }) {
 }
 
 type PreviewQuote = {
+  id?: string;
   corridor: string;
   sourceAmount: unknown;
   sourceCurrency: string;
@@ -235,12 +236,26 @@ function QuotePreviewPanel({ quote }: { quote?: PreviewQuote | null }) {
       ];
 
   return (
-    <div className="qlock p-4 lg:rounded-r-none">
+    <div className={cn("qlock p-4", isLocked && "qlock--locked")}>
       <div className="relative flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-white/40">Quote lock preview</p>
-          <p className="mt-0.5 text-[11px] text-white/50">
-            {isLocked ? "Executable terms ready for settlement" : "Terminal preview — terms not yet locked"}
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-white/40">
+            INR payout · Quote lock preview
+          </p>
+          {isLocked && quote?.id ? (
+            <p className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="qlock__quoteid">{quotePublicId(quote.id)}</span>
+              <span className="qlock__source-tag">Active locked quote · from inventory</span>
+            </p>
+          ) : (
+            <p className="mt-1">
+              <span className="qlock__source-tag">Draft preview · reflects standard quote terms</span>
+            </p>
+          )}
+          <p className="mt-1 text-[11px] text-white/50">
+            {isLocked
+              ? "Locked execution terms — independent of the draft form on the left."
+              : "Values lock when you generate the quote; the draft form does not move money."}
           </p>
         </div>
         <span className={cn("qlock__chip shrink-0", isLocked ? "qlock__chip--locked" : "qlock__chip--indicative")}>
@@ -272,7 +287,7 @@ function QuotePreviewPanel({ quote }: { quote?: PreviewQuote | null }) {
       </dl>
 
       <p className="qlock__note relative mt-auto pt-2.5">
-        Final terms lock after quote generation. A settlement can only be created from a locked, unexpired quote.
+        A settlement can only be created from a locked, unexpired quote. Final terms lock after quote generation.
       </p>
     </div>
   );
@@ -426,7 +441,7 @@ export default async function QuotesPage({
           <ExecutionPathStrip activeStep={previewStep} />
         </div>
 
-        <div className="grid lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="quote-ticket-form p-3.5 sm:p-4">
             <div className="mb-3 flex items-center gap-2 rounded-lg border border-brand-emerald/15 bg-brand-emerald/[0.06] px-2.5 py-2">
               <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">Execution lane</span>
@@ -436,7 +451,7 @@ export default async function QuotesPage({
 
             <p className="ticket-section-title mb-2">Trade parameters</p>
 
-            <form action={submitQuote} className="quote-generate-form grid gap-2 sm:grid-cols-2">
+            <form action={submitQuote} className="quote-generate-form grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               <div className="ticket-param">
                 <Field label="Corridor" hint="Conversion direction.">
                   <FormSelect
@@ -467,14 +482,40 @@ export default async function QuotesPage({
                   />
                 </Field>
               </div>
-              <div className="ticket-param flex flex-col justify-between">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-400">Rate basis</p>
-                <p className="text-xs text-slate-500">
-                  Treasury reference rate · fee <span className="font-semibold text-slate-700">45 bps</span> ·
-                  validity <span className="font-semibold text-slate-700">15 min</span>
+              <div className="ticket-param">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-400">Execution lane</p>
+                <p className="mt-1.5 text-xs font-semibold text-slate-700">External provider rail</p>
+                <p className="mt-0.5 text-[10px] leading-snug text-slate-400">
+                  RemitQuickly / PontisGlobe sandbox · INRSettle does not move funds
                 </p>
               </div>
-              <div className="mt-1 flex items-center justify-between gap-3 sm:col-span-2">
+              <div className="ticket-param">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-400">Rate basis · quote terms</p>
+                <dl className="mt-1">
+                  <div className="ticket-term">
+                    <dt>Reference</dt>
+                    <dd>Treasury desk rate</dd>
+                  </div>
+                  <div className="ticket-term">
+                    <dt>Fee</dt>
+                    <dd>45 bps</dd>
+                  </div>
+                </dl>
+              </div>
+              <div className="ticket-param">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-400">Validity terms</p>
+                <dl className="mt-1">
+                  <div className="ticket-term">
+                    <dt>Quote validity</dt>
+                    <dd>15 min</dd>
+                  </div>
+                  <div className="ticket-term">
+                    <dt>Terms</dt>
+                    <dd>Lock on generation</dd>
+                  </div>
+                </dl>
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3 sm:col-span-2 lg:col-span-3">
                 <p className="text-[11px] leading-snug text-slate-400">
                   Generating locks rate, fee and window — the ticket becomes executable for settlement creation.
                 </p>
@@ -560,15 +601,13 @@ export default async function QuotesPage({
                       <DataGridTd>
                         {isActive ? (
                           <>
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <p className="text-sm font-semibold text-slate-950">Executable quote locked</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="quote-ticket-id">{publicId}</p>
                               <span className="quote-badge-locked quote-badge-live">LOCKED</span>
                             </div>
-                            <p className="mt-0.5 text-[11px] font-medium text-brand-emerald-ink">
-                              {quoteStatusSubtext(displayStatus)}
-                            </p>
-                            <p className="mt-1 text-[11px] text-slate-400">
-                              {publicId} · {corridorLabel(quote.corridor)}
+                            <p className="mt-0.5 text-xs font-semibold text-slate-700">{corridorLabel(quote.corridor)}</p>
+                            <p className="mt-1 text-[11px] font-medium text-brand-emerald-ink">
+                              Executable — {quoteStatusSubtext(displayStatus).toLowerCase()}
                             </p>
                           </>
                         ) : (
