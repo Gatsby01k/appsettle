@@ -1,24 +1,19 @@
 import Link from "next/link";
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-  FileText,
-  Landmark,
-  Plus,
-  RefreshCw,
-} from "lucide-react";
+import { ArrowRight, FileText, Landmark, Plus, ShieldCheck } from "lucide-react";
 import { SettlementStatus } from "@prisma/client";
 import { requireSession } from "@/lib/auth";
 import { autoMatchReconciliation } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
+import { assessFinality } from "@/lib/finality";
+import { buildFinalityInput, hasAuditApproval, latestProofOf } from "@/lib/finality-input";
 import { isPontisConfigured } from "@/lib/providers/pontis/client";
 import { isPontisGatewayConfigured } from "@/lib/providers/pontis/gateway";
-import { cn, formatCurrencyCompact, formatCurrencyFull, formatDateTime } from "@/lib/utils";
+import { isRemitQuicklyConfigured } from "@/lib/providers/remitquickly/client";
+import { MODE_LABEL, getShadowConfig, inrLegOf, safetyFor, type SettlementMode } from "@/lib/shadow-mode";
+import { cn, formatCurrencyFull, formatDateTime } from "@/lib/utils";
 import { MetricCard } from "@/components/ops/metric-card";
 import { SettlementLifecycle } from "@/components/ops/settlement-lifecycle";
 import { StatusBadge } from "@/components/ops/status-badge";
-import { EmptyState } from "@/components/ops/empty-state";
 import { Button } from "@/components/ui/button";
 
 function isPontisEnabled() {
@@ -33,11 +28,10 @@ const STREAM_EVENT_ACTIONS = new Set([
   "remitquickly.payout.settled",
   "reconciliation.auto_match",
   "reconciliation.confirm_match",
+  "settlement.finality_approved",
+  "settlement.report_generated",
+  "provider.proof.recorded",
 ]);
-
-function isAuthEvent(action: string) {
-  return action.startsWith("auth.");
-}
 
 function humanizeStreamAction(action: string): string {
   const map: Record<string, string> = {
@@ -48,60 +42,22 @@ function humanizeStreamAction(action: string): string {
     "remitquickly.payout.settled": "Provider payout completed",
     "reconciliation.auto_match": "Settlement reconciled automatically",
     "reconciliation.confirm_match": "Settlement reconciled",
-    "settlement.transition": "Audit trail recorded",
+    "settlement.transition": "Lifecycle recorded",
+    "settlement.finality_approved": "Finality approved (dual-control)",
+    "settlement.report_generated": "Settlement report generated",
+    "provider.proof.recorded": "Provider proof recorded",
   };
   return map[action] ?? action.replaceAll(".", " · ").replaceAll("_", " ");
 }
 
-function streamDotTone(action: string): "success" | "info" | "neutral" {
-  if (
-    action.includes("settled") ||
-    action.includes("reconcil") ||
-    action === "settlement.transition"
-  ) {
-    return "success";
-  }
-  if (action.includes("created") || action.includes("status_updated")) {
-    return "info";
-  }
-  return "neutral";
-}
-
 function isStreamActivity(log: { action: string; after: unknown }) {
-  if (isAuthEvent(log.action)) return false;
+  if (log.action.startsWith("auth.")) return false;
   if (STREAM_EVENT_ACTIONS.has(log.action)) return true;
   if (log.action === "settlement.transition") {
     const after = log.after as { toStatus?: string } | null;
     return after?.toStatus === SettlementStatus.RECONCILED;
   }
   return false;
-}
-
-const RECENT_PROOF_MS = 6 * 60 * 60 * 1000;
-
-function isRecentlyCompleted(
-  settlement: { reconciledAt: Date | null; settledAt: Date | null },
-  now: Date,
-) {
-  const completedAt = settlement.reconciledAt ?? settlement.settledAt;
-  if (!completedAt) return false;
-  const elapsed = now.getTime() - completedAt.getTime();
-  return elapsed >= 0 && elapsed < RECENT_PROOF_MS;
-}
-
-function truncateTx(id: string, max = 14) {
-  if (id.length <= max) return id;
-  return `${id.slice(0, 6)}…${id.slice(-4)}`;
-}
-
-function proofSummaryCopy(status: SettlementStatus) {
-  if (status === SettlementStatus.RECONCILED) {
-    return "Provider payout completed. Settlement reconciled. Audit trail recorded.";
-  }
-  if (status === SettlementStatus.SETTLED) {
-    return "Provider payout completed. Awaiting reconciliation.";
-  }
-  return "Settlement in progress.";
 }
 
 function demoSettlementWhere(organizationId: string) {
@@ -126,6 +82,21 @@ function DemoFocusBadge() {
   );
 }
 
+const FINALITY_CHIP = {
+  ready_to_finalize: { label: "Finality ready", className: "case-chip border-emerald-200 bg-emerald-50 text-emerald-700" },
+  needs_review: { label: "Finality review", className: "case-chip case-chip--gold" },
+  not_ready: { label: "Finality pending", className: "case-chip case-chip--demo" },
+} as const;
+
+const MODE_CHIP = {
+  DEMO: "case-chip case-chip--demo",
+  SHADOW: "case-chip case-chip--shadow",
+  LIVE_TEST: "case-chip case-chip--live",
+} as const;
+
+type StepState = "ok" | "pending" | "blocked";
+const STEP_STATE_LABEL: Record<StepState, string> = { ok: "Verified", pending: "Pending", blocked: "Blocked" };
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -137,6 +108,8 @@ export default async function DashboardPage({
   const demoQuery = demoFocus ? "?demo=1" : "";
   const now = new Date();
   const pontisConnected = isPontisEnabled();
+  const remitQuicklyConnected = isRemitQuicklyConfigured();
+  const shadowConfig = getShadowConfig();
   const settlementWhere = demoFocus
     ? demoSettlementWhere(organization.id)
     : { organizationId: organization.id };
@@ -151,13 +124,11 @@ export default async function DashboardPage({
   }
 
   const completedStatus = { in: [SettlementStatus.SETTLED, SettlementStatus.RECONCILED] };
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
 
-  // NOTE: settlements are intentionally fetched WITHOUT a nested
-  // `include: { reconciliation: { take, orderBy } }`. That construct triggers a
-  // Prisma 7 + @prisma/adapter-pg DriverAdapterError (Postgres 42809,
-  // "WITHIN GROUP is required for ordered-set aggregate mode"). The latest
-  // linked reconciliation record is fetched in a separate flat query below and
-  // attached manually, preserving the same `reconciliation: [latest?]` shape.
+  // NOTE: the reconciliation relation is fetched FLAT (no nested take/orderBy —
+  // historical Prisma 7 + adapter-pg hazard) and attached manually below.
   const [
     recentSettlementsRaw,
     latestProofPreferredRaw,
@@ -169,420 +140,571 @@ export default async function DashboardPage({
     completedCount,
     inFlightCount,
     reconciledCount,
+    reportsGenerated,
+    liveTestCount,
+    shadowCount,
+    todaysLiveTests,
   ] = await Promise.all([
-      prisma.settlement.findMany({
-        where: settlementWhere,
-        orderBy: { createdAt: "desc" },
-        take: 6,
-      }),
-      demoFocus
-        ? prisma.settlement.findFirst({
-            where: {
-              organizationId: organization.id,
-              publicId: "SET-DEMO-001",
-              status: completedStatus,
-            },
-          })
-        : Promise.resolve(null),
-      prisma.settlement.findFirst({
-        where: { ...settlementWhere, status: completedStatus },
-        orderBy: [{ reconciledAt: "desc" }, { settledAt: "desc" }],
-      }),
-      prisma.reconciliationRecord.count({
-        where: demoFocus
-          ? {
-              organizationId: organization.id,
-              status: "EXCEPTION",
-              externalRef: { startsWith: "DEMO-" },
-            }
-          : { organizationId: organization.id, status: "EXCEPTION" },
-      }),
-      prisma.auditLog.findMany({
-        where: auditWhere,
-        orderBy: { createdAt: "desc" },
-        take: demoFocus ? 8 : 16,
-        include: { user: true },
-      }),
-      demoFocus
-        ? Promise.resolve(0)
-        : prisma.quote.count({
-            where: {
-              organizationId: organization.id,
-              OR: [{ status: "EXPIRED" }, { status: "ACTIVE", expiresAt: { lt: now } }],
-            },
-          }),
-      prisma.settlement.count({
-        where: { ...settlementWhere, status: SettlementStatus.REQUESTED },
-      }),
-      prisma.settlement.count({
-        where: { ...settlementWhere, status: completedStatus },
-      }),
-      prisma.settlement.count({
-        where: {
-          ...settlementWhere,
-          status: { in: [SettlementStatus.APPROVED, SettlementStatus.EXECUTING] },
-        },
-      }),
-      prisma.settlement.count({
-        where: { ...settlementWhere, status: SettlementStatus.RECONCILED },
-      }),
-    ]);
+    prisma.settlement.findMany({
+      where: settlementWhere,
+      orderBy: { createdAt: "desc" },
+      take: 6,
+      include: { events: true, providerProofs: true },
+    }),
+    demoFocus
+      ? prisma.settlement.findFirst({
+          where: { organizationId: organization.id, publicId: "SET-DEMO-001", status: completedStatus },
+          include: { events: true, providerProofs: true },
+        })
+      : Promise.resolve(null),
+    prisma.settlement.findFirst({
+      where: { ...settlementWhere, status: completedStatus },
+      orderBy: [{ reconciledAt: "desc" }, { settledAt: "desc" }],
+      include: { events: true, providerProofs: true },
+    }),
+    prisma.reconciliationRecord.count({
+      where: demoFocus
+        ? { organizationId: organization.id, status: "EXCEPTION", externalRef: { startsWith: "DEMO-" } }
+        : { organizationId: organization.id, status: "EXCEPTION" },
+    }),
+    prisma.auditLog.findMany({
+      where: auditWhere,
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: { user: true },
+    }),
+    demoFocus
+      ? Promise.resolve(0)
+      : prisma.quote.count({
+          where: {
+            organizationId: organization.id,
+            OR: [{ status: "EXPIRED" }, { status: "ACTIVE", expiresAt: { lt: now } }],
+          },
+        }),
+    prisma.settlement.count({ where: { ...settlementWhere, status: SettlementStatus.REQUESTED } }),
+    prisma.settlement.count({ where: { ...settlementWhere, status: completedStatus } }),
+    prisma.settlement.count({
+      where: { ...settlementWhere, status: { in: [SettlementStatus.APPROVED, SettlementStatus.EXECUTING] } },
+    }),
+    prisma.settlement.count({ where: { ...settlementWhere, status: SettlementStatus.RECONCILED } }),
+    prisma.auditLog.count({
+      where: { organizationId: organization.id, action: "settlement.report_generated" },
+    }),
+    prisma.settlement.count({ where: { organizationId: organization.id, testMode: "LIVE_TEST" } }),
+    prisma.settlement.count({ where: { organizationId: organization.id, testMode: "SHADOW" } }),
+    prisma.settlement.findMany({
+      where: {
+        organizationId: organization.id,
+        testMode: "LIVE_TEST",
+        createdAt: { gte: startOfToday },
+        status: { notIn: ["FAILED", "CANCELLED"] },
+      },
+      select: {
+        publicId: true,
+        status: true,
+        sourceCurrency: true,
+        targetCurrency: true,
+        sourceAmount: true,
+        targetAmount: true,
+      },
+    }),
+  ]);
 
-  // Latest linked reconciliation record per settlement, fetched flat (no nested
-  // include) and attached manually.
+  // Latest linked reconciliation per settlement (flat fetch, attached manually).
   const proofSettlementIds = Array.from(
     new Set(
       [
-        ...recentSettlementsRaw.map((settlement) => settlement.id),
+        ...recentSettlementsRaw.map((s) => s.id),
         latestProofPreferredRaw?.id,
         latestProofFallbackRaw?.id,
       ].filter((id): id is string => Boolean(id)),
     ),
   );
-
   const reconciliationRecords = proofSettlementIds.length
     ? await prisma.reconciliationRecord.findMany({
         where: { settlementId: { in: proofSettlementIds } },
         orderBy: { createdAt: "desc" },
       })
     : [];
-
-  // Records are ordered newest-first, so the first one seen per settlement is
-  // the latest — equivalent to the old nested `take: 1, orderBy createdAt desc`.
-  const latestReconciliationBySettlementId = new Map<string, (typeof reconciliationRecords)[number]>();
+  const reconBySettlement = new Map<string, typeof reconciliationRecords>();
   for (const record of reconciliationRecords) {
-    if (record.settlementId && !latestReconciliationBySettlementId.has(record.settlementId)) {
-      latestReconciliationBySettlementId.set(record.settlementId, record);
-    }
+    if (!record.settlementId) continue;
+    const list = reconBySettlement.get(record.settlementId) ?? [];
+    list.push(record);
+    reconBySettlement.set(record.settlementId, list);
   }
 
-  const withLatestReconciliation = <T extends { id: string }>(settlement: T) => {
-    const latest = latestReconciliationBySettlementId.get(settlement.id);
-    return { ...settlement, reconciliation: latest ? [latest] : [] };
+  type RawSettlement = (typeof recentSettlementsRaw)[number];
+  const withCaseFile = (settlement: RawSettlement) => {
+    const recon = reconBySettlement.get(settlement.id) ?? [];
+    const assessment = assessFinality(
+      buildFinalityInput(settlement, settlement.providerProofs, recon, settlement.events, safetyFor(settlement, shadowConfig)),
+    );
+    return { ...settlement, reconciliation: recon, assessment };
   };
 
-  const recentSettlements = recentSettlementsRaw.map(withLatestReconciliation);
-  const latestProofPreferred = latestProofPreferredRaw
-    ? withLatestReconciliation(latestProofPreferredRaw)
-    : null;
-  const latestProofFallback = latestProofFallbackRaw
-    ? withLatestReconciliation(latestProofFallbackRaw)
-    : null;
-
+  const recentSettlements = recentSettlementsRaw.map(withCaseFile);
+  const latestProofPreferred = latestProofPreferredRaw ? withCaseFile(latestProofPreferredRaw) : null;
+  const latestProofFallback = latestProofFallbackRaw ? withCaseFile(latestProofFallbackRaw) : null;
   const latestProof = demoFocus ? (latestProofPreferred ?? latestProofFallback) : latestProofFallback;
 
-  const autoReconciledRate =
-    completedCount > 0 ? Math.round((reconciledCount / completedCount) * 100) : null;
+  // Pipeline state from the latest completed case (the org's "current story").
+  const latestReportLog = latestProof
+    ? await prisma.auditLog.findFirst({
+        where: {
+          organizationId: organization.id,
+          action: "settlement.report_generated",
+          resourceType: "settlement",
+          resourceId: latestProof.id,
+        },
+      })
+    : null;
+  const pipeline: { name: string; state: StepState }[] = latestProof
+    ? [
+        { name: "Provider proof", state: latestProof.providerProofs.length > 0 ? "ok" : "pending" },
+        {
+          name: "Independent recon",
+          state: latestProof.reconciliation.some((r) => r.status === "MATCHED")
+            ? "ok"
+            : latestProof.reconciliation.some((r) => ["UNMATCHED", "EXCEPTION"].includes(r.status))
+              ? "blocked"
+              : "pending",
+        },
+        { name: "Audit trail", state: hasAuditApproval(latestProof, latestProof.events) ? "ok" : "pending" },
+        {
+          name: "Finality review",
+          state:
+            latestProof.assessment.decision === "ready_to_finalize"
+              ? "ok"
+              : latestProof.assessment.riskLevel === "high"
+                ? "blocked"
+                : "pending",
+        },
+        { name: "Settlement report", state: latestReportLog ? "ok" : "pending" },
+      ]
+    : [
+        { name: "Provider proof", state: "pending" },
+        { name: "Independent recon", state: "pending" },
+        { name: "Audit trail", state: "pending" },
+        { name: "Finality review", state: "pending" },
+        { name: "Settlement report", state: "pending" },
+      ];
 
-  const operationsStream = demoFocus
-    ? auditLogs.slice(0, 4)
-    : auditLogs.filter((log) => isStreamActivity(log)).slice(0, 4);
+  const operatingMode: SettlementMode = liveTestCount > 0 ? "LIVE_TEST" : shadowCount > 0 ? "SHADOW" : "DEMO";
+  const dailyUsedInr = todaysLiveTests.reduce((sum, row) => sum + inrLegOf(row), 0);
+  const settledAwaitingRecon = Math.max(0, completedCount - reconciledCount);
+  const autoReconciledRate = completedCount > 0 ? Math.round((reconciledCount / completedCount) * 100) : null;
+  const operationsStream = (demoFocus ? auditLogs : auditLogs.filter(isStreamActivity)).slice(0, 6);
 
-  const proofFeed = recentSettlements
-    .filter((settlement) => settlement.id !== latestProof?.id)
-    .slice(0, 4);
+  const riskItems = [
+    reconExceptions > 0 && {
+      label: `${reconExceptions} reconciliation exception${reconExceptions === 1 ? "" : "s"}`,
+      detail: "Independent evidence contradicts or cannot corroborate a settlement.",
+      href: `/reconciliation?status=EXCEPTION${demoFocus ? "&demo=1" : ""}`,
+      severity: "high" as const,
+    },
+    settledAwaitingRecon > 0 && {
+      label: `${settledAwaitingRecon} settled without independent reconciliation`,
+      detail: "Provider claims completion — uncorroborated until a bank/PSP record matches.",
+      href: `/settlements?status=SETTLED${demoFocus ? "&demo=1" : ""}`,
+      severity: "medium" as const,
+    },
+    pendingApprovals > 0 && {
+      label: `${pendingApprovals} settlement${pendingApprovals === 1 ? "" : "s"} awaiting approval`,
+      detail: "Approval is required audit evidence for finality.",
+      href: `/settlements?status=REQUESTED${demoFocus ? "&demo=1" : ""}`,
+      severity: "medium" as const,
+    },
+    expiredQuotes > 0 && {
+      label: `${expiredQuotes} expired quote${expiredQuotes === 1 ? "" : "s"}`,
+      detail: "Refresh or archive stale quotes before the next settlement run.",
+      href: "/quotes?tab=expired",
+      severity: "low" as const,
+    },
+    shadowConfig.livePayoutsEnabled && {
+      label: "LIVE_PAYOUTS_ENABLED is set",
+      detail: "Tripwire: finality is blocked for all shadow/live-test settlements until this is off.",
+      href: "/settlements",
+      severity: "high" as const,
+    },
+  ].filter(Boolean) as { label: string; detail: string; href: string; severity: "high" | "medium" | "low" }[];
 
-  const primaryAlert =
-    reconExceptions > 0
-      ? {
-          title: `${reconExceptions} reconciliation exception${reconExceptions === 1 ? "" : "s"}`,
-          action: "Review",
-          href: `/reconciliation?status=EXCEPTION${demoFocus ? "&demo=1" : ""}`,
-          tone: "danger" as const,
-        }
-      : pendingApprovals > 0
-        ? {
-            title: `${pendingApprovals} awaiting approval`,
-            action: "Review queue",
-            href: `/settlements?status=REQUESTED${demoFocus ? "&demo=1" : ""}`,
-            tone: "warning" as const,
-          }
-        : expiredQuotes > 0
-          ? {
-              title: `${expiredQuotes} expired quote${expiredQuotes === 1 ? "" : "s"}`,
-              body: "Refresh or archive stale quotes before the next settlement run.",
-              action: "Open quotes",
-              href: `/quotes?tab=expired${demoFocus ? "&demo=1" : ""}`,
-              tone: "warning" as const,
-            }
-          : null;
+  const pilotItems = [
+    { label: "Live payouts", ok: !shadowConfig.livePayoutsEnabled, detail: shadowConfig.livePayoutsEnabled ? "ENABLED — must be off" : "Disabled (guarded)" },
+    { label: "Per-settlement cap", ok: true, detail: `INR ${shadowConfig.liveTestMaxInr.toLocaleString("en-IN")}` },
+    {
+      label: "Daily pilot cap",
+      ok: dailyUsedInr <= shadowConfig.liveTestDailyMaxInr,
+      detail: `INR ${dailyUsedInr.toLocaleString("en-IN")} of ${shadowConfig.liveTestDailyMaxInr.toLocaleString("en-IN")} used today`,
+    },
+    { label: "Provider allowlist", ok: true, detail: shadowConfig.liveTestAllowedProviders.join(", ") },
+    { label: "Operator approval", ok: true, detail: "Required for every settlement (audit-logged)" },
+    { label: "Second approver", ok: true, detail: "Dual-control: creator self-approval rejected" },
+    { label: "Settlement report", ok: reportsGenerated > 0, detail: `${reportsGenerated} generated to date` },
+  ];
 
   const latestCompletedAt = latestProof
     ? latestProof.reconciledAt ?? latestProof.settledAt ?? latestProof.createdAt
     : null;
+  const latestFinality = latestProof ? FINALITY_CHIP[latestProof.assessment.decision] : null;
 
   return (
-    <div className="overview-page">
-      <section className="mission-control">
-        <div className="mission-control__hero-glow pointer-events-none absolute inset-x-0 top-0 h-40" aria-hidden="true" />
-        <div className="mission-control__scanline pointer-events-none absolute inset-0" aria-hidden="true" />
+    <div className="space-y-5">
+      {/* 1 ── Executive command hero ─────────────────────────────────────── */}
+      <section className="conf-hero p-5 sm:p-7">
+        <div className="grid gap-6 lg:grid-cols-[1.25fr_1fr] lg:items-center">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="overview-live-badge inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-emerald-700">
+                <span className="ops-pulse ops-pulse--subtle" aria-hidden="true" />
+                Rails live
+              </span>
+              <span className={MODE_CHIP[operatingMode]}>{MODE_LABEL[operatingMode]} workspace</span>
+              <span className={cn("case-chip", pontisConnected ? "case-chip--shadow" : "case-chip--demo")}>
+                {pontisConnected ? "PontisGlobe connected" : "Pontis offline"}
+              </span>
+              {demoFocus ? <DemoFocusBadge /> : null}
+            </div>
 
-        <header className="mission-control__bar relative flex flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-6">
-          <div className="min-w-0">
-            <p className="mission-control__eyebrow">Mission Control</p>
-            <h1 className="mission-control__title">Treasury Operations</h1>
-          </div>
-          <div className="mission-control__status">
-            {demoFocus ? <DemoFocusBadge /> : null}
-            <span className="overview-live-badge mission-control__pill mission-control__pill--live">
-              <span className="ops-pulse ops-pulse--subtle" aria-hidden="true" />
-              Live
-            </span>
-            <span
-              className={cn(
-                "mission-control__pill",
-                pontisConnected ? "mission-control__pill--connected" : "mission-control__pill--offline",
-              )}
-            >
-              {pontisConnected ? "PontisGlobe" : "Pontis offline"}
-            </span>
-          </div>
-        </header>
+            <h1 className="conf-hero__headline mt-4">
+              Payment completed <span className="conf-hero__neq">≠</span> settlement finalized.
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-500">
+              {organization.displayName} settles on evidence, not provider claims: provider proof, independent
+              reconciliation and the audit trail must agree before finality.
+            </p>
 
-        <div className="mission-control__cockpit">
-          <div className="mission-control__proof-zone">
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <Button asChild variant="primary" size="sm">
+                <Link href={`/quotes${demoQuery}`} className="inline-flex items-center gap-1.5">
+                  <Plus className="h-3.5 w-3.5" />
+                  New quote
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/settlements${demoQuery}`} className="inline-flex items-center gap-1.5">
+                  <Landmark className="h-3.5 w-3.5" />
+                  Operations console
+                </Link>
+              </Button>
+              {latestProof ? (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/settlements/${latestProof.id}/report`} className="inline-flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5" />
+                    Latest report
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Latest settlement proof case panel */}
+          <div className="conf-hero__proof p-4">
             {latestProof ? (
-              <div
-                className={cn(
-                  "mission-control__proof",
-                  isRecentlyCompleted(latestProof, now) && "mission-control__proof--recent",
-                )}
-              >
-                <div className="mission-control__proof-head">
-                  <div className="min-w-0">
-                    <p className="mission-control__proof-label">Latest settlement proof</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <p className="mission-control__proof-id">{latestProof.publicId}</p>
-                      <StatusBadge status={latestProof.status} />
-                    </div>
-                  </div>
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="ops-eyebrow">Latest settlement proof</p>
                   {latestCompletedAt ? (
-                    <time className="mission-control__proof-time">{formatDateTime(latestCompletedAt)}</time>
+                    <time className="text-[11px] tabular-nums text-slate-400">{formatDateTime(latestCompletedAt)}</time>
                   ) : null}
                 </div>
-
-                <p
-                  className="mission-control__proof-amount"
-                  title={formatCurrencyFull(String(latestProof.sourceAmount), latestProof.sourceCurrency)}
-                >
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold tracking-tight text-slate-950">{latestProof.publicId}</p>
+                  <StatusBadge status={latestProof.status} />
+                  <span className={MODE_CHIP[(latestProof.testMode in MODE_CHIP ? latestProof.testMode : "DEMO") as SettlementMode]}>
+                    {MODE_LABEL[(latestProof.testMode in MODE_LABEL ? latestProof.testMode : "DEMO") as SettlementMode]}
+                  </span>
+                </div>
+                <p className="case-card__amount mt-2">
                   {formatCurrencyFull(String(latestProof.sourceAmount), latestProof.sourceCurrency)}
                 </p>
-
-                <div className="mission-control__proof-meta">
-                  {latestProof.provider ? (
-                    <span className="mission-control__proof-chip">{latestProof.provider}</span>
-                  ) : null}
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                  {latestProof.provider ? <span>{latestProof.provider}</span> : null}
                   {latestProof.providerTransactionId ? (
-                    <span className="mission-control__proof-tx" title={latestProof.providerTransactionId}>
-                      {truncateTx(latestProof.providerTransactionId)}
-                    </span>
+                    <span className="tabular-nums">{latestProof.providerTransactionId.slice(0, 14)}</span>
                   ) : null}
                 </div>
-
-                <p className="mission-control__proof-summary">{proofSummaryCopy(latestProof.status)}</p>
-
-                <div className="proof-lifecycle-wrap proof-rail--hero">
-                  <SettlementLifecycle status={latestProof.status} proofRail compact />
+                <div className="mt-3">
+                  <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.08em] text-slate-400">
+                    <span className={latestFinality?.className}>{latestFinality?.label}</span>
+                    <span className="tabular-nums">{latestProof.assessment.confidence}% confidence</span>
+                  </div>
+                  <div className="confidence-meter mt-1.5">
+                    <div
+                      className={cn(
+                        "confidence-meter__fill",
+                        latestProof.assessment.decision === "ready_to_finalize"
+                          ? "confidence-meter__fill--ready"
+                          : latestProof.assessment.decision === "needs_review"
+                            ? "confidence-meter__fill--review"
+                            : "confidence-meter__fill--neutral",
+                      )}
+                      style={{ width: `${latestProof.assessment.confidence}%` }}
+                    />
+                  </div>
                 </div>
-
-                <div
-                  className="mission-control__telemetry mission-control__telemetry--chips"
-                  aria-label="Operations telemetry"
-                >
-                  <MetricCard label="Completed" value={completedCount} tone="success" variant="telemetry" />
-                  <MetricCard
-                    label="Auto-reconciled"
-                    value={autoReconciledRate !== null ? `${autoReconciledRate}%` : "—"}
-                    tone="info"
-                    variant="telemetry"
-                  />
-                  <MetricCard label="Exceptions" value={reconExceptions} tone="danger" variant="telemetry" />
-                  <MetricCard label="In flight" value={inFlightCount} tone="neutral" variant="telemetry" />
+                <div className="mt-3 rounded-lg bg-slate-50/80 p-2.5">
+                  <SettlementLifecycle status={latestProof.status} compact />
                 </div>
-
-                <Link href={`/settlements${demoQuery}`} className="mission-control__proof-link">
-                  Open proof
-                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                </Link>
-              </div>
+              </>
             ) : (
-              <div className="mission-control__proof mission-control__proof--empty">
-                <EmptyState
-                  title="No completed settlements yet"
-                  description="Execute your first settlement to see provider proof here."
-                  action={{ label: "Create settlement", href: `/settlements${demoQuery}` }}
-                />
+              <div className="py-8 text-center">
+                <p className="text-sm font-medium text-slate-600">No completed settlement yet</p>
+                <p className="mt-1 text-xs text-slate-400">Create a quote to start the evidence chain.</p>
               </div>
             )}
           </div>
-
-          <aside className="mission-control__rail">
-            <nav className="mission-control__actions" aria-label="Quick actions">
-              <Button
-                asChild
-                variant="primary"
-                size="sm"
-                className="mission-control__action-primary mission-control__action-primary--premium"
-              >
-                <Link href={`/quotes${demoQuery}`}>
-                  <Plus className="h-3.5 w-3.5" />
-                  Create quote
-                </Link>
-              </Button>
-              <Link href={`/settlements${demoQuery}`} className="mission-control__action mission-action-card">
-                <Landmark className="h-3.5 w-3.5" aria-hidden="true" />
-                Create settlement
-              </Link>
-              <Link href={`/reconciliation${demoQuery}`} className="mission-control__action mission-action-card">
-                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                Run reconciliation
-              </Link>
-              <Link href={`/audit-logs${demoQuery}`} className="mission-control__action mission-action-card">
-                <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-                Audit trail
-              </Link>
-            </nav>
-
-            <div className="mission-control__alert-slot">
-              {primaryAlert ? (
-                <Link href={primaryAlert.href} className="group block">
-                  <div
-                    className={cn(
-                      "overview-alert mission-control__alert",
-                      primaryAlert.tone === "danger" && "overview-alert--danger",
-                      primaryAlert.tone === "warning" && "overview-alert--warning",
-                    )}
-                  >
-                    <AlertTriangle className="mission-control__alert-icon" aria-hidden="true" />
-                    <div className="min-w-0">
-                      <p className="mission-control__alert-title">{primaryAlert.title}</p>
-                      {"body" in primaryAlert && primaryAlert.body ? (
-                        <p className="mission-control__alert-body">{primaryAlert.body}</p>
-                      ) : null}
-                      <span className="overview-alert__action mission-control__alert-cta">
-                        {primaryAlert.action} →
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              ) : (
-                <div className="mission-control__alert mission-control__alert--clear">
-                  <CheckCircle2 className="mission-control__alert-icon mission-control__alert-icon--clear" aria-hidden="true" />
-                  <div className="min-w-0">
-                    <p className="mission-control__alert-title">All clear</p>
-                    <p className="mission-control__alert-sub">Rails operating normally</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </aside>
         </div>
       </section>
 
-      {/* Settlement-confidence narrative: completed is a claim, finalized is earned */}
-      <div className="evidence-chain mx-auto max-w-3xl" aria-label="Settlement confidence pipeline">
-        <div className="evidence-chain__pillar">
-          <span className="evidence-chain__label">Provider proof</span>
-          <span className="evidence-chain__state text-slate-600">Evidence captured</span>
+      {/* 2 ── Settlement confidence pipeline (main anchor) ───────────────── */}
+      <section aria-label="Settlement confidence pipeline">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="ops-eyebrow">Settlement confidence pipeline</p>
+          <p className="text-[11px] text-slate-400">
+            {latestProof ? `Tracking ${latestProof.publicId}` : "Awaiting first case"}
+          </p>
         </div>
-        <div className="evidence-chain__pillar">
-          <span className="evidence-chain__label">Independent recon</span>
-          <span className="evidence-chain__state text-slate-600">Bank / PSP verified</span>
+        <div className="conf-pipeline">
+          {pipeline.map((step, index) => (
+            <div key={step.name} className={cn("conf-step", `conf-step--${step.state}`)}>
+              <p className="conf-step__index">STEP {index + 1}</p>
+              <p className="conf-step__name">{step.name}</p>
+              <p className="conf-step__state">{STEP_STATE_LABEL[step.state]}</p>
+            </div>
+          ))}
         </div>
-        <div className="evidence-chain__pillar">
-          <span className="evidence-chain__label">Audit trail</span>
-          <span className="evidence-chain__state text-slate-600">Approval recorded</span>
-        </div>
-        <div className="evidence-chain__pillar">
-          <span className="evidence-chain__label">Finality</span>
-          <span className="evidence-chain__state text-slate-600">Safe to finalize</span>
-        </div>
-      </div>
+      </section>
 
-      <div className="overview-below">
-        <section className="overview-section">
-          <div className="overview-section__head">
-            <h2 className="overview-section__title">Operations stream</h2>
+      {/* 3+4 ── Pilot snapshot + operations health ───────────────────────── */}
+      <section className="grid gap-4 lg:grid-cols-[1fr_1.6fr]">
+        <div className="ops-panel p-4">
+          <div className="flex items-center justify-between gap-2">
+            <p className="ops-eyebrow">Live pilot readiness</p>
+            <span className={cn("case-chip", liveTestCount > 0 ? "case-chip--live" : "case-chip--demo")}>
+              {liveTestCount > 0 ? `${liveTestCount} live-test case${liveTestCount === 1 ? "" : "s"}` : "No pilot case yet"}
+            </span>
           </div>
-          {operationsStream.length ? (
-            <ul className="ops-stream">
-              {operationsStream.map((log, index) => (
-                <li
-                  key={log.id}
-                  className={cn("ops-stream-item", index === 0 && "ops-stream-item--latest")}
-                  style={{ animationDelay: `${0.04 + index * 0.045}s` }}
-                >
-                  <div className="ops-stream-item__head">
-                    <span
-                      className={cn(
-                        "ops-stream-dot",
-                        index === 0 && "ops-stream-dot--live",
-                        index !== 0 && `ops-stream-dot--${streamDotTone(log.action)}`,
-                      )}
-                      aria-hidden="true"
-                    />
-                    <p className="ops-stream-title">{humanizeStreamAction(log.action)}</p>
-                    <time className="ops-stream-time">{formatDateTime(log.createdAt)}</time>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="overview-section__empty">No recent treasury activity.</p>
-          )}
-        </section>
+          <div className="mt-2 space-y-0.5">
+            {pilotItems.map((item) => (
+              <div key={item.label} className="check-item text-sm">
+                <span className={cn("check-dot", item.ok ? "check-dot--done" : "check-dot--blocked")}>
+                  {item.ok ? "✓" : "✕"}
+                </span>
+                <div className="min-w-0">
+                  <span className="text-slate-700">{item.label}</span>
+                  <span className="block truncate text-xs text-slate-400">{item.detail}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 flex items-start gap-1.5 border-t border-[var(--ops-line-soft)] pt-2 text-[11px] leading-relaxed text-slate-400">
+            <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-emerald-ink" />
+            INRSettle does not move funds. The partner/provider moves money externally; INRSettle controls the
+            operational layer.
+          </p>
+        </div>
 
-        <section className="overview-section">
-          <div className="overview-section__head">
-            <h2 className="overview-section__title">Recent proofs</h2>
-            <Link href={`/settlements${demoQuery}`} className="overview-section__link">
-              View all
+        <div>
+          <p className="ops-eyebrow mb-2">Operations health</p>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <MetricCard label="Completed" value={completedCount} hint="Settled or reconciled" tone="success" />
+            <MetricCard
+              label="Auto-reconciled"
+              value={autoReconciledRate !== null ? `${autoReconciledRate}%` : "—"}
+              hint="Of completed settlements"
+              tone="info"
+            />
+            <MetricCard
+              label="Exceptions"
+              value={reconExceptions}
+              hint="Operations queue"
+              tone={reconExceptions ? "danger" : "neutral"}
+            />
+            <MetricCard label="In flight" value={inFlightCount} hint="Approved or executing" tone="info" />
+            <MetricCard
+              label="Needs review"
+              value={settledAwaitingRecon}
+              hint="Settled, not yet corroborated"
+              tone={settledAwaitingRecon ? "warning" : "neutral"}
+            />
+            <MetricCard label="Reports generated" value={reportsGenerated} hint="Executive settlement reports" />
+          </div>
+        </div>
+      </section>
+
+      {/* 5 ── Risk & exceptions ──────────────────────────────────────────── */}
+      <section className="ops-panel p-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="ops-eyebrow">Risk &amp; exceptions</p>
+          <span className={cn("case-chip", riskItems.length ? "case-chip--gold" : "border-emerald-200 bg-emerald-50 text-emerald-700")}>
+            {riskItems.length ? `${riskItems.length} open` : "All clear"}
+          </span>
+        </div>
+        {riskItems.length ? (
+          <div className="mt-2 grid gap-2 md:grid-cols-2">
+            {riskItems.map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={cn(
+                  "group flex items-start justify-between gap-3 rounded-xl border p-3 transition-shadow hover:shadow-[var(--ops-shadow-xs)]",
+                  item.severity === "high" && "border-red-200 bg-red-50/50",
+                  item.severity === "medium" && "border-amber-200 bg-amber-50/50",
+                  item.severity === "low" && "border-[var(--ops-line)] bg-white",
+                )}
+              >
+                <div>
+                  <p className="text-sm font-medium text-slate-900">{item.label}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{item.detail}</p>
+                </div>
+                <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-slate-500">
+            No open exceptions, uncorroborated settlements, stale quotes, or blocked finality.
+          </p>
+        )}
+      </section>
+
+      {/* 6 ── Recent settlement case cards ───────────────────────────────── */}
+      <section>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="ops-eyebrow">Recent settlement cases</p>
+          <Link href={`/settlements${demoQuery}`} className="text-xs font-medium text-slate-500 hover:text-slate-900">
+            Open console →
+          </Link>
+        </div>
+        {recentSettlements.length ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {recentSettlements.map((settlement) => {
+              const finality = FINALITY_CHIP[settlement.assessment.decision];
+              const modeKey = (settlement.testMode in MODE_CHIP ? settlement.testMode : "DEMO") as SettlementMode;
+              const matched = settlement.reconciliation.some((r) => r.status === "MATCHED");
+              return (
+                <Link key={settlement.id} href={`/settlements/${settlement.id}/report`} className="case-card p-3.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <p className="text-[13px] font-semibold tracking-tight text-slate-950">{settlement.publicId}</p>
+                    <span className={MODE_CHIP[modeKey]}>{MODE_LABEL[modeKey]}</span>
+                    <span className="ml-auto">
+                      <StatusBadge status={settlement.status} />
+                    </span>
+                  </div>
+                  <p className="case-card__amount mt-2">
+                    {formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-slate-400">
+                    {settlement.provider ?? "No provider"} · {settlement.reference}
+                  </p>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+                    <span className={cn("case-chip", settlement.providerProofs.length ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "case-chip--demo")}>
+                      proof {settlement.providerProofs.length ? "✓" : "—"}
+                    </span>
+                    <span className={cn("case-chip", matched ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "case-chip--demo")}>
+                      recon {matched ? "✓" : "—"}
+                    </span>
+                    <span className={finality.className}>{finality.label}</span>
+                  </div>
+                  <div className="confidence-meter mt-2.5">
+                    <div
+                      className={cn(
+                        "confidence-meter__fill",
+                        settlement.assessment.decision === "ready_to_finalize"
+                          ? "confidence-meter__fill--ready"
+                          : settlement.assessment.decision === "needs_review"
+                            ? "confidence-meter__fill--review"
+                            : "confidence-meter__fill--neutral",
+                      )}
+                      style={{ width: `${settlement.assessment.confidence}%` }}
+                    />
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="ops-panel p-8 text-center text-sm text-slate-500">
+            No settlements yet — create a quote to open the first case.
+          </div>
+        )}
+      </section>
+
+      {/* 7+8 ── Provider rails + operations stream ───────────────────────── */}
+      <section className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
+        <div>
+          <p className="ops-eyebrow mb-2">Provider rail health</p>
+          <div className="space-y-2">
+            {[
+              {
+                name: "PontisGlobe",
+                role: "INR payout rail · VPS gateway",
+                up: pontisConnected,
+                safety: "Sandbox · live payouts disabled",
+              },
+              {
+                name: "RemitQuickly",
+                role: "IMPS payout rail",
+                up: remitQuicklyConnected,
+                safety: "Sandbox · isTest enforced",
+              },
+              {
+                name: "BuyUcoin",
+                role: "INR liquidity venue (reference)",
+                up: true,
+                safety: "Reference counterparty",
+              },
+            ].map((rail) => (
+              <div key={rail.name} className="rail-health flex items-center gap-3 p-3">
+                <span className={cn("rail-health__dot", rail.up ? "rail-health__dot--up" : "rail-health__dot--idle")} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold tracking-tight text-slate-950">{rail.name}</p>
+                  <p className="truncate text-xs text-slate-400">{rail.role}</p>
+                </div>
+                <div className="text-right">
+                  <p className={cn("text-xs font-medium", rail.up ? "text-emerald-700" : "text-slate-400")}>
+                    {rail.up ? "Connected" : "Not configured"}
+                  </p>
+                  <p className="text-[10px] text-slate-400">{rail.safety}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="ops-panel p-4">
+          <div className="flex items-center justify-between gap-2">
+            <p className="ops-eyebrow">Operations stream</p>
+            <Link href={`/audit-logs${demoQuery}`} className="text-xs font-medium text-slate-500 hover:text-slate-900">
+              Full audit trail →
             </Link>
           </div>
-          {proofFeed.length ? (
-            <div className="proof-feed">
-              {proofFeed.map((settlement, index) => {
-                const when = settlement.reconciledAt
-                  ? formatDateTime(settlement.reconciledAt)
-                  : settlement.settledAt
-                    ? formatDateTime(settlement.settledAt)
-                    : formatDateTime(settlement.createdAt);
-
+          {operationsStream.length ? (
+            <div className="audit-line mt-2 space-y-0.5">
+              {operationsStream.map((log) => {
+                const actor = log.actorType.toLowerCase() as "user" | "api" | "system";
                 return (
-                  <Link
-                    key={settlement.id}
-                    href={`/settlements${demoQuery}`}
-                    className="proof-feed-item"
-                    style={{ animationDelay: `${0.02 + index * 0.03}s` }}
-                  >
-                    <div className="proof-feed-item__primary">
-                      <span className="proof-feed-item__id">{settlement.publicId}</span>
-                      <StatusBadge status={settlement.status} />
-                      <span
-                        className="proof-feed-item__amount"
-                        title={formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
-                      >
-                        {formatCurrencyCompact(String(settlement.sourceAmount), settlement.sourceCurrency)}
+                  <div key={log.id} className={`audit-event audit-event--${actor}`}>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <p className="text-[13px] font-medium tracking-tight text-slate-950">
+                        {humanizeStreamAction(log.action)}
+                      </p>
+                      <span className={`audit-actor audit-actor--${actor}`}>{log.actorType}</span>
+                      <span className="ml-auto shrink-0 text-[11px] tabular-nums text-slate-400">
+                        {formatDateTime(log.createdAt)}
                       </span>
                     </div>
-                    <div className="proof-feed-item__meta">
-                      <span className="proof-feed-item__provider">{settlement.provider ?? "—"}</span>
-                      {settlement.providerTransactionId ? (
-                        <span className="proof-feed-tx proof-feed-tx--pill" title={settlement.providerTransactionId}>
-                          {truncateTx(settlement.providerTransactionId)}
-                        </span>
-                      ) : null}
-                      <span className="proof-feed-item__time">{when}</span>
-                    </div>
-                  </Link>
+                    <p className="mt-0.5 text-xs text-slate-500">{log.user?.email ?? log.actorType}</p>
+                  </div>
                 );
               })}
             </div>
           ) : (
-            <p className="overview-section__empty">No prior proofs yet.</p>
+            <p className="mt-3 text-sm text-slate-500">No operational activity yet.</p>
           )}
-        </section>
-      </div>
+        </div>
+      </section>
     </div>
   );
 }

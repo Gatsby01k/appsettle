@@ -3519,3 +3519,156 @@ details[open] > .reconciliation-details-content {
   .team-member-card { transition: none; }
   .team-member-card:hover { transform: none; }
 }
+
+/* =====================================================================
+   Overview v2 — mission-control structural kit
+   ===================================================================== */
+
+/* Animated background rails (very subtle drift; off under reduced motion) */
+@keyframes rails-drift {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+  100% { transform: translateY(0); }
+}
+.app-rails { animation: rails-drift 26s ease-in-out infinite; }
+
+/* --- Executive command hero -------------------------------------------- */
+.conf-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.2rem;
+  border: 1px solid var(--ops-line);
+  background:
+    radial-gradient(720px 300px at 88% -10%, rgba(11, 180, 196, 0.1), transparent 60%),
+    radial-gradient(560px 260px at 6% 110%, rgba(242, 173, 35, 0.07), transparent 60%),
+    linear-gradient(180deg, #ffffff, #fbfdfc);
+  box-shadow: var(--ops-shadow-md);
+}
+.conf-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(11, 180, 196, 0.5) 25%, rgba(0, 199, 157, 0.45) 50%, rgba(242, 173, 35, 0.5) 78%, transparent);
+}
+.conf-hero__headline {
+  font-size: clamp(1.45rem, 2.6vw, 2rem);
+  line-height: 1.15;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--brand-ink);
+}
+.conf-hero__neq {
+  background: linear-gradient(90deg, var(--brand-aqua), var(--brand-emerald) 55%, var(--brand-amber));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.conf-hero__proof {
+  border-radius: 0.95rem;
+  border: 1px solid var(--ops-line);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--ops-shadow-sm);
+}
+
+/* --- Confidence pipeline (main anchor) ----------------------------------- */
+.conf-pipeline {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+}
+@media (max-width: 860px) { .conf-pipeline { grid-template-columns: repeat(2, 1fr); } }
+.conf-step {
+  position: relative;
+  border-radius: 0.85rem;
+  border: 1px solid var(--ops-line);
+  background: #ffffff;
+  padding: 0.75rem 0.85rem;
+  animation: check-item-enter 0.4s var(--ease) both;
+  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease);
+}
+.conf-step:hover { transform: translateY(-2px); box-shadow: var(--ops-shadow-sm); }
+.conf-step:nth-child(2) { animation-delay: 0.05s; }
+.conf-step:nth-child(3) { animation-delay: 0.1s; }
+.conf-step:nth-child(4) { animation-delay: 0.15s; }
+.conf-step:nth-child(5) { animation-delay: 0.2s; }
+.conf-step::after {
+  content: "";
+  position: absolute;
+  right: -0.55rem;
+  top: 50%;
+  width: 0.6rem;
+  height: 2px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, rgba(11, 180, 196, 0.5), rgba(242, 173, 35, 0.45));
+  z-index: 1;
+}
+.conf-step:last-child::after { display: none; }
+@media (max-width: 860px) { .conf-step::after { display: none; } }
+.conf-step--ok { border-color: var(--finality-ready-line); background: linear-gradient(180deg, #f2fdf9, #ffffff 60%); }
+.conf-step--pending { border-color: var(--finality-review-line); background: linear-gradient(180deg, #fffdf4, #ffffff 60%); }
+.conf-step--blocked { border-color: var(--finality-blocked-line); background: linear-gradient(180deg, var(--finality-blocked-soft), #ffffff 60%); }
+.conf-step__index {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: rgba(7, 17, 31, 0.35);
+}
+.conf-step__name {
+  margin-top: 0.1rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--brand-ink);
+}
+.conf-step__state { margin-top: 0.2rem; font-size: 0.66rem; font-weight: 600; }
+.conf-step--ok .conf-step__state { color: var(--finality-ready); }
+.conf-step--pending .conf-step__state { color: var(--finality-review); }
+.conf-step--blocked .conf-step__state { color: var(--finality-blocked); }
+
+/* --- Case cards ------------------------------------------------------------ */
+.case-card {
+  display: block;
+  border-radius: 0.95rem;
+  border: 1px solid var(--ops-line);
+  background: #ffffff;
+  box-shadow: var(--ops-shadow-xs);
+  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease), border-color 0.25s var(--ease);
+}
+.case-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--ops-line-strong);
+  box-shadow: var(--ops-shadow-sm);
+}
+.case-card__amount {
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--brand-ink);
+}
+
+/* --- Rail health ------------------------------------------------------------ */
+.rail-health {
+  border-radius: 0.85rem;
+  border: 1px solid var(--ops-line);
+  background: #ffffff;
+  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease);
+}
+.rail-health:hover { transform: translateY(-1px); box-shadow: var(--ops-shadow-xs); }
+.rail-health__dot {
+  height: 0.5rem;
+  width: 0.5rem;
+  border-radius: 999px;
+}
+.rail-health__dot--up { background: var(--brand-emerald); box-shadow: 0 0 8px rgba(0, 199, 157, 0.55); }
+.rail-health__dot--idle { background: rgba(7, 17, 31, 0.25); }
+
+@media (prefers-reduced-motion: reduce) {
+  .app-rails { animation: none; }
+  .conf-step { animation: none; transition: none; }
+  .conf-step:hover { transform: none; }
+  .case-card, .rail-health { transition: none; }
+  .case-card:hover, .rail-health:hover { transform: none; }
+}
