@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
-import { ActivityItem } from "@/components/ops/activity-item";
 import { EmptyState } from "@/components/ops/empty-state";
 import { FilterBar } from "@/components/ops/filter-bar";
 
@@ -119,19 +118,33 @@ export default async function AuditLogsPage({
         <FilterBar searchPlaceholder="Search action, resource, reference..." />
       </Suspense>
 
-      <div className="ops-panel p-4">
+      <div className="ops-panel p-4 sm:p-5">
         {filteredLogs.length ? (
-          filteredLogs.map((log) => (
-            <ActivityItem
-              key={log.id}
-              action={log.action}
-              actor={log.user?.email ?? log.actorType}
-              timestamp={formatDateTime(log.createdAt)}
-              resource={resourceLabel(log)}
-              detail={eventDetail(log)}
-              tone={auditTone(log.action)}
-            />
-          ))
+          <div className="audit-line space-y-0.5">
+            {filteredLogs.map((log) => {
+              const actor = log.actorType.toLowerCase() as "user" | "api" | "system";
+              const tone = auditTone(log.action);
+              return (
+                <div key={log.id} className={`audit-event audit-event--${actor}`}>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <p className="text-[13px] font-medium tracking-tight text-slate-950">{log.action}</p>
+                    <span className={`audit-actor audit-actor--${actor}`}>{log.actorType}</span>
+                    {tone === "danger" ? (
+                      <span className="case-chip case-chip--live">attention</span>
+                    ) : null}
+                    <span className="ml-auto shrink-0 text-[11px] tabular-nums text-slate-400">
+                      {formatDateTime(log.createdAt)}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                    <span className="font-medium text-slate-600">{resourceLabel(log)}</span>
+                    <span>{eventDetail(log)}</span>
+                    <span className="text-slate-400">{log.user?.email ?? log.actorType}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <EmptyState title="No audit events match" description="Try another search term or clear filters." />
         )}

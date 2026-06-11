@@ -70,7 +70,7 @@ export default async function ReportsPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         {REPORTS.map((report) => (
-          <Card key={report.type} className="flex flex-col">
+          <Card key={report.type} className="ops-card-hover flex flex-col">
             <CardHeader>
               <CardTitle>{report.title}</CardTitle>
               <CardDescription>{report.description}</CardDescription>

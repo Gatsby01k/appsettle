@@ -1,5 +1,7 @@
-import { Check } from "lucide-react";
+import { Check, ShieldCheck } from "lucide-react";
 import { requireSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { canApproveSettlement } from "@/lib/permissions";
 import { ACCESS_ROLES, DEMO_TEAM } from "@/lib/treasury";
 import { PageHeader } from "@/components/ops/page-header";
 import { MetricCard } from "@/components/ops/metric-card";
@@ -16,15 +18,28 @@ import {
 } from "@/components/ops/data-grid";
 
 export default async function TeamPage() {
-  const { user } = await requireSession();
+  const { user, organization } = await requireSession();
 
-  const members = [
-    { name: user.name, email: user.email, role: "OWNER" as const, status: "ACTIVE" as const, lastActive: "Now (you)" },
-    ...DEMO_TEAM,
-  ];
+  // Real, login-capable members of this organization (read-only — RBAC and
+  // auth are untouched). These are the users who can actually act in the app,
+  // including the dual-control finality approver.
+  const memberships = await prisma.membership.findMany({
+    where: { organizationId: organization.id },
+    orderBy: { createdAt: "asc" },
+    include: { user: true },
+  });
 
-  const activeMembers = members.filter((m) => m.status === "ACTIVE").length;
-  const pendingInvites = members.filter((m) => m.status === "PENDING").length;
+  const realMembers = memberships.map((membership) => ({
+    name: membership.user.name,
+    email: membership.user.email,
+    role: membership.role,
+    isYou: membership.user.id === user.id,
+    canApprove: canApproveSettlement(membership.role),
+    lastLoginAt: membership.user.lastLoginAt,
+  }));
+
+  const approverCount = realMembers.filter((member) => member.canApprove).length;
+  const dualControlPossible = approverCount >= 2 || (approverCount >= 1 && realMembers.length >= 2);
 
   return (
     <div className="space-y-6">
@@ -34,11 +49,73 @@ export default async function TeamPage() {
       />
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <MetricCard label="Members" value={members.length} hint="In this organization" />
-        <MetricCard label="Active" value={activeMembers} hint="Signed-in access" tone="success" />
-        <MetricCard label="Pending invites" value={pendingInvites} hint="Awaiting acceptance" tone="warning" />
+        <MetricCard label="Database members" value={realMembers.length} hint="Can sign in and act" />
+        <MetricCard label="Finality approvers" value={approverCount} hint="Can approve settlements & finality" tone="success" />
+        <MetricCard
+          label="Dual control"
+          value={dualControlPossible ? "Available" : "Not yet"}
+          hint={
+            dualControlPossible
+              ? "A second operator can approve finality"
+              : "Add a second member (npm run demo:approver)"
+          }
+          tone={dualControlPossible ? "success" : "warning"}
+        />
       </div>
 
+      {/* Dual-control explainer */}
+      <div className="flex items-start gap-2 rounded-xl border border-[var(--ops-line)] bg-white p-3">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand-emerald-ink" />
+        <p className="text-xs leading-relaxed text-slate-600">
+          <span className="font-semibold text-slate-900">Dual control for live tests:</span> a LIVE_TEST settlement can
+          only reach finality when an approver-role member who is <span className="font-semibold">not</span> the
+          settlement creator explicitly approves it on the Shadow console. Creator self-approval is rejected.
+        </p>
+      </div>
+
+      {/* Real database members */}
+      <div>
+        <p className="ops-eyebrow mb-2">Organization members · database users</p>
+        <DataGrid>
+          <table className="w-full min-w-[680px]">
+            <DataGridHead>
+              <DataGridTh>Member</DataGridTh>
+              <DataGridTh>Role</DataGridTh>
+              <DataGridTh>Finality approval</DataGridTh>
+              <DataGridTh>Last sign-in</DataGridTh>
+            </DataGridHead>
+            <DataGridBody>
+              {realMembers.map((member) => (
+                <DataGridRow key={member.email}>
+                  <DataGridTd>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-slate-950">{member.name}</p>
+                      {member.isYou ? <span className="case-chip case-chip--shadow">you</span> : null}
+                      <span className="case-chip border-emerald-200 bg-emerald-50 text-emerald-700">DB user</span>
+                    </div>
+                    <p className="text-xs text-slate-500">{member.email}</p>
+                  </DataGridTd>
+                  <DataGridTd>
+                    <Badge tone={member.role === "OWNER" ? "info" : "neutral"}>{member.role}</Badge>
+                  </DataGridTd>
+                  <DataGridTd>
+                    {member.canApprove ? (
+                      <span className="case-chip case-chip--gold">Can approve finality</span>
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
+                  </DataGridTd>
+                  <DataGridTd className="text-xs text-slate-500">
+                    {member.lastLoginAt ? member.lastLoginAt.toLocaleString() : "Never"}
+                  </DataGridTd>
+                </DataGridRow>
+              ))}
+            </DataGridBody>
+          </table>
+        </DataGrid>
+      </div>
+
+      {/* Role matrix */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {ACCESS_ROLES.map((role) => (
           <Card key={role.role}>
@@ -62,33 +139,39 @@ export default async function TeamPage() {
         ))}
       </div>
 
-      <DataGrid>
-        <table className="w-full min-w-[680px]">
-          <DataGridHead>
-            <DataGridTh>Member</DataGridTh>
-            <DataGridTh>Role</DataGridTh>
-            <DataGridTh>Last active</DataGridTh>
-            <DataGridTh>Status</DataGridTh>
-          </DataGridHead>
-          <DataGridBody>
-            {members.map((member) => (
-              <DataGridRow key={member.email}>
-                <DataGridTd>
-                  <p className="font-medium text-slate-950">{member.name}</p>
-                  <p className="text-xs text-slate-500">{member.email}</p>
-                </DataGridTd>
-                <DataGridTd>
-                  <Badge tone={member.role === "OWNER" ? "info" : "neutral"}>{member.role}</Badge>
-                </DataGridTd>
-                <DataGridTd className="text-xs text-slate-500">{member.lastActive}</DataGridTd>
-                <DataGridTd>
-                  <StatusBadge status={member.status} />
-                </DataGridTd>
-              </DataGridRow>
-            ))}
-          </DataGridBody>
-        </table>
-      </DataGrid>
+      {/* Demo roster — display-only sample data, clearly separated */}
+      <div>
+        <p className="ops-eyebrow mb-2">
+          Demo roster · sample directory <span className="case-chip case-chip--demo ml-1">display only</span>
+        </p>
+        <DataGrid>
+          <table className="w-full min-w-[680px]">
+            <DataGridHead>
+              <DataGridTh>Member</DataGridTh>
+              <DataGridTh>Role</DataGridTh>
+              <DataGridTh>Last active</DataGridTh>
+              <DataGridTh>Status</DataGridTh>
+            </DataGridHead>
+            <DataGridBody>
+              {DEMO_TEAM.map((member) => (
+                <DataGridRow key={member.email}>
+                  <DataGridTd>
+                    <p className="font-medium text-slate-950">{member.name}</p>
+                    <p className="text-xs text-slate-500">{member.email}</p>
+                  </DataGridTd>
+                  <DataGridTd>
+                    <Badge tone="neutral">{member.role}</Badge>
+                  </DataGridTd>
+                  <DataGridTd className="text-xs text-slate-500">{member.lastActive}</DataGridTd>
+                  <DataGridTd>
+                    <StatusBadge status={member.status} />
+                  </DataGridTd>
+                </DataGridRow>
+              ))}
+            </DataGridBody>
+          </table>
+        </DataGrid>
+      </div>
     </div>
   );
 }

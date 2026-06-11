@@ -557,7 +557,24 @@ export default async function SettlementsPage({
                     {formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
                   </DataGridTd>
                   <DataGridTd>
-                    <StatusBadge status={settlement.status} />
+                    <div className="flex flex-col items-start gap-1">
+                      <StatusBadge status={settlement.status} />
+                      <span
+                        className={cn(
+                          "case-chip",
+                          settlementDetail.finality.decision === "ready_to_finalize" && "border-emerald-200 bg-emerald-50 text-emerald-700",
+                          settlementDetail.finality.decision === "needs_review" && "case-chip--gold",
+                          settlementDetail.finality.decision === "not_ready" && "case-chip--demo",
+                        )}
+                        title={settlementDetail.finality.summary}
+                      >
+                        {settlementDetail.finality.decision === "ready_to_finalize"
+                          ? "Finality ready"
+                          : settlementDetail.finality.decision === "needs_review"
+                            ? "Finality review"
+                            : "Finality pending"}
+                      </span>
+                    </div>
                   </DataGridTd>
                   <DataGridTd className="min-w-[240px]">
                     <SettlementLifecycle status={settlement.status} compact />

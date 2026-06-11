@@ -479,6 +479,26 @@ export default async function DashboardPage({
         </div>
       </section>
 
+      {/* Settlement-confidence narrative: completed is a claim, finalized is earned */}
+      <div className="evidence-chain mx-auto max-w-3xl" aria-label="Settlement confidence pipeline">
+        <div className="evidence-chain__pillar">
+          <span className="evidence-chain__label">Provider proof</span>
+          <span className="evidence-chain__state text-slate-600">Evidence captured</span>
+        </div>
+        <div className="evidence-chain__pillar">
+          <span className="evidence-chain__label">Independent recon</span>
+          <span className="evidence-chain__state text-slate-600">Bank / PSP verified</span>
+        </div>
+        <div className="evidence-chain__pillar">
+          <span className="evidence-chain__label">Audit trail</span>
+          <span className="evidence-chain__state text-slate-600">Approval recorded</span>
+        </div>
+        <div className="evidence-chain__pillar">
+          <span className="evidence-chain__label">Finality</span>
+          <span className="evidence-chain__state text-slate-600">Safe to finalize</span>
+        </div>
+      </div>
+
       <div className="overview-below">
         <section className="overview-section">
           <div className="overview-section__head">

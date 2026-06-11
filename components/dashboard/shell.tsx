@@ -22,9 +22,12 @@ export function DashboardShell({
 }) {
   return (
     <div className="app-surface min-h-screen text-slate-950">
+      {/* Global settlement-rail arcs (fixed, behind every screen) */}
+      <div className="app-rails" aria-hidden="true" />
       <SidebarNav organizationName={organizationName} />
       <div className="lg:pl-60">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-[var(--ops-line)] bg-white/75 px-4 backdrop-blur-xl sm:px-6">
+        <header className="relative sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-[var(--ops-line)] bg-white/75 px-4 backdrop-blur-xl sm:px-6">
+          <span className="app-topbar-rail" aria-hidden="true" />
           <div className="flex min-w-0 items-center gap-2.5">
             <MobileNav organizationName={organizationName} />
             <CommandPalette />

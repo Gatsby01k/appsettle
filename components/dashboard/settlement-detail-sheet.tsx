@@ -55,8 +55,23 @@ export function SettlementDetailSheet({
         title={settlement.publicId}
         description={settlement.reference}
       >
-        <div className="mb-3 flex items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           <StatusBadge status={settlement.status} />
+          <span
+            className={
+              settlement.finality.decision === "ready_to_finalize"
+                ? "case-chip border-emerald-200 bg-emerald-50 text-emerald-700"
+                : settlement.finality.decision === "needs_review"
+                  ? "case-chip case-chip--gold"
+                  : "case-chip case-chip--demo"
+            }
+          >
+            {settlement.finality.decision === "ready_to_finalize"
+              ? "Finality ready"
+              : settlement.finality.decision === "needs_review"
+                ? "Finality review"
+                : "Finality pending"}
+          </span>
           <span className="text-xs text-slate-500">{settlement.corridor}</span>
         </div>
 

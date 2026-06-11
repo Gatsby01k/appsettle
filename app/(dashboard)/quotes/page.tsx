@@ -414,6 +414,13 @@ export default async function QuotesPage({
         actions={demoFocus ? <DemoFocusBadge /> : undefined}
       />
 
+      {/* Corridor rail: the institutional INR <-> USDT settlement corridor */}
+      <div className="corridor-rail max-w-xl" aria-hidden="true">
+        <span className="corridor-rail__node">USDT · Stablecoin treasury</span>
+        <span className="corridor-rail__line" />
+        <span className="corridor-rail__node">INR · Bank settlement</span>
+      </div>
+
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {params.success === "created" ? (
         <FlashMessage message="Executable quote generated — it is ACTIVE and ready for settlement creation." />
