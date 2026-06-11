@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   classifyPontisStatus,
   classifyRemitQuicklyStatus,
+  deterministicUuid,
   pontisIdempotencyKeyFor,
   proofFingerprint,
 } from "../providers/outcome";
+
+/** RFC 4122 v5 UUID: version nibble = 5, variant nibble = 8/9/a/b. */
+const UUID_V5_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 describe("outcome classification (uncertainty never fails a settlement)", () => {
   it("explicit success statuses classify as success", () => {
@@ -36,16 +40,27 @@ describe("outcome classification (uncertainty never fails a settlement)", () => 
   });
 });
 
-describe("stable idempotency key", () => {
-  it("is deterministic per settlement — retries reuse the SAME key", () => {
-    const a = pontisIdempotencyKeyFor("SET-9F2A");
-    const b = pontisIdempotencyKeyFor("SET-9F2A");
-    expect(a).toBe(b);
-    expect(a).toContain("SET-9F2A");
+describe("stable idempotency key (valid UUID)", () => {
+  it("generates a VALID RFC 4122 UUID (provider requires UUID format)", () => {
+    expect(pontisIdempotencyKeyFor("SET-9F2A")).toMatch(UUID_V5_PATTERN);
+    expect(pontisIdempotencyKeyFor("SET-9F2A", "status")).toMatch(UUID_V5_PATTERN);
   });
 
-  it("differs across settlements", () => {
+  it("is deterministic per settlement/action — retries reuse the SAME UUID", () => {
+    expect(pontisIdempotencyKeyFor("SET-9F2A")).toBe(pontisIdempotencyKeyFor("SET-9F2A"));
+    expect(pontisIdempotencyKeyFor("SET-9F2A", "payout")).toBe(pontisIdempotencyKeyFor("SET-9F2A", "payout"));
+  });
+
+  it("differs across settlements and across actions", () => {
     expect(pontisIdempotencyKeyFor("SET-A")).not.toBe(pontisIdempotencyKeyFor("SET-B"));
+    expect(pontisIdempotencyKeyFor("SET-A", "payout")).not.toBe(pontisIdempotencyKeyFor("SET-A", "refund"));
+  });
+
+  it("deterministicUuid is name-based and namespace-validated", () => {
+    expect(deterministicUuid("x")).toBe(deterministicUuid("x"));
+    expect(deterministicUuid("x")).not.toBe(deterministicUuid("y"));
+    expect(deterministicUuid("x")).toMatch(UUID_V5_PATTERN);
+    expect(() => deterministicUuid("x", "not-a-uuid")).toThrow(/valid UUID/);
   });
 });
 

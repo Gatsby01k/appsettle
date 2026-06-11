@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 // Pure provider-outcome classification + idempotency helpers (no framework /
 // server-only coupling, so both provider modules and unit tests share them).
 //
@@ -56,13 +58,44 @@ function classifyStatus(status: string | undefined | null): ProviderOutcome {
 }
 
 /**
- * Stable PontisGlobe idempotency key for a settlement payout. Derived from the
- * settlement's public id (never random), so a retry after a timeout reuses the
- * SAME key and the provider deduplicates instead of creating a second payout.
- * RemitQuickly achieves the same via merchantRecognitionId = publicId.
+ * Fixed INRSettle namespace for deterministic (RFC 4122 v5) UUIDs. Changing
+ * this constant would change every derived idempotency key — never change it.
  */
-export function pontisIdempotencyKeyFor(settlementPublicId: string): string {
-  return `inrsettle-payout-${settlementPublicId}`;
+const INRSETTLE_UUID_NAMESPACE = "3f1c6e8a-9b4d-4f2a-8c7e-1d5a2b9e0c43";
+
+/**
+ * Deterministic RFC 4122 version-5 UUID (SHA-1, name-based): the same name
+ * always yields the same UUID; different names yield different UUIDs.
+ */
+export function deterministicUuid(name: string, namespace: string = INRSETTLE_UUID_NAMESPACE): string {
+  const namespaceBytes = Buffer.from(namespace.replaceAll("-", ""), "hex");
+  if (namespaceBytes.length !== 16) {
+    throw new Error("UUID namespace must be a valid UUID.");
+  }
+
+  const hash = crypto
+    .createHash("sha1")
+    .update(Buffer.concat([namespaceBytes, Buffer.from(name, "utf8")]))
+    .digest();
+
+  const bytes = Buffer.from(hash.subarray(0, 16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x50; // version 5
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122 variant
+
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/**
+ * Stable PontisGlobe idempotency key for a settlement action, as a VALID UUID
+ * (the provider requires UUID format). Deterministically derived from
+ * provider + action + settlement public id — never random — so a retry after
+ * a timeout reuses the SAME key and the provider deduplicates instead of
+ * creating a second payout. RemitQuickly achieves the same via
+ * merchantRecognitionId = publicId.
+ */
+export function pontisIdempotencyKeyFor(settlementPublicId: string, action: string = "payout"): string {
+  return deterministicUuid(`pontisglobe:${action}:${settlementPublicId}`);
 }
 
 export type ProofFingerprintInput = {
