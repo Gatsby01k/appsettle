@@ -394,30 +394,6 @@ export default async function QuotesPage({
         </div>
       </section>
 
-      {/* 2 ── Corridor visualizer (page anchor) ──────────────────────────── */}
-      <section className="corridor-viz ov-reveal ov-reveal-1" aria-label="Settlement corridor">
-        <div className="corridor-viz__station corridor-viz__station--source">
-          <span className="corridor-viz__label">Source</span>
-          <span className="corridor-viz__name">USDT Treasury</span>
-          <span className="corridor-viz__hint">Stablecoin float · Fireblocks vault</span>
-        </div>
-        <span className="corridor-viz__line corridor-viz__line--in" aria-hidden="true" />
-        <div className="corridor-viz__station corridor-viz__station--lock">
-          <span className="corridor-viz__medal" aria-hidden="true">
-            <Lock className="h-3.5 w-3.5" />
-          </span>
-          <span className="corridor-viz__label">Terms</span>
-          <span className="corridor-viz__name">Quote Lock</span>
-          <span className="corridor-viz__hint">Rate · fee · window fixed 15 min</span>
-        </div>
-        <span className="corridor-viz__line corridor-viz__line--out" aria-hidden="true" />
-        <div className="corridor-viz__station corridor-viz__station--target">
-          <span className="corridor-viz__label">Destination</span>
-          <span className="corridor-viz__name">INR Settlement</span>
-          <span className="corridor-viz__hint">Bank rail via external provider</span>
-        </div>
-      </section>
-
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {params.success === "created" ? (
         <FlashMessage message="Executable quote generated — it is ACTIVE and ready for settlement creation." />
@@ -426,32 +402,43 @@ export default async function QuotesPage({
         <FlashMessage message="Replacement quote generated — it is ACTIVE and ready for settlement." />
       ) : null}
 
-      <div id="quote-ticket" className="quote-ticket ops-panel ops-panel-accent ov-reveal ov-reveal-2 scroll-mt-4 overflow-hidden">
-        <div className="flex flex-col gap-2 border-b border-[var(--ops-line-soft)] px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+      <div id="quote-ticket" className="quote-terminal ov-reveal ov-reveal-1 scroll-mt-4">
+        <div className="quote-terminal__head">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Quote ticket</p>
-            <p className="truncate text-xs text-slate-500">
-              Configure execution input · promote to{" "}
-              <Link href="/settlements" className="font-medium text-brand-emerald-ink hover:underline">
-                Settlements
-              </Link>{" "}
-              when terms are locked
-            </p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Quote terminal</p>
+            <div className="corridor-inline mt-1.5" aria-label="Settlement corridor">
+              <span className="corridor-inline__node">
+                <span className="corridor-inline__dot corridor-inline__dot--cyan" aria-hidden="true" />
+                USDT Treasury
+              </span>
+              <span className="corridor-inline__seg" aria-hidden="true" />
+              <span className="corridor-inline__node">
+                <span className="corridor-inline__dot corridor-inline__dot--gold" aria-hidden="true" />
+                Quote Lock
+              </span>
+              <span className="corridor-inline__seg corridor-inline__seg--out" aria-hidden="true" />
+              <span className="corridor-inline__node">
+                <span className="corridor-inline__dot corridor-inline__dot--emerald" aria-hidden="true" />
+                INR Settlement
+              </span>
+            </div>
           </div>
           <ExecutionPathStrip activeStep={previewStep} />
         </div>
 
-        <div className="grid lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="quote-ticket-form p-3.5 sm:p-4">
-            <div className="mb-3 flex items-center gap-2 rounded-lg border border-brand-emerald/15 bg-brand-emerald/[0.06] px-2.5 py-2">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">Execution lane</span>
-              <span className="text-sm font-semibold text-brand-emerald-ink">USDT → INR</span>
+            <div className="mb-2.5 flex items-center gap-2 rounded-lg border border-brand-emerald/15 bg-brand-emerald/[0.06] px-2.5 py-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-[0.09em] text-brand-emerald-ink">Quote builder</span>
+              <span className="text-xs font-semibold text-slate-700">USDT → INR draft</span>
               <span className="ml-auto case-chip case-chip--demo">sandbox</span>
             </div>
 
-            <p className="ticket-section-title mb-2">Trade parameters</p>
-
             <form action={submitQuote} className="quote-generate-form grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <p className="qb-module sm:col-span-2 lg:col-span-3">
+                <span className="qb-module__num">1</span>
+                Corridor &amp; amount
+              </p>
               <div className="ticket-param">
                 <Field label="Corridor" hint="Conversion direction.">
                   <FormSelect
@@ -482,6 +469,10 @@ export default async function QuotesPage({
                   />
                 </Field>
               </div>
+              <p className="qb-module sm:col-span-2 lg:col-span-3">
+                <span className="qb-module__num">2</span>
+                Execution terms
+              </p>
               <div className="ticket-param">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-400">Execution lane</p>
                 <p className="mt-1.5 text-xs font-semibold text-slate-700">External provider rail</p>
@@ -539,8 +530,10 @@ export default async function QuotesPage({
       <div className="ops-panel ov-reveal ov-reveal-3 overflow-hidden">
         <div className="flex flex-col gap-2 border-b border-[var(--ops-line-soft)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Quote inventory</p>
-            <p className="truncate text-xs text-slate-400">Executable tickets ready for settlement creation</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Quote inventory</p>
+            <p className="truncate text-xs text-slate-400">
+              Locked executable tickets — promote to a settlement before expiry
+            </p>
           </div>
           <TabLinks
             basePath="/quotes"

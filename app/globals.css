@@ -4466,3 +4466,126 @@ details[open] > .reconciliation-details-content {
   letter-spacing: -0.01em;
   color: var(--brand-ink);
 }
+
+/* =====================================================================
+   Quotes v3 — cohesive quote terminal
+   ===================================================================== */
+
+/* Terminal frame: one surface for builder + lock panel */
+.quote-terminal {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.1rem;
+  border: 1px solid var(--ops-line);
+  background: #ffffff;
+  box-shadow: var(--ops-shadow-md);
+}
+.quote-terminal::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2.5px;
+  z-index: 2;
+  background: linear-gradient(90deg, var(--brand-aqua), var(--brand-emerald) 45%, var(--brand-amber) 80%, var(--brand-gold));
+}
+.quote-terminal__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--ops-line-soft);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(255, 255, 255, 0.4));
+  padding: 0.75rem 1rem;
+}
+
+/* Compact inline corridor rail (lives in the terminal head) */
+.corridor-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+.corridor-inline__node {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+  font-size: 0.66rem;
+  font-weight: 650;
+  color: rgba(7, 17, 31, 0.6);
+}
+.corridor-inline__dot { height: 0.45rem; width: 0.45rem; border-radius: 999px; }
+.corridor-inline__dot--cyan { background: var(--brand-aqua); box-shadow: 0 0 7px rgba(11, 180, 196, 0.55); }
+.corridor-inline__dot--gold { background: var(--brand-gold); box-shadow: 0 0 7px rgba(212, 160, 23, 0.55); }
+.corridor-inline__dot--emerald { background: var(--brand-emerald); box-shadow: 0 0 7px rgba(0, 199, 157, 0.55); }
+.corridor-inline__seg {
+  position: relative;
+  width: clamp(1.2rem, 3vw, 2.6rem);
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(11, 180, 196, 0.45), rgba(212, 160, 23, 0.45));
+  overflow: hidden;
+}
+.corridor-inline__seg--out { background: linear-gradient(90deg, rgba(212, 160, 23, 0.45), rgba(0, 199, 157, 0.45)); }
+.corridor-inline__seg::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0.6rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  mix-blend-mode: overlay;
+  animation: corridor-pulse 2.8s var(--ease) infinite;
+}
+
+/* Builder modules */
+.qb-module {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  font-size: 0.6rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(7, 17, 31, 0.4);
+}
+.qb-module__num {
+  display: inline-grid;
+  height: 1.05rem;
+  width: 1.05rem;
+  place-items: center;
+  border-radius: 0.35rem;
+  font-size: 0.55rem;
+  font-weight: 800;
+  color: #086d77;
+  background: rgba(11, 180, 196, 0.1);
+  box-shadow: 0 0 0 1px rgba(11, 180, 196, 0.25) inset;
+}
+.qb-module::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: linear-gradient(90deg, var(--ops-line-strong), transparent);
+}
+
+/* Lock panel: bigger hero payout */
+.qlock__payout { font-size: 1.8rem; }
+
+/* Inventory: executable ticket rows */
+.quote-row-active > td {
+  background: linear-gradient(180deg, rgba(240, 253, 249, 0.55), rgba(255, 255, 255, 0));
+}
+.quote-row-active > td:first-child { box-shadow: inset 3px 0 0 var(--brand-emerald); }
+.quote-row-active {
+  transition: box-shadow 0.25s var(--ease);
+}
+.quote-row-active:hover > td {
+  background: linear-gradient(180deg, rgba(240, 253, 249, 0.85), rgba(255, 255, 255, 0.2));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .corridor-inline__seg::after { animation: none; opacity: 0; }
+}
