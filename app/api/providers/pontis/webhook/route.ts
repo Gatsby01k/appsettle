@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AuditActorType } from "@prisma/client";
+import { writeAuditLog } from "@/lib/audit";
 import { isPontisConfigured, verifyWebhookSignature } from "@/lib/providers/pontis/client";
 import { webhookPayloadSchema } from "@/lib/providers/pontis/schema";
 import { resolvePayoutByTransaction } from "@/lib/providers/pontis/settlement";
@@ -78,6 +80,25 @@ export async function POST(request: NextRequest) {
     resolution = await resolvePayoutByTransaction(transaction_id, status, status_message ?? null);
   } catch (error) {
     console.error("[pontis.webhook] failed to resolve settlement:", error);
+    // Audit the miss so it is visible to operators (safe message only — no
+    // credentials, no raw payload). Never throw: keep the 2xx ACK and rely on
+    // the status-poll fallback to recover.
+    try {
+      await writeAuditLog({
+        action: "webhook.resolution_failed",
+        resourceType: "provider",
+        resourceId: "PontisGlobe",
+        actorType: AuditActorType.SYSTEM,
+        after: {
+          provider: "PontisGlobe",
+          transactionId: transaction_id,
+          status,
+          message: error instanceof Error ? error.message : "resolution failed",
+        },
+      });
+    } catch {
+      // Best-effort audit; the console error above remains the last resort.
+    }
   }
 
   return NextResponse.json({
