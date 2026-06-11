@@ -174,34 +174,26 @@ const EXECUTION_PATH = [
 
 function ExecutionPathStrip({ activeStep }: { activeStep: number }) {
   return (
-    <ol className="quote-execution-path flex flex-wrap items-center gap-1">
+    <ol className="qpath" aria-label="Execution flow">
       {EXECUTION_PATH.map((step, index) => {
         const isActive = index === activeStep;
         const isDone = index < activeStep;
-
         return (
-          <li key={step} className="flex items-center gap-1">
+          <li key={step} className="contents">
+            {index > 0 ? (
+              <span aria-hidden="true" className={cn("qpath__link", isDone || isActive ? "qpath__link--done" : "")} />
+            ) : null}
             <span
               className={cn(
-                "quote-execution-step rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] transition-all duration-300",
-                isActive && "quote-execution-step-active bg-brand-emerald/[0.14] text-brand-emerald-ink ring-1 ring-brand-emerald/20",
-                isDone && "quote-execution-step-done bg-brand-emerald/[0.08] text-brand-emerald-ink/80",
-                !isActive && !isDone && "border border-[var(--ops-line)] bg-white text-slate-400",
+                "qpath__step",
+                isActive && "qpath__step--active",
+                isDone && "qpath__step--done",
               )}
+              aria-current={isActive ? "step" : undefined}
             >
+              <span className="qpath__num">{isDone ? "✓" : index + 1}</span>
               {step}
             </span>
-            {index < EXECUTION_PATH.length - 1 ? (
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "quote-execution-connector text-[10px] transition-colors duration-300",
-                  index < activeStep ? "quote-execution-connector-done text-brand-emerald/55" : "text-slate-300",
-                )}
-              >
-                →
-              </span>
-            ) : null}
           </li>
         );
       })}
@@ -223,89 +215,65 @@ type PreviewQuote = {
 
 function QuotePreviewPanel({ quote }: { quote?: PreviewQuote | null }) {
   const isLocked = Boolean(quote);
+  const payout = quote ? formatCurrencyFull(String(quote.targetAmount), quote.targetCurrency) : null;
   const rows = quote
     ? [
         { label: "Corridor", value: corridorLabel(quote.corridor) },
-        {
-          label: "Source amount",
-          value: formatCurrencyFull(String(quote.sourceAmount), quote.sourceCurrency),
-        },
-        {
-          label: "Destination amount",
-          value: formatCurrencyFull(String(quote.targetAmount), quote.targetCurrency),
-        },
+        { label: "Source amount", value: formatCurrencyFull(String(quote.sourceAmount), quote.sourceCurrency) },
         { label: "Rate", value: formatQuoteRate(String(quote.rate), quote.corridor) },
         { label: "Fee", value: formatCurrencyFull(String(quote.feeAmount), quote.sourceCurrency) },
+        { label: "Window", value: settlementWindowLabel(quote.settlementWindow) },
         { label: "Valid until", value: formatDateTime(quote.expiresAt) },
-        { label: "Settlement window", value: settlementWindowLabel(quote.settlementWindow) },
       ]
     : [
-        { label: "Corridor", value: "USDT → INR", estimated: true },
-        { label: "Source amount", value: "—", estimated: true },
-        { label: "Indicative payout", value: "—", estimated: true },
-        { label: "Rate", value: "—", estimated: true },
-        { label: "Fee", value: "—", estimated: true },
-        { label: "Validity", value: "15 min", estimated: true },
+        { label: "Corridor", value: "USDT → INR" },
+        { label: "Source amount", value: "Awaiting input" },
+        { label: "Rate", value: "Locks on generation" },
+        { label: "Fee", value: "45 bps indicative" },
+        { label: "Window", value: "Instant / same day" },
+        { label: "Valid until", value: "15:00 from lock" },
       ];
 
   return (
-    <div
-      className={cn(
-        "quote-preview-panel flex flex-col border-t border-[var(--ops-line-soft)] bg-gradient-to-b from-[#f4fbf8]/80 to-slate-50/40 p-3 lg:border-l lg:border-t-0",
-        isLocked && "quote-preview-panel-locked",
-      )}
-    >
-      <div className="mb-2.5 flex items-start justify-between gap-2">
+    <div className="qlock p-4 lg:rounded-r-none">
+      <div className="relative flex items-start justify-between gap-2">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-            {isLocked ? "Locked quote terms" : "Estimated preview"}
-          </p>
-          <p className="mt-0.5 text-xs text-slate-500">
-            {isLocked ? "Executable terms ready for settlement" : "Final terms lock after generation"}
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-white/40">Quote lock preview</p>
+          <p className="mt-0.5 text-[11px] text-white/50">
+            {isLocked ? "Executable terms ready for settlement" : "Terminal preview — terms not yet locked"}
           </p>
         </div>
-        {isLocked ? (
-          <span className="quote-preview-locked shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">
-            Locked
-          </span>
-        ) : (
-          <span className="shrink-0 rounded-full border border-[var(--ops-line)] bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
-            Indicative
-          </span>
-        )}
+        <span className={cn("qlock__chip shrink-0", isLocked ? "qlock__chip--locked" : "qlock__chip--indicative")}>
+          {isLocked ? "● Locked" : "Indicative"}
+        </span>
       </div>
 
-      <div
-        className={cn(
-          "quote-preview-surface ops-grid-faint rounded-xl border bg-white/90 p-3 transition-colors",
-          isLocked
-            ? "border-brand-emerald/25 shadow-[inset_0_0_0_1px_rgba(0,199,157,0.08)]"
-            : "border-[var(--ops-line-soft)]",
-        )}
-      >
-        <dl className="space-y-2">
-          {rows.map((row) => (
-            <div key={row.label} className="flex items-center justify-between gap-3 text-xs">
-              <dt className="text-slate-500">{row.label}</dt>
-              <dd
-                className={cn(
-                  "font-medium tabular-nums text-right",
-                  "estimated" in row && row.estimated ? "text-slate-400" : "text-slate-800",
-                )}
-              >
-                {row.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-
-      <div className="mt-2.5 rounded-lg border border-[var(--ops-line-soft)] bg-white/60 px-2.5 py-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">Settlement path</p>
-        <p className="mt-0.5 text-[11px] font-medium text-slate-600">
-          Quote → Settlement → Execute → Reconcile
+      <div className="relative mt-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-white/35">INR payout</p>
+        <p className={cn("qlock__payout mt-1", !payout && "qlock__payout--empty")}>
+          {payout ?? "₹ —"}
         </p>
       </div>
+
+      <div className="relative mt-3 flex items-center justify-between gap-2">
+        <span className="qlock__timer">
+          <span className="qlock__timer-dot" aria-hidden="true" />
+          {isLocked && quote ? `Valid · ${formatExpiryCountdown(quote.expiresAt) ?? "expired"}` : "Validity · 15:00 on lock"}
+        </span>
+      </div>
+
+      <dl className="relative mt-3">
+        {rows.map((row) => (
+          <div key={row.label} className="qlock__row">
+            <dt>{row.label}</dt>
+            <dd className={cn(!isLocked && "is-empty")}>{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <p className="qlock__note relative mt-auto pt-2.5">
+        Final terms lock after quote generation. A settlement can only be created from a locked, unexpired quote.
+      </p>
     </div>
   );
 }
@@ -420,6 +388,9 @@ export default async function QuotesPage({
         </div>
         <span className="corridor-viz__line corridor-viz__line--in" aria-hidden="true" />
         <div className="corridor-viz__station corridor-viz__station--lock">
+          <span className="corridor-viz__medal" aria-hidden="true">
+            <Lock className="h-3.5 w-3.5" />
+          </span>
           <span className="corridor-viz__label">Terms</span>
           <span className="corridor-viz__name">Quote Lock</span>
           <span className="corridor-viz__hint">Rate · fee · window fixed 15 min</span>
@@ -456,45 +427,63 @@ export default async function QuotesPage({
         </div>
 
         <div className="grid lg:grid-cols-[minmax(0,1fr)_280px]">
-          <div className="quote-ticket-form p-3">
+          <div className="quote-ticket-form p-3.5 sm:p-4">
             <div className="mb-3 flex items-center gap-2 rounded-lg border border-brand-emerald/15 bg-brand-emerald/[0.06] px-2.5 py-2">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">Corridor</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500">Execution lane</span>
               <span className="text-sm font-semibold text-brand-emerald-ink">USDT → INR</span>
-              <span className="ml-auto text-[10px] text-slate-400">Primary execution lane</span>
+              <span className="ml-auto case-chip case-chip--demo">sandbox</span>
             </div>
 
-            <form action={submitQuote} className="quote-generate-form grid gap-2.5 sm:grid-cols-2">
-              <Field label="Corridor" hint="Conversion direction.">
-                <FormSelect
-                  name="corridor"
-                  defaultValue="USDT_INR"
-                  options={[
-                    { value: "USDT_INR", label: "USDT → INR" },
-                    { value: "INR_USDT", label: "INR → USDT" },
-                  ]}
-                />
-              </Field>
-              <Field label="Source amount" htmlFor="sourceAmount" hint="Amount in source currency." required>
-                <Input id="sourceAmount" name="sourceAmount" type="number" min="1" step="0.01" placeholder="10000" required />
-              </Field>
-              <Field label="Settlement window" hint="Target settlement speed.">
-                <FormSelect
-                  name="settlementWindow"
-                  defaultValue="instant"
-                  options={[
-                    { value: "instant", label: "Instant" },
-                    { value: "same_day", label: "Same day" },
-                    { value: "next_day", label: "Next day" },
-                  ]}
-                />
-              </Field>
-              <div className="flex items-end sm:col-span-2">
+            <p className="ticket-section-title mb-2">Trade parameters</p>
+
+            <form action={submitQuote} className="quote-generate-form grid gap-2 sm:grid-cols-2">
+              <div className="ticket-param">
+                <Field label="Corridor" hint="Conversion direction.">
+                  <FormSelect
+                    name="corridor"
+                    defaultValue="USDT_INR"
+                    options={[
+                      { value: "USDT_INR", label: "USDT → INR" },
+                      { value: "INR_USDT", label: "INR → USDT" },
+                    ]}
+                  />
+                </Field>
+              </div>
+              <div className="ticket-param">
+                <Field label="Source amount" htmlFor="sourceAmount" hint="Amount in source currency." required>
+                  <Input id="sourceAmount" name="sourceAmount" type="number" min="1" step="0.01" placeholder="10000" required />
+                </Field>
+              </div>
+              <div className="ticket-param">
+                <Field label="Settlement window" hint="Target settlement speed.">
+                  <FormSelect
+                    name="settlementWindow"
+                    defaultValue="instant"
+                    options={[
+                      { value: "instant", label: "Instant" },
+                      { value: "same_day", label: "Same day" },
+                      { value: "next_day", label: "Next day" },
+                    ]}
+                  />
+                </Field>
+              </div>
+              <div className="ticket-param flex flex-col justify-between">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-400">Rate basis</p>
+                <p className="text-xs text-slate-500">
+                  Treasury reference rate · fee <span className="font-semibold text-slate-700">45 bps</span> ·
+                  validity <span className="font-semibold text-slate-700">15 min</span>
+                </p>
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3 sm:col-span-2">
+                <p className="text-[11px] leading-snug text-slate-400">
+                  Generating locks rate, fee and window — the ticket becomes executable for settlement creation.
+                </p>
                 <SubmitButton
                   type="submit"
                   variant="primary"
                   size="sm"
                   pendingText="Locking quote..."
-                  className="quote-ticket-cta w-full sm:w-auto"
+                  className="quote-ticket-cta shrink-0"
                 >
                   Generate executable quote
                 </SubmitButton>
@@ -824,6 +813,17 @@ export default async function QuotesPage({
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold tracking-tight text-slate-900">{emptyTitle}</p>
               <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{emptyDescription}</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {acceptedCount > 0 ? (
+                  <span className="case-chip case-chip--shadow">{acceptedCount} consumed by settlements</span>
+                ) : null}
+                {expiredCount > 0 ? (
+                  <span className="case-chip case-chip--gold">{expiredCount} expired — refresh to re-arm</span>
+                ) : null}
+                {acceptedCount === 0 && expiredCount === 0 ? (
+                  <span className="case-chip case-chip--demo">No quotes generated yet</span>
+                ) : null}
+              </div>
             </div>
             <Link
               href={tab === "active" ? "#quote-ticket" : "/quotes?tab=active"}

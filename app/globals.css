@@ -3929,3 +3929,243 @@ details[open] > .reconciliation-details-content {
   .corridor-viz__station { transition: none; }
   .corridor-viz__station:hover { transform: none; }
 }
+
+/* =====================================================================
+   Quotes v2.1 — execution terminal polish
+   ===================================================================== */
+
+/* Ticket: institutional execution ticket */
+.quote-ticket {
+  position: relative;
+  transition: box-shadow 0.3s var(--ease);
+}
+.quote-ticket:hover { box-shadow: var(--ops-shadow-md); }
+.quote-ticket::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  z-index: 1;
+  background: linear-gradient(180deg, var(--brand-aqua), var(--brand-emerald) 55%, var(--brand-amber));
+}
+.ticket-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(7, 17, 31, 0.42);
+}
+.ticket-section-title::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: linear-gradient(90deg, var(--ops-line-strong), transparent);
+}
+.ticket-param {
+  border-radius: 0.65rem;
+  border: 1px solid var(--ops-line-soft);
+  background: rgba(248, 250, 252, 0.6);
+  padding: 0.55rem 0.65rem 0.65rem;
+  transition: border-color 0.2s var(--ease), background-color 0.2s var(--ease);
+}
+.ticket-param:focus-within {
+  border-color: rgba(0, 199, 157, 0.35);
+  background: #ffffff;
+}
+
+/* Quote Lock Preview: navy execution terminal */
+.qlock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    radial-gradient(420px 220px at 100% 0%, rgba(11, 180, 196, 0.14), transparent 60%),
+    radial-gradient(360px 240px at 0% 100%, rgba(0, 199, 157, 0.1), transparent 60%),
+    linear-gradient(180deg, #0a1626, #07111f);
+  color: rgba(255, 255, 255, 0.85);
+}
+.qlock::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1.4px);
+  background-size: 20px 20px;
+  -webkit-mask-image: linear-gradient(180deg, #000, transparent 75%);
+  mask-image: linear-gradient(180deg, #000, transparent 75%);
+}
+.qlock__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.qlock__chip--indicative {
+  background: rgba(242, 173, 35, 0.14);
+  color: #f6c45e;
+  box-shadow: 0 0 0 1px rgba(242, 173, 35, 0.3) inset;
+}
+.qlock__chip--locked {
+  background: rgba(0, 199, 157, 0.14);
+  color: #3ce0bb;
+  box-shadow: 0 0 0 1px rgba(0, 199, 157, 0.35) inset, 0 0 14px rgba(0, 199, 157, 0.2);
+}
+.qlock__payout {
+  font-size: 1.45rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+  transition: opacity 0.35s var(--ease);
+}
+.qlock__payout--empty { color: rgba(255, 255, 255, 0.28); }
+.qlock__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+  font-size: 0.72rem;
+}
+.qlock__row:last-child { border-bottom: none; }
+.qlock__row dt { color: rgba(255, 255, 255, 0.45); }
+.qlock__row dd {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.88);
+  transition: color 0.3s var(--ease), opacity 0.3s var(--ease);
+}
+.qlock__row dd.is-empty { color: rgba(255, 255, 255, 0.28); font-weight: 500; }
+.qlock__timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 0.55rem;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: #7fd9e4;
+  background: rgba(11, 180, 196, 0.1);
+  box-shadow: 0 0 0 1px rgba(11, 180, 196, 0.28) inset;
+}
+.qlock__timer-dot {
+  height: 0.4rem;
+  width: 0.4rem;
+  border-radius: 999px;
+  background: var(--brand-aqua);
+  box-shadow: 0 0 7px rgba(11, 180, 196, 0.8);
+}
+.qlock__note {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.66rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Corridor visualizer depth+ */
+.corridor-viz__station {
+  box-shadow: var(--ops-shadow-sm);
+}
+.corridor-viz__station--lock {
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+  box-shadow:
+    var(--ops-shadow-sm),
+    0 0 0 1px rgba(212, 160, 23, 0.12),
+    0 10px 30px rgba(212, 160, 23, 0.12);
+}
+.corridor-viz__medal {
+  display: inline-grid;
+  height: 1.6rem;
+  width: 1.6rem;
+  place-items: center;
+  margin-bottom: 0.3rem;
+  border-radius: 999px;
+  color: #8a6510;
+  background: linear-gradient(160deg, #fff7e6, #ffffff);
+  box-shadow: 0 0 0 1px rgba(212, 160, 23, 0.4) inset, 0 0 14px rgba(212, 160, 23, 0.25);
+}
+.corridor-viz__line { height: 3px; }
+.corridor-viz__line::before {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+  border-radius: 999px;
+  filter: blur(4px);
+  background: inherit;
+  opacity: 0.5;
+}
+
+/* Quote lifecycle: premium mini pipeline */
+.qpath {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+}
+.qpath__step {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--ops-line-soft);
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(7, 17, 31, 0.35);
+  animation: check-item-enter 0.35s var(--ease) both;
+}
+.qpath__step:nth-child(3) { animation-delay: 0.05s; }
+.qpath__step:nth-child(5) { animation-delay: 0.1s; }
+.qpath__step:nth-child(7) { animation-delay: 0.15s; }
+.qpath__step:nth-child(9) { animation-delay: 0.2s; }
+.qpath__num {
+  display: inline-grid;
+  height: 0.95rem;
+  width: 0.95rem;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 0.55rem;
+  font-weight: 800;
+  background: rgba(7, 17, 31, 0.06);
+  color: rgba(7, 17, 31, 0.35);
+}
+.qpath__step--active {
+  border-color: rgba(0, 199, 157, 0.35);
+  background: linear-gradient(180deg, #f0fdf9, #ffffff);
+  color: var(--brand-emerald-ink);
+  box-shadow: 0 0 14px rgba(0, 199, 157, 0.16);
+}
+.qpath__step--active .qpath__num { background: rgba(0, 199, 157, 0.16); color: var(--brand-emerald-ink); }
+.qpath__step--done {
+  border-color: rgba(0, 199, 157, 0.2);
+  color: rgba(8, 127, 105, 0.75);
+}
+.qpath__step--done .qpath__num { background: rgba(0, 199, 157, 0.12); color: var(--brand-emerald-ink); }
+.qpath__link {
+  width: 0.8rem;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--ops-line-strong);
+}
+.qpath__link--done { background: rgba(0, 199, 157, 0.45); }
+
+@media (prefers-reduced-motion: reduce) {
+  .quote-ticket, .ticket-param, .qlock__payout, .qlock__row dd { transition: none; }
+  .qpath__step { animation: none; }
+}
