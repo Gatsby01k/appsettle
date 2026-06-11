@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { ArrowRight, FileText, Landmark, Plus, ShieldCheck } from "lucide-react";
+import { Activity, ArrowRight, CheckCircle2, FileText, Landmark, Plus, Scale, ShieldAlert, ShieldCheck } from "lucide-react";
 import { SettlementStatus } from "@prisma/client";
 import { requireSession } from "@/lib/auth";
 import { autoMatchReconciliation } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 import { assessFinality } from "@/lib/finality";
-import { buildFinalityInput, hasAuditApproval, latestProofOf } from "@/lib/finality-input";
+import { buildFinalityInput, hasAuditApproval } from "@/lib/finality-input";
 import { isPontisConfigured } from "@/lib/providers/pontis/client";
 import { isPontisGatewayConfigured } from "@/lib/providers/pontis/gateway";
 import { isRemitQuicklyConfigured } from "@/lib/providers/remitquickly/client";
@@ -351,8 +351,8 @@ export default async function DashboardPage({
   return (
     <div className="space-y-5">
       {/* 1 ── Executive command hero ─────────────────────────────────────── */}
-      <section className="conf-hero p-5 sm:p-7">
-        <div className="grid gap-6 lg:grid-cols-[1.25fr_1fr] lg:items-center">
+      <section className="conf-hero ov-reveal p-5 sm:p-8">
+        <div className="relative grid gap-8 lg:grid-cols-[1.25fr_1fr] lg:items-center">
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="overview-live-badge inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-emerald-700">
@@ -366,7 +366,7 @@ export default async function DashboardPage({
               {demoFocus ? <DemoFocusBadge /> : null}
             </div>
 
-            <h1 className="conf-hero__headline mt-4">
+            <h1 className="conf-hero__headline mt-5">
               Payment completed <span className="conf-hero__neq">≠</span> settlement finalized.
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-500">
@@ -374,7 +374,7 @@ export default async function DashboardPage({
               reconciliation and the audit trail must agree before finality.
             </p>
 
-            <div className="mt-5 flex flex-wrap items-center gap-2">
+            <div className="mt-6 flex flex-wrap items-center gap-2.5">
               <Button asChild variant="primary" size="sm">
                 <Link href={`/quotes${demoQuery}`} className="inline-flex items-center gap-1.5">
                   <Plus className="h-3.5 w-3.5" />
@@ -399,7 +399,7 @@ export default async function DashboardPage({
           </div>
 
           {/* Latest settlement proof case panel */}
-          <div className="conf-hero__proof p-4">
+          <div className="conf-hero__proof p-4 sm:p-5">
             {latestProof ? (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -458,7 +458,7 @@ export default async function DashboardPage({
       </section>
 
       {/* 2 ── Settlement confidence pipeline (main anchor) ───────────────── */}
-      <section aria-label="Settlement confidence pipeline">
+      <section aria-label="Settlement confidence pipeline" className="ov-reveal ov-reveal-1">
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="ops-eyebrow">Settlement confidence pipeline</p>
           <p className="text-[11px] text-slate-400">
@@ -468,6 +468,9 @@ export default async function DashboardPage({
         <div className="conf-pipeline">
           {pipeline.map((step, index) => (
             <div key={step.name} className={cn("conf-step", `conf-step--${step.state}`)}>
+              <span className="conf-step__dot" aria-hidden="true">
+                {step.state === "ok" ? "✓" : step.state === "blocked" ? "✕" : "•"}
+              </span>
               <p className="conf-step__index">STEP {index + 1}</p>
               <p className="conf-step__name">{step.name}</p>
               <p className="conf-step__state">{STEP_STATE_LABEL[step.state]}</p>
@@ -477,7 +480,7 @@ export default async function DashboardPage({
       </section>
 
       {/* 3+4 ── Pilot snapshot + operations health ───────────────────────── */}
-      <section className="grid gap-4 lg:grid-cols-[1fr_1.6fr]">
+      <section className="ov-reveal ov-reveal-2 grid gap-4 lg:grid-cols-[1fr_1.6fr]">
         <div className="ops-panel p-4">
           <div className="flex items-center justify-between gap-2">
             <p className="ops-eyebrow">Live pilot readiness</p>
@@ -508,69 +511,123 @@ export default async function DashboardPage({
         <div>
           <p className="ops-eyebrow mb-2">Operations health</p>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            <MetricCard label="Completed" value={completedCount} hint="Settled or reconciled" tone="success" />
+            <MetricCard variant="mission" icon={CheckCircle2} label="Completed" value={completedCount} hint="Settled or reconciled" tone="success" />
             <MetricCard
+              variant="mission"
+              icon={Scale}
               label="Auto-reconciled"
               value={autoReconciledRate !== null ? `${autoReconciledRate}%` : "—"}
-              hint="Of completed settlements"
+              hint={autoReconciledRate !== null && autoReconciledRate >= 80 ? "Healthy match rate" : "Of completed settlements"}
               tone="info"
             />
             <MetricCard
+              variant="mission"
+              icon={ShieldAlert}
               label="Exceptions"
               value={reconExceptions}
-              hint="Operations queue"
-              tone={reconExceptions ? "danger" : "neutral"}
+              hint={reconExceptions ? "Operator action required" : "Queue clear"}
+              tone={reconExceptions ? "danger" : "success"}
             />
-            <MetricCard label="In flight" value={inFlightCount} hint="Approved or executing" tone="info" />
+            <MetricCard variant="mission" icon={Activity} label="In flight" value={inFlightCount} hint="Approved or executing" tone="info" />
             <MetricCard
+              variant="mission"
+              icon={ShieldCheck}
               label="Needs review"
               value={settledAwaitingRecon}
-              hint="Settled, not yet corroborated"
-              tone={settledAwaitingRecon ? "warning" : "neutral"}
+              hint={settledAwaitingRecon ? "Settled, not yet corroborated" : "All completed cases corroborated"}
+              tone={settledAwaitingRecon ? "warning" : "success"}
             />
-            <MetricCard label="Reports generated" value={reportsGenerated} hint="Executive settlement reports" />
+            <MetricCard variant="mission" icon={FileText} label="Reports generated" value={reportsGenerated} hint="Executive settlement reports" />
           </div>
         </div>
       </section>
 
-      {/* 5 ── Risk & exceptions ──────────────────────────────────────────── */}
-      <section className="ops-panel p-4">
+      {/* 5 ── Risk & exceptions health board ───────────────────────────── */}
+      <section className="ops-panel ov-reveal ov-reveal-3 p-4">
         <div className="flex items-center justify-between gap-2">
           <p className="ops-eyebrow">Risk &amp; exceptions</p>
           <span className={cn("case-chip", riskItems.length ? "case-chip--gold" : "border-emerald-200 bg-emerald-50 text-emerald-700")}>
             {riskItems.length ? `${riskItems.length} open` : "All clear"}
           </span>
         </div>
-        {riskItems.length ? (
-          <div className="mt-2 grid gap-2 md:grid-cols-2">
-            {riskItems.map((item) => (
+        <div className="mt-2.5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {[
+            {
+              key: "mismatches",
+              title: "Reconciliation mismatches",
+              count: reconExceptions,
+              okText: "No exceptions — evidence agrees",
+              alertText: "Independent evidence contradicts a settlement",
+              href: `/reconciliation?status=EXCEPTION${demoFocus ? "&demo=1" : ""}`,
+              severity: "high" as const,
+            },
+            {
+              key: "uncorroborated",
+              title: "Unreconciled settlements",
+              count: settledAwaitingRecon,
+              okText: "Every completed case is corroborated",
+              alertText: "Provider claims completion — awaiting bank/PSP record",
+              href: `/settlements?status=SETTLED${demoFocus ? "&demo=1" : ""}`,
+              severity: "medium" as const,
+            },
+            {
+              key: "approvals",
+              title: "Blocked finality (approvals)",
+              count: pendingApprovals,
+              okText: "No settlements waiting on approval",
+              alertText: "Approval is required audit evidence for finality",
+              href: `/settlements?status=REQUESTED${demoFocus ? "&demo=1" : ""}`,
+              severity: "medium" as const,
+            },
+            {
+              key: "quotes",
+              title: "Expired quotes",
+              count: expiredQuotes,
+              okText: "Quote book is fresh",
+              alertText: "Refresh or archive before the next settlement run",
+              href: "/quotes?tab=expired",
+              severity: "low" as const,
+            },
+            {
+              key: "guardrails",
+              title: "Live-test guardrails",
+              count: shadowConfig.livePayoutsEnabled ? 1 : 0,
+              okText: `Caps armed · payouts disabled · INR ${dailyUsedInr.toLocaleString("en-IN")} of ${shadowConfig.liveTestDailyMaxInr.toLocaleString("en-IN")} daily`,
+              alertText: "LIVE_PAYOUTS_ENABLED is set — finality blocked until off",
+              href: "/settlements",
+              severity: "high" as const,
+            },
+          ].map((tile) => {
+            const alert = tile.count > 0;
+            return (
               <Link
-                key={item.label}
-                href={item.href}
-                className={cn(
-                  "group flex items-start justify-between gap-3 rounded-xl border p-3 transition-shadow hover:shadow-[var(--ops-shadow-xs)]",
-                  item.severity === "high" && "border-red-200 bg-red-50/50",
-                  item.severity === "medium" && "border-amber-200 bg-amber-50/50",
-                  item.severity === "low" && "border-[var(--ops-line)] bg-white",
-                )}
+                key={tile.key}
+                href={tile.href}
+                className={cn("health-tile group", alert ? `health-tile--${tile.severity}` : "health-tile--ok")}
               >
-                <div>
-                  <p className="text-sm font-medium text-slate-900">{item.label}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">{item.detail}</p>
-                </div>
-                <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                <span className={cn("check-dot mt-0.5", alert ? (tile.severity === "high" ? "check-dot--blocked" : "check-dot--pending") : "check-dot--done")}>
+                  {alert ? (tile.severity === "high" ? "✕" : "!") : "✓"}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="text-[13px] font-semibold tracking-tight text-slate-950">{tile.title}</span>
+                    <span className={cn("text-sm font-semibold tabular-nums", alert ? "text-slate-900" : "text-emerald-700")}>
+                      {alert ? tile.count : "OK"}
+                    </span>
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-snug text-slate-500">
+                    {alert ? tile.alertText : tile.okText}
+                  </span>
+                </span>
+                <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500" />
               </Link>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-2 text-sm text-slate-500">
-            No open exceptions, uncorroborated settlements, stale quotes, or blocked finality.
-          </p>
-        )}
+            );
+          })}
+        </div>
       </section>
 
       {/* 6 ── Recent settlement case cards ───────────────────────────────── */}
-      <section>
+      <section className="ov-reveal ov-reveal-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="ops-eyebrow">Recent settlement cases</p>
           <Link href={`/settlements${demoQuery}`} className="text-xs font-medium text-slate-500 hover:text-slate-900">
@@ -584,42 +641,62 @@ export default async function DashboardPage({
               const modeKey = (settlement.testMode in MODE_CHIP ? settlement.testMode : "DEMO") as SettlementMode;
               const matched = settlement.reconciliation.some((r) => r.status === "MATCHED");
               return (
-                <Link key={settlement.id} href={`/settlements/${settlement.id}/report`} className="case-card p-3.5">
+                <Link
+                  key={settlement.id}
+                  href={`/settlements/${settlement.id}/report`}
+                  className={cn(
+                    "case-card p-3.5 pl-4",
+                    settlement.assessment.decision === "ready_to_finalize"
+                      ? "case-card--ready"
+                      : settlement.assessment.decision === "needs_review"
+                        ? "case-card--review"
+                        : "case-card--neutral",
+                  )}
+                >
                   <div className="flex flex-wrap items-center gap-1.5">
                     <p className="text-[13px] font-semibold tracking-tight text-slate-950">{settlement.publicId}</p>
                     <span className={MODE_CHIP[modeKey]}>{MODE_LABEL[modeKey]}</span>
+                    {settlement.assessment.riskLevel === "high" ? (
+                      <span className="case-chip case-chip--live">high risk</span>
+                    ) : null}
                     <span className="ml-auto">
                       <StatusBadge status={settlement.status} />
                     </span>
                   </div>
-                  <p className="case-card__amount mt-2">
+                  <p className="case-card__amount mt-2.5">
                     {formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
                   </p>
                   <p className="mt-0.5 truncate text-xs text-slate-400">
                     {settlement.provider ?? "No provider"} · {settlement.reference}
                   </p>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+                  <div className="case-card__divider" />
+                  <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                    <span className="text-[9px] font-semibold uppercase tracking-[0.09em] text-slate-400">Evidence</span>
                     <span className={cn("case-chip", settlement.providerProofs.length ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "case-chip--demo")}>
                       proof {settlement.providerProofs.length ? "✓" : "—"}
                     </span>
                     <span className={cn("case-chip", matched ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "case-chip--demo")}>
                       recon {matched ? "✓" : "—"}
                     </span>
-                    <span className={finality.className}>{finality.label}</span>
+                    <span className={cn("ml-auto", finality.className)}>{finality.label}</span>
                   </div>
-                  <div className="confidence-meter mt-2.5">
-                    <div
-                      className={cn(
-                        "confidence-meter__fill",
-                        settlement.assessment.decision === "ready_to_finalize"
-                          ? "confidence-meter__fill--ready"
-                          : settlement.assessment.decision === "needs_review"
-                            ? "confidence-meter__fill--review"
-                            : "confidence-meter__fill--neutral",
-                      )}
-                      style={{ width: `${settlement.assessment.confidence}%` }}
-                    />
-                  </div>
+                  {settlement.assessment.confidence > 0 ? (
+                    <div className="confidence-meter mt-2.5">
+                      <div
+                        className={cn(
+                          "confidence-meter__fill",
+                          settlement.assessment.decision === "ready_to_finalize"
+                            ? "confidence-meter__fill--ready"
+                            : "confidence-meter__fill--review",
+                        )}
+                        style={{ width: `${settlement.assessment.confidence}%` }}
+                      />
+                    </div>
+                  ) : (
+                    <p className="mt-2.5 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-300">
+                      Evidence chain not started
+                    </p>
+                  )}
                 </Link>
               );
             })}
@@ -632,7 +709,7 @@ export default async function DashboardPage({
       </section>
 
       {/* 7+8 ── Provider rails + operations stream ───────────────────────── */}
-      <section className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
+      <section className="ov-reveal ov-reveal-5 grid gap-4 lg:grid-cols-[1fr_1.4fr]">
         <div>
           <p className="ops-eyebrow mb-2">Provider rail health</p>
           <div className="space-y-2">
@@ -656,17 +733,24 @@ export default async function DashboardPage({
                 safety: "Reference counterparty",
               },
             ].map((rail) => (
-              <div key={rail.name} className="rail-health flex items-center gap-3 p-3">
-                <span className={cn("rail-health__dot", rail.up ? "rail-health__dot--up" : "rail-health__dot--idle")} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold tracking-tight text-slate-950">{rail.name}</p>
-                  <p className="truncate text-xs text-slate-400">{rail.role}</p>
-                </div>
-                <div className="text-right">
-                  <p className={cn("text-xs font-medium", rail.up ? "text-emerald-700" : "text-slate-400")}>
-                    {rail.up ? "Connected" : "Not configured"}
+              <div key={rail.name} className="rail-health p-3">
+                <div className="flex items-center gap-3">
+                  <span className="rail-health__medal">{rail.name.slice(0, 2).toUpperCase()}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-sm font-semibold tracking-tight text-slate-950">{rail.name}</p>
+                      <span className={cn("rail-health__dot shrink-0", rail.up ? "rail-health__dot--up" : "rail-health__dot--idle")} />
+                    </div>
+                    <p className="truncate text-xs text-slate-400">{rail.role}</p>
+                  </div>
+                  <p className={cn("shrink-0 text-xs font-semibold", rail.up ? "text-emerald-700" : "text-slate-400")}>
+                    {rail.up ? "Connected" : "Idle"}
                   </p>
-                  <p className="text-[10px] text-slate-400">{rail.safety}</p>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {rail.safety.split(" · ").map((label) => (
+                    <span key={label} className="case-chip case-chip--demo">{label}</span>
+                  ))}
                 </div>
               </div>
             ))}
@@ -685,7 +769,7 @@ export default async function DashboardPage({
               {operationsStream.map((log) => {
                 const actor = log.actorType.toLowerCase() as "user" | "api" | "system";
                 return (
-                  <div key={log.id} className={`audit-event audit-event--${actor}`}>
+                  <div key={log.id} className={`audit-event audit-event--dense audit-event--${actor}`}>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       <p className="text-[13px] font-medium tracking-tight text-slate-950">
                         {humanizeStreamAction(log.action)}

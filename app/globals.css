@@ -3672,3 +3672,155 @@ details[open] > .reconciliation-details-content {
   .case-card, .rail-health { transition: none; }
   .case-card:hover, .rail-health:hover { transform: none; }
 }
+
+/* =====================================================================
+   Overview v2.1 — final premium polish
+   ===================================================================== */
+
+/* Section reveal (one-shot, staggered) */
+@keyframes ov-reveal {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.ov-reveal { animation: ov-reveal 0.5s var(--ease) both; }
+.ov-reveal-1 { animation-delay: 0.04s; }
+.ov-reveal-2 { animation-delay: 0.09s; }
+.ov-reveal-3 { animation-delay: 0.14s; }
+.ov-reveal-4 { animation-delay: 0.19s; }
+.ov-reveal-5 { animation-delay: 0.24s; }
+.ov-reveal-6 { animation-delay: 0.29s; }
+
+/* Hero: rail arcs + command-center depth */
+.conf-hero {
+  box-shadow:
+    0 1px 2px rgba(7, 17, 31, 0.05),
+    0 24px 60px rgba(7, 17, 31, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+}
+.conf-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(closest-side at 118% -65%, transparent 96.6%, rgba(11, 180, 196, 0.35) 97%, transparent 98%),
+    radial-gradient(closest-side at 122% -60%, transparent 97.2%, rgba(0, 199, 157, 0.28) 97.6%, transparent 98.4%),
+    radial-gradient(closest-side at 114% -72%, transparent 96.2%, rgba(242, 173, 35, 0.32) 96.6%, transparent 97.6%),
+    radial-gradient(rgba(7, 17, 31, 0.035) 1px, transparent 1.5px);
+  background-size: 1400px 1400px, 1500px 1500px, 1300px 1300px, 22px 22px;
+  background-position: 0 0, 0 0, 0 0, 0 0;
+  -webkit-mask-image: linear-gradient(105deg, transparent 38%, #000 72%);
+  mask-image: linear-gradient(105deg, transparent 38%, #000 72%);
+}
+.conf-hero__proof {
+  position: relative;
+  box-shadow:
+    var(--ops-shadow-sm),
+    0 0 0 1px rgba(11, 180, 196, 0.08),
+    0 18px 44px rgba(11, 180, 196, 0.08);
+}
+
+/* Pipeline: connected rail + evidence-flow states */
+.conf-pipeline { position: relative; }
+.conf-pipeline::before {
+  content: "";
+  position: absolute;
+  left: 1.5%;
+  right: 1.5%;
+  top: 50%;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(11, 180, 196, 0.4), rgba(0, 199, 157, 0.35) 45%, rgba(242, 173, 35, 0.4));
+  opacity: 0.55;
+}
+@media (max-width: 860px) { .conf-pipeline::before { display: none; } }
+.conf-step { z-index: 1; }
+.conf-step__dot {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  display: inline-flex;
+  height: 1.15rem;
+  width: 1.15rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 800;
+}
+.conf-step--ok .conf-step__dot {
+  background: var(--finality-ready-soft);
+  color: var(--finality-ready);
+  box-shadow: 0 0 0 1px var(--finality-ready-line) inset, 0 0 10px rgba(0, 199, 157, 0.35);
+}
+.conf-step--pending .conf-step__dot {
+  background: var(--finality-review-soft);
+  color: var(--finality-review);
+  box-shadow: 0 0 0 1px var(--finality-review-line) inset;
+}
+.conf-step--blocked .conf-step__dot {
+  background: var(--finality-blocked-soft);
+  color: var(--finality-blocked);
+  box-shadow: 0 0 0 1px var(--finality-blocked-line) inset, 0 0 10px rgba(180, 35, 24, 0.25);
+}
+.conf-step--ok { box-shadow: 0 6px 18px rgba(0, 199, 157, 0.08); }
+.conf-step--blocked { box-shadow: 0 6px 18px rgba(180, 35, 24, 0.08); }
+
+/* Risk & exceptions: health tiles (alert OR clear) */
+.health-tile {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border-radius: 0.8rem;
+  border: 1px solid var(--ops-line);
+  background: #ffffff;
+  padding: 0.7rem 0.8rem;
+  transition: transform 0.22s var(--ease), box-shadow 0.22s var(--ease);
+}
+.health-tile:hover { transform: translateY(-1px); box-shadow: var(--ops-shadow-xs); }
+.health-tile--ok { border-color: rgba(0, 199, 157, 0.22); background: linear-gradient(180deg, #f5fdfa, #ffffff 65%); }
+.health-tile--high { border-color: var(--finality-blocked-line); background: linear-gradient(180deg, var(--finality-blocked-soft), #ffffff 70%); }
+.health-tile--medium { border-color: var(--finality-review-line); background: linear-gradient(180deg, var(--finality-review-soft), #ffffff 70%); }
+.health-tile--low { border-color: var(--ops-line-strong); }
+
+/* Case cards: finality spine + hierarchy */
+.case-card { position: relative; overflow: hidden; }
+.case-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+}
+.case-card--ready::before { background: linear-gradient(180deg, var(--brand-emerald), var(--brand-aqua)); }
+.case-card--review::before { background: linear-gradient(180deg, var(--brand-amber), var(--brand-gold)); }
+.case-card--neutral::before { background: rgba(7, 17, 31, 0.1); }
+.case-card__divider {
+  margin: 0.6rem 0 0.55rem;
+  border-top: 1px dashed var(--ops-line-strong);
+}
+
+/* Rail health: provider medallions */
+.rail-health__medal {
+  display: grid;
+  height: 2.1rem;
+  width: 2.1rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  color: var(--brand-ink);
+  background: linear-gradient(160deg, #ffffff, #eef7f4);
+  box-shadow: 0 0 0 1px var(--ops-line) inset, 0 0 0 2px rgba(11, 180, 196, 0.08);
+}
+
+/* Operations stream: tighter premium density */
+.audit-event--dense { padding: 0.4rem 0.55rem; }
+.audit-event--dense::before { top: 0.8rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ov-reveal { animation: none; }
+  .health-tile { transition: none; }
+  .health-tile:hover { transform: none; }
+}
