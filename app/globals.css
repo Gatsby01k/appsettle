@@ -4325,3 +4325,92 @@ details[open] > .reconciliation-details-content {
   .scase:hover { transform: none; }
   .mode-filter { transition: none; }
 }
+
+/* =====================================================================
+   Settlements v2.1 — case clarity polish
+   ===================================================================== */
+
+/* Finality accent washes (combine with mode spine) */
+.scase--fin-review { border-color: var(--finality-review-line); }
+.scase--fin-review .scase__header {
+  background: radial-gradient(440px 120px at 100% 0%, rgba(242, 173, 35, 0.09), transparent 70%);
+}
+.scase--fin-ready { border-color: var(--finality-ready-line); }
+.scase--fin-ready .scase__header {
+  background: radial-gradient(440px 120px at 100% 0%, rgba(0, 199, 157, 0.09), transparent 70%);
+}
+.scase--fin-risk { border-color: var(--finality-blocked-line); }
+.scase--fin-risk .scase__header {
+  background: radial-gradient(440px 120px at 100% 0%, rgba(180, 35, 24, 0.08), transparent 70%);
+}
+
+/* Human operational summary under the title */
+.scase__summary {
+  margin-top: 0.4rem;
+  max-width: 36rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: rgba(7, 17, 31, 0.62);
+}
+.scase__summary strong { font-weight: 650; color: var(--brand-ink); }
+
+/* Financial summary block (right side) */
+.scase__fin {
+  min-width: 11rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--ops-line-soft);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.85), rgba(255, 255, 255, 0.5));
+  padding: 0.6rem 0.8rem;
+  text-align: right;
+}
+.scase__fin-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.66rem;
+  color: rgba(7, 17, 31, 0.45);
+}
+
+/* Evidence chain: blocker focus + downstream consequence */
+.evidence-chain__pillar--focus {
+  z-index: 1;
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1.5px var(--finality-review-line),
+    0 6px 18px rgba(242, 173, 35, 0.18);
+}
+.evidence-chain__pillar--bad.evidence-chain__pillar--focus {
+  box-shadow:
+    0 0 0 1.5px var(--finality-blocked-line),
+    0 6px 18px rgba(180, 35, 24, 0.16);
+}
+.evidence-chain__pillar--downstream { opacity: 0.6; }
+
+/* Recommended next step strip */
+.scase__next {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.6rem 1rem 0 1.1rem;
+  border-radius: 0.7rem;
+  border: 1px solid var(--finality-review-line);
+  background: linear-gradient(90deg, var(--finality-review-soft), rgba(255, 255, 255, 0.4));
+  padding: 0.55rem 0.7rem;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: #7a5408;
+}
+.scase__next--ready {
+  border-color: var(--finality-ready-line);
+  background: linear-gradient(90deg, var(--finality-ready-soft), rgba(255, 255, 255, 0.4));
+  color: var(--finality-ready);
+}
+
+/* Lifecycle rail: tighter + stronger current step */
+.scase__rail { padding: 0.55rem 0.75rem; }
+.scase__rail .settlement-step-active { filter: drop-shadow(0 0 6px rgba(0, 199, 157, 0.35)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .evidence-chain__pillar--focus { transform: none; }
+}

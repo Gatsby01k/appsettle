@@ -115,6 +115,43 @@ function successMatchesRow(success: string | undefined, status: SettlementStatus
   return map[success] === status;
 }
 
+/**
+ * One dominant operational state + human summary per case (display only).
+ * The lifecycle status stays visible; this names what the OPERATOR should
+ * care about right now.
+ */
+function caseOperationalSummary(
+  status: SettlementStatus,
+  finality: { decision: string; riskLevel: string; reconciliation: { status: string; independent: boolean } | null },
+): string {
+  if (status === SettlementStatus.REQUESTED) {
+    return "Settlement created. Operator approval is required before execution.";
+  }
+  if (status === SettlementStatus.APPROVED) {
+    return "Approved. Execute the payout via the provider to start tracking.";
+  }
+  if (status === SettlementStatus.EXECUTING) {
+    return "Payout submitted. INRSettle is tracking the provider status.";
+  }
+  if (status === SettlementStatus.FAILED) {
+    return "Provider reported a terminal failure before money moved.";
+  }
+  if (status === SettlementStatus.RECONCILED && finality.decision === "ready_to_finalize") {
+    return "Proof, independent reconciliation and audit trail agree — safe to finalize.";
+  }
+  if (status === SettlementStatus.SETTLED || status === SettlementStatus.RECONCILED) {
+    const recon = finality.reconciliation;
+    if (recon && (recon.status === "UNMATCHED" || recon.status === "EXCEPTION")) {
+      return "Provider payout completed, but independent evidence does not match — investigate before finality.";
+    }
+    if (finality.riskLevel === "high") {
+      return "Provider payout completed, but a high-risk issue blocks finality.";
+    }
+    return "Provider payout completed. Reconciliation is still pending before finality.";
+  }
+  return "Settlement in progress.";
+}
+
 function demoSettlementWhere(organizationId: string) {
   return {
     organizationId,
@@ -587,6 +624,16 @@ export default async function SettlementsPage({
                   finality.decision === "ready_to_finalize" ? "ok" : finality.riskLevel === "high" ? "bad" : "pending",
               },
             ] as const;
+            // The blocker is the FIRST non-verified step; later steps are consequences.
+            const blockerIndex = chain.findIndex((step) => step.state !== "ok");
+            const operationalSummary = caseOperationalSummary(settlement.status, finality);
+            const awaitingRecon =
+              (settlement.status === SettlementStatus.SETTLED || settlement.status === SettlementStatus.RECONCILED) &&
+              finality.decision !== "ready_to_finalize";
+            const recommendedAction =
+              finality.decision === "ready_to_finalize"
+                ? "Generate the settlement report and finalize — all three evidence sources agree."
+                : finality.recommendedActions[0] ?? null;
 
             return (
               <article
@@ -594,6 +641,13 @@ export default async function SettlementsPage({
                 className={cn(
                   "scase",
                   `scase--${settlement.testMode in MODE_CHIP_CLASS ? settlement.testMode : "DEMO"}`,
+                  finality.riskLevel === "high"
+                    ? "scase--fin-risk"
+                    : finality.decision === "ready_to_finalize"
+                      ? "scase--fin-ready"
+                      : finality.decision === "needs_review"
+                        ? "scase--fin-review"
+                        : undefined,
                   showConsole && "settlement-row-active",
                   rowJustUpdated && "settlement-row-highlight",
                 )}
@@ -629,32 +683,71 @@ export default async function SettlementsPage({
                         <span className="text-slate-400"> · tx {settlement.providerTransactionId.slice(0, 16)}</span>
                       ) : null}
                     </p>
+                    <p className="scase__summary">{operationalSummary}</p>
                     <SettlementRowStatusSubtext status={settlement.status} settlementId={settlement.id} />
                   </div>
-                  <div className="text-right">
+                  <div className="scase__fin">
                     <p className="scase__amount" title={formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}>
                       {formatCurrencyFull(String(settlement.sourceAmount), settlement.sourceCurrency)}
                     </p>
-                    <p className="mt-0.5 text-[11px] text-slate-400">{settlement.corridor.replace("_", " → ")}</p>
+                    <div className="scase__fin-row mt-1.5">
+                      <span>Corridor</span>
+                      <span className="font-medium text-slate-600">{settlement.corridor.replace("_", " → ")}</span>
+                    </div>
+                    <div className="scase__fin-row mt-0.5">
+                      <span>{settlement.settledAt ? "Settled" : "Created"}</span>
+                      <span className="font-medium tabular-nums text-slate-600">
+                        {formatDateTime(settlement.settledAt ?? settlement.createdAt)}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Evidence strip + lifecycle rail */}
                 <div className="scase__body grid gap-2.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
                   <div className="evidence-chain evidence-chain--mini" aria-label="Evidence chain">
-                    {chain.map((step) => (
-                      <div key={step.name} className={cn("evidence-chain__pillar", `evidence-chain__pillar--${step.state}`)}>
-                        <span className="evidence-chain__label">{step.name}</span>
-                        <span className="evidence-chain__state">
-                          {step.state === "ok" ? "Verified" : step.state === "bad" ? "Mismatch" : "Pending"}
-                        </span>
-                      </div>
-                    ))}
+                    {chain.map((step, index) => {
+                      const isBlocker = index === blockerIndex && step.state !== "ok";
+                      const isDownstream = blockerIndex >= 0 && index > blockerIndex && step.state !== "ok";
+                      return (
+                        <div
+                          key={step.name}
+                          className={cn(
+                            "evidence-chain__pillar",
+                            `evidence-chain__pillar--${step.state}`,
+                            isBlocker && "evidence-chain__pillar--focus",
+                            isDownstream && "evidence-chain__pillar--downstream",
+                          )}
+                        >
+                          <span className="evidence-chain__label">{step.name}</span>
+                          <span className="evidence-chain__state">
+                            {step.state === "ok"
+                              ? "Verified"
+                              : step.state === "bad"
+                                ? "Mismatch"
+                                : isDownstream
+                                  ? "Awaiting previous"
+                                  : "Pending"}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="scase__rail">
                     <SettlementLifecycle status={settlement.status} />
                   </div>
                 </div>
+
+                {recommendedAction ? (
+                  <div className={cn("scase__next", finality.decision === "ready_to_finalize" && "scase__next--ready")}>
+                    <span className="text-[10px] font-bold uppercase tracking-[0.07em]">
+                      {finality.decision === "ready_to_finalize" ? "Ready" : "Next"}
+                    </span>
+                    <span>
+                      <strong className="font-semibold">Recommended action:</strong> {recommendedAction}
+                    </span>
+                  </div>
+                ) : null}
 
                 {/* Case actions */}
                 <div className="scase__actions">
@@ -714,6 +807,26 @@ export default async function SettlementsPage({
                     </SettlementActionForm>
                   ) : !canApprove ? (
                     <span className="text-xs text-slate-400">Read only</span>
+                  ) : null}
+                  {awaitingRecon && settlement.status === SettlementStatus.SETTLED ? (
+                    <>
+                      <Button asChild variant="primary" size="sm">
+                        <Link href={`/reconciliation${demoFocus ? "?demo=1" : ""}`}>Open reconciliation</Link>
+                      </Button>
+                      {canApprove ? (
+                        <form action={runAutoMatch}>
+                          <input type="hidden" name="settlementId" value={settlement.id} />
+                          <SubmitButton variant="outline" size="sm" pendingText="Matching...">
+                            Auto-match
+                          </SubmitButton>
+                        </form>
+                      ) : null}
+                    </>
+                  ) : null}
+                  {settlement.status === SettlementStatus.RECONCILED && finality.decision === "ready_to_finalize" ? (
+                    <Button asChild variant="primary" size="sm">
+                      <Link href={`/settlements/${settlement.id}/report`}>Generate report</Link>
+                    </Button>
                   ) : null}
                   {canApprove &&
                   settlement.status === SettlementStatus.EXECUTING &&
