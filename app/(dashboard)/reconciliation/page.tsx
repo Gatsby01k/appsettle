@@ -15,6 +15,11 @@ import {
 } from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
 import {
+  canRunReconciliationMatch,
+  canWriteReconciliation,
+  roleErrorMessage,
+} from "@/lib/permissions";
+import {
   SUGGESTED_MIN_CONFIDENCE,
   computeConfidence,
   matchReasonFor,
@@ -32,9 +37,22 @@ import { ReconciliationCommandBar } from "@/components/dashboard/reconciliation-
 import { ReconciliationWorkspace } from "@/components/dashboard/reconciliation-workspace";
 import { SubmitButton } from "@/components/ui/submit-button";
 
+/**
+ * P0 RBAC: every reconciliation mutation requires the operational write set.
+ * Reconciliation records are INDEPENDENT finality evidence — read-only and
+ * compliance roles must never be able to create or link them.
+ */
+async function requireReconciliationWriter() {
+  const context = await requireSession();
+  if (!canWriteReconciliation(context.membership.role)) {
+    redirect(`/reconciliation?error=${encodeURIComponent(roleErrorMessage(context.membership.role))}`);
+  }
+  return context;
+}
+
 async function submitRecord(formData: FormData) {
   "use server";
-  const { user, organization } = await requireSession();
+  const { user, organization } = await requireReconciliationWriter();
   const settlementRaw = String(formData.get("settlementId") || "");
   const exceptionReason = String(formData.get("exceptionReason") || "").trim() || undefined;
   const hasManualSettlement = Boolean(settlementRaw) && settlementRaw !== "_none";
@@ -70,7 +88,10 @@ async function submitRecord(formData: FormData) {
 
 async function runAutoMatch() {
   "use server";
-  const { user, organization } = await requireSession();
+  const { user, organization, membership } = await requireSession();
+  if (!canRunReconciliationMatch(membership.role)) {
+    redirect(`/reconciliation?error=${encodeURIComponent(roleErrorMessage(membership.role))}`);
+  }
   let result = { matched: 0, scanned: 0 };
   try {
     result = await autoMatchReconciliation(user.id, organization.id);
@@ -82,7 +103,7 @@ async function runAutoMatch() {
 
 async function createMatchingBankRecord() {
   "use server";
-  const { user, organization } = await requireSession();
+  const { user, organization } = await requireReconciliationWriter();
   try {
     await createMatchingDemoRecord("bank_statement", user.id, organization.id);
   } catch (error) {
@@ -93,7 +114,7 @@ async function createMatchingBankRecord() {
 
 async function createMatchingChainRecord() {
   "use server";
-  const { user, organization } = await requireSession();
+  const { user, organization } = await requireReconciliationWriter();
   try {
     await createMatchingDemoRecord("chain_tx", user.id, organization.id);
   } catch (error) {
@@ -104,7 +125,7 @@ async function createMatchingChainRecord() {
 
 async function createExceptionRecord() {
   "use server";
-  const { user, organization } = await requireSession();
+  const { user, organization } = await requireReconciliationWriter();
   try {
     await createExceptionDemoRecord(user.id, organization.id);
   } catch (error) {
@@ -115,7 +136,7 @@ async function createExceptionRecord() {
 
 async function confirmMatch(formData: FormData) {
   "use server";
-  const { user, organization } = await requireSession();
+  const { user, organization } = await requireReconciliationWriter();
   const recordId = String(formData.get("recordId") || "");
   const settlementId = String(formData.get("settlementId") || "");
   try {
@@ -128,7 +149,7 @@ async function confirmMatch(formData: FormData) {
 
 async function rejectSuggestion(formData: FormData) {
   "use server";
-  const { user, organization } = await requireSession();
+  const { user, organization } = await requireReconciliationWriter();
   const recordId = String(formData.get("recordId") || "");
   const settlementId = String(formData.get("settlementId") || "");
   try {
@@ -141,7 +162,7 @@ async function rejectSuggestion(formData: FormData) {
 
 async function resolveException(formData: FormData) {
   "use server";
-  const { user, organization } = await requireSession();
+  const { user, organization } = await requireReconciliationWriter();
   const recordId = String(formData.get("recordId") || "");
   try {
     await resolveReconciliationException(recordId, user.id, organization.id);
@@ -181,9 +202,12 @@ export default async function ReconciliationPage({
 }: {
   searchParams: Promise<{ error?: string; success?: string; q?: string; status?: string; matched?: string; scanned?: string; demo?: string }>;
 }) {
-  const { organization } = await requireSession();
+  const { organization, membership } = await requireSession();
   const params = await searchParams;
   const demoFocus = params.demo === "1";
+  // UI mirror of the server-action gates: read-only / compliance roles see
+  // the queue but no mutation surfaces (forms are also blocked server-side).
+  const canWrite = canWriteReconciliation(membership.role);
   const settlementWhere = demoFocus
     ? demoSettlementWhere(organization.id)
     : { organizationId: organization.id };
@@ -378,6 +402,17 @@ export default async function ReconciliationPage({
         </div>
       </div>
 
+      {!canWrite ? (
+        <div className="flex items-center gap-2 rounded-xl border border-[var(--ops-line)] bg-white px-3 py-2">
+          <span className="case-chip case-chip--demo">Read-only role</span>
+          <p className="text-xs text-slate-500">
+            You can review the reconciliation queue, but adding, matching, and resolving records requires an
+            operational role.
+          </p>
+        </div>
+      ) : null}
+
+      {canWrite ? (
       <ReconciliationCommandBar
         addRecordForm={
           <AddRecordForm
@@ -413,6 +448,7 @@ export default async function ReconciliationPage({
           </div>
         }
       />
+      ) : null}
 
       <div className="ops-panel ops-panel-accent reconciliation-console overflow-hidden">
         <div className="flex items-center justify-between gap-3 border-b border-[var(--ops-line-soft)] px-3 py-2">
@@ -436,9 +472,9 @@ export default async function ReconciliationPage({
         <ReconciliationWorkspace
           embedded
           records={workspaceRows}
-          confirmAction={confirmMatch}
-          rejectAction={rejectSuggestion}
-          resolveAction={resolveException}
+          confirmAction={canWrite ? confirmMatch : undefined}
+          rejectAction={canWrite ? rejectSuggestion : undefined}
+          resolveAction={canWrite ? resolveException : undefined}
         />
       </div>
     </div>

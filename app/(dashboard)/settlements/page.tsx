@@ -20,7 +20,7 @@ import {
   isIndependentReconciliationSource,
 } from "@/lib/reconciliation";
 import { MODE_LABEL, getShadowConfig, safetyFor, type SettlementMode } from "@/lib/shadow-mode";
-import { canApproveSettlement } from "@/lib/permissions";
+import { canApproveSettlement, canCreateSettlement, roleErrorMessage } from "@/lib/permissions";
 import { counterpartyForCorridor } from "@/lib/treasury";
 import { prisma } from "@/lib/prisma";
 import { cn, formatCurrencyCompact, formatCurrencyFull, formatDateTime } from "@/lib/utils";
@@ -305,7 +305,10 @@ function toOperationConsoleData(settlement: SettlementRow): SettlementOperationC
 
 async function submitSettlement(formData: FormData) {
   "use server";
-  const { user, organization } = await requireSession();
+  const { user, organization, membership } = await requireSession();
+  if (!canCreateSettlement(membership.role)) {
+    redirect(`/settlements?error=${encodeURIComponent(roleErrorMessage(membership.role))}`);
+  }
   try {
     await createSettlement(
       {
@@ -462,6 +465,9 @@ export default async function SettlementsPage({
   const justCompleted =
     params.success === "reconciled" || params.success === "matched";
   const canApprove = canApproveSettlement(membership.role);
+  // UI mirror of the submitSettlement server gate: read-only / compliance
+  // roles browse cases but never see the creation form.
+  const canCreate = canCreateSettlement(membership.role);
 
   const [quotes, settlements, openIndependentRecords] = await Promise.all([
     prisma.quote.findMany({
@@ -967,6 +973,7 @@ export default async function SettlementsPage({
         </div>
       )}
 
+      {canCreate ? (
       <Card>
         <CardHeader>
           <CardTitle>Create settlement</CardTitle>
@@ -1019,6 +1026,14 @@ export default async function SettlementsPage({
           </SettlementActionForm>
         </CardContent>
       </Card>
+      ) : (
+        <div className="flex items-center gap-2 rounded-xl border border-[var(--ops-line)] bg-white px-3 py-2">
+          <span className="case-chip case-chip--demo">Read-only role</span>
+          <p className="text-xs text-slate-500">
+            You can review settlement cases, but creating settlements requires an operational role.
+          </p>
+        </div>
+      )}
     </div>
     </SettlementActionsProvider>
   );

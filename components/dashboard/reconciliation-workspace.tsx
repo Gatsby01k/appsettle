@@ -44,9 +44,10 @@ export type ReconciliationRow = {
 
 type WorkspaceProps = {
   records: ReconciliationRow[];
-  confirmAction: (formData: FormData) => Promise<void>;
-  rejectAction: (formData: FormData) => Promise<void>;
-  resolveAction: (formData: FormData) => Promise<void>;
+  /** Omitted for read-only roles — mutation buttons are hidden, not disabled. */
+  confirmAction?: (formData: FormData) => Promise<void>;
+  rejectAction?: (formData: FormData) => Promise<void>;
+  resolveAction?: (formData: FormData) => Promise<void>;
   embedded?: boolean;
 };
 
@@ -413,13 +414,17 @@ export function ReconciliationWorkspace({
                     This record is flagged as an exception and is not reconciled. Review the reason above, then resolve
                     once handled.
                   </p>
-                  <form action={resolveAction}>
-                    <input type="hidden" name="recordId" value={selected.id} />
-                    <SubmitButton variant="primary" size="sm" pendingText="Resolving...">
-                      <ShieldCheck className="h-3.5 w-3.5" />
-                      Resolve exception
-                    </SubmitButton>
-                  </form>
+                  {resolveAction ? (
+                    <form action={resolveAction}>
+                      <input type="hidden" name="recordId" value={selected.id} />
+                      <SubmitButton variant="primary" size="sm" pendingText="Resolving...">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Resolve exception
+                      </SubmitButton>
+                    </form>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">Resolving requires an operational role.</p>
+                  )}
                   <p className="text-[11px] text-slate-500">
                     Resolving marks the exception as reviewed and clears it from the queue. It does not link a
                     settlement.
@@ -448,28 +453,36 @@ export function ReconciliationWorkspace({
                 </div>
               ) : showSuggestion && selected.suggestion ? (
                 <div className="mt-2 space-y-2.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <form action={confirmAction}>
-                      <input type="hidden" name="recordId" value={selected.id} />
-                      <input type="hidden" name="settlementId" value={selected.suggestion.settlementId} />
-                      <SubmitButton variant="primary" size="sm" pendingText="Confirming...">
-                        <Check className="h-3.5 w-3.5" />
-                        Confirm match
-                      </SubmitButton>
-                    </form>
-                    <form action={rejectAction}>
-                      <input type="hidden" name="recordId" value={selected.id} />
-                      <input type="hidden" name="settlementId" value={selected.suggestion.settlementId} />
-                      <SubmitButton variant="outline" size="sm" pendingText="Rejecting...">
-                        <X className="h-3.5 w-3.5" />
-                        Reject match
-                      </SubmitButton>
-                    </form>
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    Confirming links this record and moves the settlement to RECONCILED. Rejecting keeps it in manual
-                    review.
-                  </p>
+                  {confirmAction && rejectAction ? (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <form action={confirmAction}>
+                          <input type="hidden" name="recordId" value={selected.id} />
+                          <input type="hidden" name="settlementId" value={selected.suggestion.settlementId} />
+                          <SubmitButton variant="primary" size="sm" pendingText="Confirming...">
+                            <Check className="h-3.5 w-3.5" />
+                            Confirm match
+                          </SubmitButton>
+                        </form>
+                        <form action={rejectAction}>
+                          <input type="hidden" name="recordId" value={selected.id} />
+                          <input type="hidden" name="settlementId" value={selected.suggestion.settlementId} />
+                          <SubmitButton variant="outline" size="sm" pendingText="Rejecting...">
+                            <X className="h-3.5 w-3.5" />
+                            Reject match
+                          </SubmitButton>
+                        </form>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Confirming links this record and moves the settlement to RECONCILED. Rejecting keeps it in
+                        manual review.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">
+                      Suggested match found. Confirming or rejecting requires an operational role.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <p className="mt-2 text-xs text-slate-500">

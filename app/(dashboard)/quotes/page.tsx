@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { createQuote, createSettlement } from "@/lib/domain";
 import { friendlyErrorMessage } from "@/lib/errors";
+import { canCreateQuote, canCreateSettlement, roleErrorMessage } from "@/lib/permissions";
 import { defaultAccountsForCorridor } from "@/lib/treasury";
 import { prisma } from "@/lib/prisma";
 import { displayQuoteStatus } from "@/lib/quotes";
@@ -29,7 +30,10 @@ import { SubmitButton } from "@/components/ui/submit-button";
 
 async function submitQuote(formData: FormData) {
   "use server";
-  const { user, organization } = await requireSession();
+  const { user, organization, membership } = await requireSession();
+  if (!canCreateQuote(membership.role)) {
+    redirect(`/quotes?error=${encodeURIComponent(roleErrorMessage(membership.role))}`);
+  }
   try {
     await createQuote(
       {
@@ -48,7 +52,10 @@ async function submitQuote(formData: FormData) {
 
 async function acceptQuote(formData: FormData) {
   "use server";
-  const { user, organization } = await requireSession();
+  const { user, organization, membership } = await requireSession();
+  if (!canCreateSettlement(membership.role)) {
+    redirect(`/quotes?error=${encodeURIComponent(roleErrorMessage(membership.role))}&tab=active`);
+  }
   const quoteId = String(formData.get("quoteId") ?? "");
   const corridor = String(formData.get("corridor") ?? "INR_USDT") as "INR_USDT" | "USDT_INR";
   const accounts = defaultAccountsForCorridor(corridor);
@@ -71,7 +78,10 @@ async function acceptQuote(formData: FormData) {
 
 async function refreshQuote(formData: FormData) {
   "use server";
-  const { user, organization } = await requireSession();
+  const { user, organization, membership } = await requireSession();
+  if (!canCreateQuote(membership.role)) {
+    redirect(`/quotes?error=${encodeURIComponent(roleErrorMessage(membership.role))}&tab=expired`);
+  }
   try {
     await createQuote(
       {
@@ -294,10 +304,13 @@ export default async function QuotesPage({
 }: {
   searchParams: Promise<{ error?: string; success?: string; q?: string; tab?: string; demo?: string }>;
 }) {
-  const { organization } = await requireSession();
+  const { organization, membership } = await requireSession();
   const params = await searchParams;
   const demoFocus = params.demo === "1";
   const tab = params.tab ?? "active";
+  // UI mirror of the server-action gates above: read-only / compliance roles
+  // browse quotes but see no creation or settlement-creation surfaces.
+  const canWrite = canCreateQuote(membership.role);
   const allQuotes = await prisma.quote.findMany({
     where: { organizationId: organization.id },
     orderBy: { createdAt: "desc" },
@@ -431,6 +444,16 @@ export default async function QuotesPage({
               <span className="ml-auto case-chip case-chip--demo">sandbox</span>
             </div>
 
+            {!canWrite ? (
+              <div className="flex items-center gap-2 rounded-lg border border-[var(--ops-line)] bg-slate-50/60 px-3 py-2.5">
+                <span className="case-chip case-chip--demo">Read-only role</span>
+                <p className="text-xs text-slate-500">
+                  You can review quotes, but generating quotes and creating settlements requires an operational
+                  role.
+                </p>
+              </div>
+            ) : null}
+            {canWrite ? (
             <form action={submitQuote} className="quote-generate-form grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               <p className="qb-module sm:col-span-2 lg:col-span-3">
                 <span className="qb-module__num">1</span>
@@ -518,6 +541,7 @@ export default async function QuotesPage({
                 </SubmitButton>
               </div>
             </form>
+            ) : null}
           </div>
 
           <QuotePreviewPanel quote={previewQuote} />
@@ -687,7 +711,7 @@ export default async function QuotesPage({
                       </DataGridTd>
                       <DataGridTd>
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          {isActive ? (
+                          {isActive && canWrite ? (
                             <div className="quote-active-actions flex w-full min-w-[168px] flex-col items-end gap-1">
                               <form action={acceptQuote} className="w-full">
                                 <input type="hidden" name="quoteId" value={quote.id} />
@@ -740,7 +764,7 @@ export default async function QuotesPage({
                               </div>
                             </div>
                           ) : null}
-                          {isExpired ? (
+                          {isExpired && canWrite ? (
                             <form action={refreshQuote} className="quote-expired-refresh-form">
                               <input type="hidden" name="corridor" value={quote.corridor} />
                               <input type="hidden" name="sourceAmount" value={String(quote.sourceAmount)} />
