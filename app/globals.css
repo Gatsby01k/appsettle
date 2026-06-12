@@ -4951,3 +4951,41 @@ details[open] > .reconciliation-details-content {
 }
 
 /* Reduced motion: this pass adds no animation; existing global rules apply. */
+
+/* =====================================================================
+   Auth / login motion kit — restrained, reduced-motion-safe.
+   ===================================================================== */
+.auth-rail-dash { animation: authRailDrift 56s linear infinite; }
+.auth-rail-dash--slow { animation-duration: 84s; animation-direction: reverse; }
+@keyframes authRailDrift { to { stroke-dashoffset: -200; } }
+
+.auth-node-pulse { animation: authNodePulse 4.2s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+.auth-node-pulse--late { animation-delay: 1.4s; }
+.auth-node-pulse--later { animation-delay: 2.8s; }
+@keyframes authNodePulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+.auth-live-dot { animation: authLiveDot 2.4s ease-in-out infinite; box-shadow: 0 0 0 4px rgba(0, 199, 157, 0.14); }
+@keyframes authLiveDot {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(0, 199, 157, 0.16); }
+  50% { box-shadow: 0 0 0 7px rgba(0, 199, 157, 0.06); }
+}
+
+.auth-status-card { animation: authCardIn 0.6s var(--ease) both 0.15s; }
+.auth-form-card { animation: authCardIn 0.5s var(--ease) both; }
+@keyframes authCardIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-rail-dash,
+  .auth-node-pulse,
+  .auth-live-dot,
+  .auth-status-card,
+  .auth-form-card {
+    animation: none;
+  }
+}

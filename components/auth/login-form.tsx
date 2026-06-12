@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useActionState } from "react";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, Loader2, LockKeyhole, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/auth/form-field";
@@ -53,19 +53,26 @@ export function LoginForm({
       {state.error ? <ErrorBanner>{state.error}</ErrorBanner> : null}
 
       <FormField id="email" label="Work email" required error={fieldErrors.email}>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          autoCapitalize="none"
-          spellCheck={false}
-          placeholder="you@company.com"
-          required
-          aria-invalid={fieldErrors.email ? true : undefined}
-          aria-describedby={fieldErrors.email ? "email-error" : undefined}
-        />
+        <div className="relative">
+          <Mail
+            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            aria-hidden="true"
+          />
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="you@company.com"
+            required
+            className="pl-10"
+            aria-invalid={fieldErrors.email ? true : undefined}
+            aria-describedby={fieldErrors.email ? "email-error" : undefined}
+          />
+        </div>
       </FormField>
 
       <PasswordField
@@ -76,6 +83,7 @@ export function LoginForm({
         autoComplete="current-password"
         placeholder="Enter your password"
         error={fieldErrors.password}
+        leadingIcon={<LockKeyhole className="h-4 w-4" aria-hidden="true" />}
         action={
           <Link
             href="/contact?intent=access"
@@ -86,7 +94,13 @@ export function LoginForm({
         }
       />
 
-      <Button type="submit" size="lg" variant="primary" disabled={isPending} className="mt-1 w-full">
+      <Button
+        type="submit"
+        size="lg"
+        variant="primary"
+        disabled={isPending}
+        className="auth-submit mt-1 w-full bg-gradient-to-r from-[hsl(168_90%_30%)] via-[hsl(168_90%_33%)] to-[hsl(174_85%_36%)] shadow-[0_14px_34px_rgba(8,127,105,0.32)] hover:shadow-[0_18px_42px_rgba(8,127,105,0.42)]"
+      >
         {isPending ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

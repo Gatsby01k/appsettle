@@ -63,28 +63,46 @@ export default async function LoginPage() {
         Back to inrsettle.com
       </Link>
 
-      <div className="mt-8 flex items-center gap-3 lg:hidden">
-        <Image
-          src="/assets/mark.png"
-          alt="INRSettle"
-          width={40}
-          height={40}
-          className="rounded-xl border border-slate-200 bg-white p-1.5 shadow-ops-xs"
-        />
-        <span className="text-lg font-semibold tracking-tight text-slate-900">INRSettle</span>
+      {/* Compact brand + security header (mobile only — the hero panel is hidden) */}
+      <div className="mt-8 lg:hidden">
+        <div className="flex items-center gap-3">
+          <Image
+            src="/assets/mark.png"
+            alt="INRSettle"
+            width={40}
+            height={40}
+            className="rounded-xl border border-slate-200 bg-white p-1.5 shadow-ops-xs"
+          />
+          <span className="text-lg font-semibold tracking-tight text-slate-900">INRSettle</span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <span className="case-chip border-emerald-200 bg-emerald-50 text-emerald-700">Audit logging active</span>
+          <span className="case-chip border-cyan-200 bg-cyan-50 text-cyan-800">RBAC enforced</span>
+          <span className="case-chip case-chip--gold">Dual-control ready</span>
+        </div>
       </div>
 
-      <header className="mt-8">
-        <h1 className="text-[1.7rem] font-semibold leading-tight tracking-tight text-slate-900">
-          Sign in to the console
-        </h1>
-        <p className="mt-2 text-[15px] leading-relaxed text-slate-500">
-          Access treasury, settlement, and reconciliation workflows for your organization.
-        </p>
-      </header>
+      {/* Premium glass form card */}
+      <div className="auth-form-card mt-8 rounded-2xl border border-slate-200/80 bg-white/85 p-6 shadow-ops-md backdrop-blur-xl sm:p-7">
+        <header>
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-brand-emerald-ink">
+            Secure console access
+          </p>
+          <h1 className="mt-2 text-[1.7rem] font-semibold leading-tight tracking-tight text-slate-900">
+            Sign in to the console
+          </h1>
+          <p className="mt-2 text-[15px] leading-relaxed text-slate-500">
+            Access treasury, settlement, and reconciliation workflows for your organization.
+          </p>
+        </header>
 
-      <div className="mt-7">
-        <LoginForm action={login} />
+        <div className="mt-6">
+          <LoginForm action={login} />
+        </div>
+
+        <p className="mt-4 text-center text-[12px] text-slate-400">
+          Access is logged. Actions are scoped by role.
+        </p>
       </div>
 
       <p className="mt-6 text-[13px] text-slate-500">

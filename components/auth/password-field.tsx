@@ -12,18 +12,25 @@ type PasswordFieldProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, "typ
   error?: string;
   hint?: string;
   action?: React.ReactNode;
+  /** Optional decorative leading icon (display only). */
+  leadingIcon?: React.ReactNode;
 };
 
-export function PasswordField({ id, label, error, hint, action, className, ...props }: PasswordFieldProps) {
+export function PasswordField({ id, label, error, hint, action, leadingIcon, className, ...props }: PasswordFieldProps) {
   const [visible, setVisible] = React.useState(false);
 
   return (
     <FormField id={id} label={label} error={error} hint={hint} required={props.required} action={action}>
       <div className="relative">
+        {leadingIcon ? (
+          <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+            {leadingIcon}
+          </span>
+        ) : null}
         <Input
           id={id}
           type={visible ? "text" : "password"}
-          className={cn("pr-11", className)}
+          className={cn("pr-11", leadingIcon && "pl-10", className)}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
           {...props}
