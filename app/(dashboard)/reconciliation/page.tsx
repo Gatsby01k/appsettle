@@ -28,8 +28,6 @@ import {
 } from "@/lib/reconciliation";
 import { prisma } from "@/lib/prisma";
 import { cn, formatCurrencyFull, formatDateTime, formatPercent } from "@/lib/utils";
-import { PageHeader } from "@/components/ops/page-header";
-import { MetricCard } from "@/components/ops/metric-card";
 import { FlashMessage } from "@/components/ops/flash-message";
 import { FilterBar } from "@/components/ops/filter-bar";
 import { AddRecordForm } from "@/components/dashboard/add-record-form";
@@ -279,10 +277,8 @@ export default async function ReconciliationPage({
   const manualReview = records.filter(
     (r) => !r.settlement && r.status !== "EXCEPTION" && r.status !== "RESOLVED",
   ).length;
-  const suggestedCount = records.filter((r) => !r.settlement && r.status !== "EXCEPTION" && suggestionFor(r)).length;
   const exceptions = records.filter((r) => r.status === "EXCEPTION").length;
   const matchRate = records.length ? Math.round((matchedCount / records.length) * 100) : 0;
-  const metricsRefresh = Boolean(params.success);
 
   const workspaceRows = filteredRecords.map((record) => {
     const confidence = confidenceFor(record);
@@ -322,17 +318,42 @@ export default async function ReconciliationPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Reconciliation"
-        className="gap-3"
-        actions={demoFocus ? <DemoFocusBadge /> : undefined}
-      />
-
-      {/* Independence rule, stated where matching happens */}
-      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-        <span className="case-chip border-emerald-200 bg-emerald-50 text-emerald-700">Independent evidence</span>
-        <span className="case-chip case-chip--gold">Provider claims excluded</span>
-      </div>
+      {/* Command header: independent evidence console band (mirrors Settlements) */}
+      <section className="conf-hero ov-reveal p-5 sm:p-6">
+        <div className="relative flex flex-wrap items-start justify-between gap-5">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="overview-live-badge inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-emerald-700">
+                <span className="ops-pulse ops-pulse--subtle" aria-hidden="true" />
+                Independent evidence console
+              </span>
+              {demoFocus ? <DemoFocusBadge /> : null}
+            </div>
+            <h1 className="conf-hero__headline mt-3">Reconciliation</h1>
+            <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-slate-500">
+              Match external bank/PSP records against settlements before finality.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <span className="case-chip case-chip--gold">Provider claims excluded</span>
+              <span className="case-chip border-emerald-200 bg-emerald-50 text-emerald-700">External records only</span>
+              <span className="case-chip border-cyan-200 bg-cyan-50 text-cyan-800">Required before finality</span>
+            </div>
+          </div>
+          <div className="grid shrink-0 grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
+            {[
+              { label: "Matched", value: matchedCount, tone: "text-brand-emerald-ink" },
+              { label: "Manual review", value: manualReview, tone: manualReview ? "text-[#9b6810]" : "text-slate-400" },
+              { label: "Exceptions", value: exceptions, tone: exceptions ? "text-rose-600" : "text-slate-400" },
+              { label: "Match rate", value: formatPercent(matchRate), tone: "text-[#0a7d86]" },
+            ].map((stat) => (
+              <div key={stat.label} className="scase-stat">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.09em] text-slate-400">{stat.label}</p>
+                <p className={cn("scase-stat__value mt-1", stat.tone)}>{stat.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {params.error ? <FlashMessage message={params.error} tone="error" /> : null}
       {params.success === "created" ? (
@@ -361,46 +382,6 @@ export default async function ReconciliationPage({
       {params.success === "demo_exception" ? (
         <FlashMessage message="Exception record created — sent to the operations queue for manual review." />
       ) : null}
-
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <div className={cn("reconciliation-metric-enter", metricsRefresh && "reconciliation-metric-value-pulse")}>
-          <MetricCard label="Matched" value={matchedCount} hint="Linked & reconciled" tone="success" />
-        </div>
-        <div
-          className={cn(
-            "reconciliation-metric-enter reconciliation-metric-enter-delay-1",
-            metricsRefresh && "reconciliation-metric-value-pulse",
-          )}
-        >
-          <MetricCard
-            label="Manual review"
-            value={manualReview}
-            hint={`${suggestedCount} with suggestions`}
-            tone={manualReview ? "warning" : "neutral"}
-          />
-        </div>
-        <div
-          className={cn(
-            "reconciliation-metric-enter reconciliation-metric-enter-delay-2",
-            metricsRefresh && "reconciliation-metric-value-pulse",
-          )}
-        >
-          <MetricCard label="Exceptions" value={exceptions} hint="Operations queue" tone={exceptions ? "danger" : "neutral"} />
-        </div>
-        <div
-          className={cn(
-            "reconciliation-metric-enter reconciliation-metric-enter-delay-3",
-            metricsRefresh && "reconciliation-metric-value-pulse",
-          )}
-        >
-          <MetricCard
-            label="Match rate"
-            value={formatPercent(matchRate)}
-            hint="Reconciled records"
-            tone="info"
-          />
-        </div>
-      </div>
 
       {!canWrite ? (
         <div className="flex items-center gap-2 rounded-xl border border-[var(--ops-line)] bg-white px-3 py-2">

@@ -66,12 +66,12 @@ const RESOLUTION_HEADER: Record<
 > = {
   AUTO_MATCHED: {
     title: "Reconciled",
-    subtitle: "Auto-matched — settlement linked and reconciled",
+    subtitle: "External record matched — settlement linked and reconciled",
     panel: "reconciliation-panel-success reconciliation-panel-matched",
   },
   MANUAL_MATCHED: {
     title: "Reconciled",
-    subtitle: "Manually linked by an operator",
+    subtitle: "External record matched — manually linked by an operator",
     panel: "reconciliation-panel-success reconciliation-panel-matched",
   },
   SUGGESTED: {
@@ -81,7 +81,7 @@ const RESOLUTION_HEADER: Record<
   },
   MANUAL_REVIEW: {
     title: "Manual review",
-    subtitle: "Open record — awaiting settlement link",
+    subtitle: "Open external record — awaiting settlement link",
     panel: "reconciliation-panel-warning",
   },
   EXCEPTION: {
@@ -242,7 +242,7 @@ export function ReconciliationWorkspace({
           <div className="flex items-center gap-2">
             <span className="reconciliation-live-dot h-1.5 w-1.5 rounded-full bg-brand-emerald" aria-hidden="true" />
             <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-500">
-              Queue · {records.length} records
+              Evidence queue · {records.length} external record{records.length === 1 ? "" : "s"}
             </p>
           </div>
         </div>
@@ -370,7 +370,7 @@ export function ReconciliationWorkspace({
                 {showMatched && selected.settlement ? (
                   <div className="reconciliation-matched-settlement rounded-md border border-emerald-200/80 bg-emerald-50/50 px-2.5 py-2">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-emerald-700/80">
-                      Matched settlement
+                      Linked settlement
                     </p>
                     <div className="mt-1.5">
                       <SettlementPill
@@ -403,6 +403,42 @@ export function ReconciliationWorkspace({
                   </p>
                 )}
               </div>
+            </section>
+
+            {/* Finality impact: independent reconciliation is a finality pillar —
+                display-only, derived from the record's existing matched state. */}
+            <section
+              className={cn(
+                "reconciliation-block reconciliation-block-enter reconciliation-block-enter-delay-2 mt-2 rounded-lg border px-3 py-2.5",
+                showMatched
+                  ? "border-emerald-200/80 bg-emerald-50/50"
+                  : "border-amber-200/70 bg-amber-50/40",
+              )}
+            >
+              <BlockTitle>Finality impact</BlockTitle>
+              {showMatched ? (
+                <div className="mt-1.5 flex items-start gap-2">
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-emerald" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-emerald-900">
+                      This independent match can unlock finality review.
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-emerald-800/80">
+                      External record matched · settlement linked. Finality review can proceed once provider
+                      proof and approvals agree.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-1.5">
+                  <p className="text-xs font-semibold text-amber-900">
+                    Finality remains blocked until independent reconciliation matches.
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-amber-800/80">
+                    Provider claims are excluded — only an external bank/PSP record can satisfy this pillar.
+                  </p>
+                </div>
+              )}
             </section>
 
             <section className="reconciliation-block reconciliation-block-enter reconciliation-block-enter-delay-3 mt-2 rounded-lg border border-[var(--ops-line)] px-3 py-2.5">
