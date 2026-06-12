@@ -8,6 +8,7 @@ import {
   useSettlementActionsOptional,
 } from "@/components/dashboard/settlement-auto-refresh";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { reconciliationPendingActions } from "@/lib/settlement-actions";
 import { cn } from "@/lib/utils";
 
 export type SettlementOperationConsoleData = {
@@ -339,6 +340,15 @@ export function SettlementOperationConsoleRow({
 
   const providerStatus = settlement.providerStatus ?? "completed";
 
+  // Single source of truth for the reconciliation-pending action list:
+  // unavailable actions are HIDDEN (never disabled ghosts), and the list
+  // is regression-tested in lib/__tests__/settlement-actions.test.ts.
+  const settledActions = reconciliationPendingActions({
+    canReconcile,
+    autoMatchAvailable: Boolean(autoMatchAction),
+    hasOpenRecords,
+  });
+
   const content = (
     <>
         {mode === "approved" ? (
@@ -407,7 +417,7 @@ export function SettlementOperationConsoleRow({
               >
                 Open reconciliation
               </Link>
-              {canReconcile && autoMatchAction && hasOpenRecords ? (
+              {settledActions.includes("run_auto_match") && autoMatchAction ? (
                 <SettlementActionForm
                   settlementId={settlementId}
                   action="reconcile"
@@ -425,11 +435,6 @@ export function SettlementOperationConsoleRow({
                     Run auto-match
                   </SubmitButton>
                 </SettlementActionForm>
-              ) : null}
-              {canReconcile && autoMatchAction && !hasOpenRecords ? (
-                <span className="text-[11px] text-slate-500">
-                  No bank/PSP record available to match yet.
-                </span>
               ) : null}
             </div>
           </ConsolePanel>

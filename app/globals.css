@@ -1,6 +1,32 @@
 @import "tailwindcss";
 
 /* ============================================================
+   Tailwind v4 design tokens (ROOT-CAUSE FIX for ghost buttons)
+   Tailwind v4 does NOT read tailwind.config.ts without an @config
+   directive, so utilities defined only there (bg-brand-emerald,
+   text-brand-emerald-ink, shadow-ops-*, ease-ops) generated NO CSS —
+   e.g. the "Open reconciliation" button rendered white text with no
+   background. These @theme tokens mirror tailwind.config.ts exactly
+   so those utilities exist again. Values must stay in sync with
+   :root below and tailwind.config.ts.
+   ============================================================ */
+@theme {
+  --color-brand-ink: #07111f;
+  --color-brand-navy: #0a1626;
+  --color-brand-emerald: #00c79d;
+  --color-brand-emerald-ink: #087f69;
+  --color-brand-aqua: #0bb4c4;
+  --color-brand-amber: #f2ad23;
+  --color-brand-amber-ink: #a5670a;
+  --shadow-ops-xs: 0 1px 2px rgba(7, 17, 31, 0.05);
+  --shadow-ops-sm: 0 1px 2px rgba(7, 17, 31, 0.04), 0 10px 24px rgba(7, 17, 31, 0.05);
+  --shadow-ops-md: 0 2px 4px rgba(7, 17, 31, 0.05), 0 18px 44px rgba(7, 17, 31, 0.09);
+  --shadow-ops-lg: 0 30px 70px rgba(7, 17, 31, 0.14);
+  --shadow-soft: 0 18px 50px rgba(7, 17, 31, 0.08);
+  --ease-ops: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ============================================================
    INRSettle Console — design tokens
    Source of truth: upgraded INRSettle marketing site.
    Palette: emerald #00c79d · aqua #0bb4c4 · saffron #f2ad23 · ink #07111f.
