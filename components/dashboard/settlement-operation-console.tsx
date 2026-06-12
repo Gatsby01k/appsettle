@@ -177,7 +177,7 @@ export function SettlementRowStatusSubtext({
   let hint: string | null = null;
   if (status === "APPROVED") hint = "Ready to execute";
   else if (status === "EXECUTING") hint = "Tracking via PontisGlobe";
-  else if (status === "SETTLED") hint = "Ready for reconciliation";
+  else if (status === "SETTLED") hint = "Awaiting independent reconciliation";
   else if (status === "RECONCILED") hint = "Reconciled automatically";
 
   if (!hint) return null;
@@ -294,6 +294,7 @@ export function SettlementOperationConsoleRow({
   autoRefresh = false,
   canReconcile = false,
   autoMatchAction,
+  hasOpenRecords = true,
   generateReconcileAction,
   reconcileRequired = false,
   inlineError,
@@ -305,6 +306,8 @@ export function SettlementOperationConsoleRow({
   autoRefresh?: boolean;
   canReconcile?: boolean;
   autoMatchAction?: (formData: FormData) => Promise<void>;
+  /** Whether any unlinked, independent bank/PSP record exists for auto-match. */
+  hasOpenRecords?: boolean;
   generateReconcileAction?: (formData: FormData) => Promise<void>;
   reconcileRequired?: boolean;
   inlineError?: string;
@@ -391,9 +394,9 @@ export function SettlementOperationConsoleRow({
         {mode === "settled" ? (
           <ConsolePanel mode="settled">
             <div>
-              <p className="text-xs font-semibold text-slate-900">Ready for reconciliation</p>
+              <p className="text-xs font-semibold text-slate-900">Awaiting independent reconciliation</p>
               <p className="mt-0.5 text-[11px] text-slate-600">
-                Provider payout completed. Match this settlement with an independent bank or PSP record.
+                Provider payout is complete. Add or match a bank/PSP record before finality.
               </p>
             </div>
             <ReconciliationProofGrid settlement={settlement} providerStatus={providerStatus} />
@@ -404,7 +407,7 @@ export function SettlementOperationConsoleRow({
               >
                 Open reconciliation
               </Link>
-              {canReconcile && autoMatchAction ? (
+              {canReconcile && autoMatchAction && hasOpenRecords ? (
                 <SettlementActionForm
                   settlementId={settlementId}
                   action="reconcile"
@@ -419,9 +422,14 @@ export function SettlementOperationConsoleRow({
                     settlementId={settlementId}
                     action="reconcile"
                   >
-                    Auto-match
+                    Run auto-match
                   </SubmitButton>
                 </SettlementActionForm>
+              ) : null}
+              {canReconcile && autoMatchAction && !hasOpenRecords ? (
+                <span className="text-[11px] text-slate-500">
+                  No bank/PSP record available to match yet.
+                </span>
               ) : null}
             </div>
           </ConsolePanel>

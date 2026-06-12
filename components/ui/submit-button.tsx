@@ -42,8 +42,15 @@ export function SubmitButton({
       className={cn(
         className,
         "reconciliation-btn-content",
-        showPending && "reconciliation-btn-pending cursor-wait",
-        disabled && !showPending && "cursor-not-allowed opacity-55",
+        // Pending: keep the button fully readable — the base variant's
+        // disabled:opacity-50 would stack with the pending pulse animation
+        // and leave a near-invisible "ghost" button.
+        showPending && "reconciliation-btn-pending cursor-wait disabled:opacity-90",
+        // Explicitly disabled: a visible, readable disabled state instead of
+        // stacked opacities (no white-on-pale text, label stays legible).
+        disabled &&
+          !showPending &&
+          "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-500 shadow-none disabled:opacity-100",
       )}
     >
       {showPending ? (

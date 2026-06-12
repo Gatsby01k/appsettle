@@ -14,7 +14,11 @@ import {
 import { friendlyErrorMessage } from "@/lib/errors";
 import { assessFinality } from "@/lib/finality";
 import { buildFinalityInput, hasAuditApproval, latestProofOf, relevantReconciliationOf } from "@/lib/finality-input";
-import { RECONCILIATION_SOURCE_LABEL, isIndependentReconciliationSource } from "@/lib/reconciliation";
+import {
+  INDEPENDENT_RECONCILIATION_SOURCES,
+  RECONCILIATION_SOURCE_LABEL,
+  isIndependentReconciliationSource,
+} from "@/lib/reconciliation";
 import { MODE_LABEL, getShadowConfig, safetyFor, type SettlementMode } from "@/lib/shadow-mode";
 import { canApproveSettlement } from "@/lib/permissions";
 import { counterpartyForCorridor } from "@/lib/treasury";
@@ -459,7 +463,7 @@ export default async function SettlementsPage({
     params.success === "reconciled" || params.success === "matched";
   const canApprove = canApproveSettlement(membership.role);
 
-  const [quotes, settlements] = await Promise.all([
+  const [quotes, settlements, openIndependentRecords] = await Promise.all([
     prisma.quote.findMany({
       where: { organizationId: organization.id, status: "ACTIVE", expiresAt: { gt: new Date() } },
       orderBy: { createdAt: "desc" },
@@ -474,7 +478,18 @@ export default async function SettlementsPage({
         providerProofs: { orderBy: { receivedAt: "desc" } },
       },
     }),
+    // Display-only signal: is there anything for auto-match to work with?
+    // Mirrors the auto-match engine's input filter (unlinked + independent).
+    prisma.reconciliationRecord.count({
+      where: {
+        organizationId: organization.id,
+        settlementId: null,
+        status: { in: ["OPEN", "UNMATCHED"] },
+        source: { in: [...INDEPENDENT_RECONCILIATION_SOURCES] },
+      },
+    }),
   ]);
+  const hasOpenRecords = openIndependentRecords > 0;
 
   const query = params.q?.toLowerCase().trim() ?? "";
   const modeFilter = params.mode && ["DEMO", "SHADOW", "LIVE_TEST"].includes(params.mode) ? params.mode : null;
@@ -838,16 +853,23 @@ export default async function SettlementsPage({
                   ) : !canApprove ? (
                     <span className="case-chip case-chip--demo">Read-only role</span>
                   ) : null}
-                  {awaitingRecon && settlement.status === SettlementStatus.SETTLED ? (
+                  {/* Reconciliation actions live in ONE place: the embedded console
+                      panel below renders them whenever this settlement is SETTLED
+                      with no linked record. This top-row fallback only appears when
+                      that panel is absent (a record is already linked but finality
+                      is not ready), so the actions are never duplicated. */}
+                  {awaitingRecon &&
+                  settlement.status === SettlementStatus.SETTLED &&
+                  settlement.reconciliation.length > 0 ? (
                     <>
                       <Button asChild variant="primary" size="sm">
                         <Link href={`/reconciliation${demoFocus ? "?demo=1" : ""}`}>Open reconciliation</Link>
                       </Button>
-                      {canApprove ? (
+                      {canApprove && hasOpenRecords ? (
                         <form action={runAutoMatch}>
                           <input type="hidden" name="settlementId" value={settlement.id} />
                           <SubmitButton variant="outline" size="sm" pendingText="Matching...">
-                            Auto-match
+                            Run auto-match
                           </SubmitButton>
                         </form>
                       ) : null}
@@ -912,6 +934,7 @@ export default async function SettlementsPage({
                       autoRefresh={rowAutoRefresh}
                       canReconcile={canApprove}
                       autoMatchAction={runAutoMatch}
+                      hasOpenRecords={hasOpenRecords}
                       generateReconcileAction={settlement.testMode === "DEMO" ? generateAndReconcile : undefined}
                       reconcileRequired={params.reconcileRequired === settlement.id}
                       inlineError={params.reconcileRequired === settlement.id ? params.error : undefined}
