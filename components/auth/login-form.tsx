@@ -17,9 +17,9 @@ function ErrorBanner({ children }: { children: React.ReactNode }) {
   return (
     <div
       role="alert"
-      className="flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50/80 px-3.5 py-3 text-[13px] font-medium text-rose-700"
+      className="flex items-start gap-2 rounded-lg border border-rose-200/70 border-l-2 border-l-rose-400 bg-rose-50/50 px-3 py-2 text-[12.5px] font-medium leading-relaxed text-rose-800"
     >
-      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-500" aria-hidden="true" />
       <span>{children}</span>
     </div>
   );

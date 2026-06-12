@@ -82,27 +82,32 @@ export default async function LoginPage() {
         </div>
       </div>
 
-      {/* Premium glass form card */}
-      <div className="auth-form-card mt-8 rounded-2xl border border-slate-200/80 bg-white/85 p-6 shadow-ops-md backdrop-blur-xl sm:p-7">
-        <header>
-          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-brand-emerald-ink">
-            Secure console access
-          </p>
-          <h1 className="mt-2 text-[1.7rem] font-semibold leading-tight tracking-tight text-slate-900">
-            Sign in to the console
-          </h1>
-          <p className="mt-2 text-[15px] leading-relaxed text-slate-500">
-            Access treasury, settlement, and reconciliation workflows for your organization.
-          </p>
-        </header>
+      {/* Premium layered form module: gradient ring + glass card */}
+      <div className="auth-form-card mt-8">
+        <div className="auth-card-ring">
+          <div className="rounded-[1.3rem] bg-white/[0.93] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl sm:p-7">
+            <header>
+              <p className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/80 bg-emerald-50/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-brand-emerald-ink">
+                <span className="h-1.5 w-1.5 rounded-full bg-brand-emerald" aria-hidden="true" />
+                Secure console access
+              </p>
+              <h1 className="mt-3 text-[1.7rem] font-semibold leading-tight tracking-tight text-slate-900">
+                Sign in to INRSettle
+              </h1>
+              <p className="mt-2 text-[14.5px] leading-relaxed text-slate-500">
+                Access settlement proof, reconciliation, finality review and audit workflows.
+              </p>
+            </header>
 
-        <div className="mt-6">
-          <LoginForm action={login} />
+            <div className="mt-6">
+              <LoginForm action={login} />
+            </div>
+
+            <p className="mt-4 text-center text-[12px] text-slate-400">
+              Access is logged. Actions are scoped by role.
+            </p>
+          </div>
         </div>
-
-        <p className="mt-4 text-center text-[12px] text-slate-400">
-          Access is logged. Actions are scoped by role.
-        </p>
       </div>
 
       <p className="mt-6 text-[13px] text-slate-500">

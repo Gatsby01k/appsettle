@@ -1,13 +1,13 @@
 import Image from "next/image";
-import { FileLock2, ShieldCheck, UserCheck, Users } from "lucide-react";
+import { FileLock2, Scale, ShieldCheck, UserCheck, Users } from "lucide-react";
 
-// Security/status stack: states the controls that protect the console.
-// Display copy only — every item reflects a real, enforced control.
+// Trust Stack: the controls protecting the console. Display copy only —
+// every item reflects a real, enforced control. No live-production claims.
 const securityStack = [
-  { icon: FileLock2, label: "Audit logging active", state: "Active" },
-  { icon: Users, label: "RBAC enforced", state: "Enforced" },
-  { icon: UserCheck, label: "Dual-control ready", state: "Ready" },
-  { icon: ShieldCheck, label: "Demo workspace protected", state: "Protected" },
+  { icon: FileLock2, label: "Audit logging", state: "Active" },
+  { icon: Users, label: "RBAC", state: "Enforced" },
+  { icon: UserCheck, label: "Dual-control", state: "Ready" },
+  { icon: Scale, label: "Finality review", state: "Protected" },
 ];
 
 /** Soft corridor lines + glowing settlement nodes behind the brand panel. */
@@ -60,55 +60,78 @@ export function AuthHero() {
     <section className="ops-rail relative hidden overflow-hidden text-white lg:flex lg:flex-col lg:justify-between">
       <HeroBackground />
 
-      <div className="relative flex items-center gap-3 px-12 pt-12">
-        <Image
-          src="/assets/mark.png"
-          alt="INRSettle"
-          width={44}
-          height={44}
-          className="rounded-xl border border-white/10 bg-white/5 p-1.5"
-        />
-        <span className="text-lg font-semibold tracking-tight">INRSettle</span>
+      {/* Top bar: brand + workspace posture (no "live" implication) */}
+      <div className="relative flex items-center justify-between gap-3 px-12 pt-10">
+        <div className="flex items-center gap-3">
+          <Image
+            src="/assets/mark.png"
+            alt="INRSettle"
+            width={44}
+            height={44}
+            className="rounded-xl border border-white/10 bg-white/5 p-1.5"
+          />
+          <span className="text-lg font-semibold tracking-tight">INRSettle</span>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.05] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/55 backdrop-blur-sm">
+          <ShieldCheck className="h-3 w-3 text-brand-emerald-2" aria-hidden="true" />
+          Protected workspace
+        </span>
       </div>
 
-      <div className="relative max-w-md space-y-7 px-12">
+      <div className="relative max-w-md space-y-6 px-12">
         <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold tracking-tight text-brand-emerald-2 backdrop-blur-sm">
           <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-          Protected treasury environment
+          Settlement operations console
         </p>
-        <h1 className="text-[2rem] font-semibold leading-[1.12] tracking-tight">
-          The control layer behind <span className="brand-gradient-text">INR settlement</span> operations.
+        <h1 className="text-[2.15rem] font-semibold leading-[1.08] tracking-[-0.025em]">
+          The control layer for <span className="brand-gradient-text">settlement finality</span>.
         </h1>
-        <p className="text-[15px] leading-relaxed text-white/65">
-          Provider proof, reconciliation, finality review and audit trail in one protected workspace.
+        <p className="max-w-sm text-[15px] leading-relaxed text-white/60">
+          Provider proof, independent reconciliation, finality review and audit evidence in one protected
+          workspace.
         </p>
       </div>
 
-      {/* Security / status stack */}
-      <div className="relative px-12 pb-12">
-        <div className="auth-status-card max-w-sm rounded-2xl border border-white/10 bg-white/[0.05] p-4 backdrop-blur-md">
-          <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2.5">
-            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-white/45">Workspace controls</p>
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-brand-emerald-2">
-              <span className="auth-live-dot h-1.5 w-1.5 rounded-full bg-brand-emerald" aria-hidden="true" />
-              Live
+      {/* Trust Stack: operational control surface */}
+      <div className="relative px-12 pb-10">
+        <div className="auth-status-card max-w-md rounded-2xl border border-white/10 bg-white/[0.045] p-4 backdrop-blur-md">
+          <div className="flex items-center justify-between gap-2 pb-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/45">Trust stack</p>
+            <span className="rounded-full border border-[rgba(0,199,157,0.28)] bg-[rgba(0,199,157,0.08)] px-2 py-0.5 text-[10px] font-semibold text-[#5ff0cf]">
+              Demo workspace protected
             </span>
           </div>
-          <div className="mt-1.5">
+
+          <div className="grid grid-cols-2 gap-2">
             {securityStack.map(({ icon: Icon, label, state }) => (
-              <div
-                key={label}
-                className="flex items-center gap-3 border-b border-white/[0.06] py-2 text-[13px] font-medium text-white/70 last:border-b-0"
-              >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-brand-emerald-2">
+              <div key={label} className="auth-trust-card flex items-center gap-2.5 px-3 py-2.5">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] text-brand-emerald-2">
                   <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                 </span>
-                <span className="min-w-0 flex-1 truncate">{label}</span>
-                <span className="shrink-0 rounded-full border border-[rgba(0,199,157,0.3)] bg-[rgba(0,199,157,0.1)] px-2 py-0.5 text-[10px] font-semibold text-[#5ff0cf]">
-                  {state}
+                <span className="min-w-0">
+                  <span className="block truncate text-[12px] font-semibold text-white/80">{label}</span>
+                  <span className="mt-0.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#5ff0cf]/80">
+                    <i className="auth-trust-dot" aria-hidden="true" />
+                    {state}
+                  </span>
                 </span>
               </div>
             ))}
+          </div>
+
+          {/* Mini evidence flow */}
+          <div className="mt-4 border-t border-white/[0.08] pt-3.5">
+            <div className="auth-flow" aria-label="Evidence flow: provider proof, reconciliation, finality, audit">
+              {["Provider proof", "Reconciliation", "Finality", "Audit"].map((step) => (
+                <div key={step} className="auth-flow-step">
+                  <i aria-hidden="true" />
+                  <span>{step}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-center text-[10.5px] text-white/35">
+              Provider completed ≠ settlement finalized — evidence decides.
+            </p>
           </div>
         </div>
       </div>
