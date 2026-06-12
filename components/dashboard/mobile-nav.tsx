@@ -11,7 +11,7 @@ export function MobileNav({ organizationName }: { organizationName: string }) {
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger
-        className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-ops-xs transition-colors hover:border-slate-300 hover:text-slate-900 lg:hidden"
+        className="grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-ops-xs transition-colors hover:border-slate-300 hover:text-slate-900 lg:hidden"
         aria-label="Open navigation"
       >
         <Menu className="h-[18px] w-[18px]" />
