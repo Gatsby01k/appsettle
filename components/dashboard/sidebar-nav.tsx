@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   Scale,
   Settings,
+  ShieldCheck,
   Users,
   WalletCards,
   Wallet,
@@ -25,6 +26,7 @@ const ICONS: Record<string, typeof LayoutDashboard> = {
   "/reconciliation": Scale,
   "/counterparties": Building2,
   "/accounts": Wallet,
+  "/providers": ShieldCheck,
   "/reports": FileBarChart,
   "/audit-logs": FileClock,
   "/team": Users,
@@ -47,6 +49,7 @@ const groups = [
     items: [
       { href: "/counterparties", label: "Counterparties" },
       { href: "/accounts", label: "Accounts" },
+      { href: "/providers", label: "Providers" },
       { href: "/reports", label: "Reports" },
     ],
   },

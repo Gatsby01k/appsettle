@@ -4724,3 +4724,141 @@ details[open] > .reconciliation-details-content {
 @media (prefers-reduced-motion: reduce) {
   .ptrack__step--active .ptrack__dot::after { animation: none; }
 }
+
+/* =====================================================================
+   Provider Risk Shield kit (.prs) — UI-only risk visibility layer.
+   Dark navy glass surfaces consistent with the ops rail / quote lock
+   panel. No provider execution, no live controls — display only.
+   ===================================================================== */
+.prs-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background:
+    radial-gradient(620px 280px at 92% -12%, rgba(11, 180, 196, 0.14), transparent 60%),
+    radial-gradient(460px 260px at 4% 112%, rgba(0, 199, 157, 0.1), transparent 60%),
+    linear-gradient(180deg, #0a1626 0%, #0e2036 100%);
+  color: #fff;
+  box-shadow: var(--ops-shadow-md);
+}
+.prs-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1.4px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(460px 380px at 18% 0%, #000, transparent 72%);
+  mask-image: radial-gradient(460px 380px at 18% 0%, #000, transparent 72%);
+}
+
+.prs-panel {
+  border-radius: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(8px);
+  transition: border-color 0.2s var(--ease), background-color 0.2s var(--ease);
+}
+.prs-panel:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.prs-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.prs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 9999px;
+  padding: 0.18rem 0.6rem;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  border: 1px solid transparent;
+}
+.prs-chip--ok { border-color: rgba(0, 199, 157, 0.4); background: rgba(0, 199, 157, 0.14); color: #5ff0cf; }
+.prs-chip--pending { border-color: rgba(242, 173, 35, 0.4); background: rgba(242, 173, 35, 0.13); color: #ffd58a; }
+.prs-chip--blocked { border-color: rgba(255, 122, 122, 0.38); background: rgba(255, 99, 99, 0.13); color: #ff9d9d; }
+.prs-chip--neutral { border-color: rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.06); color: rgba(255, 255, 255, 0.75); }
+
+.prs-passport-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+}
+.prs-passport-row:last-child { border-bottom: none; }
+.prs-passport-row dt { color: rgba(255, 255, 255, 0.5); flex-shrink: 0; }
+.prs-passport-row dd { text-align: right; font-weight: 550; }
+.prs-passport-row dd.prs-val--ok { color: #5ff0cf; }
+.prs-passport-row dd.prs-val--pending { color: #ffd58a; }
+.prs-passport-row dd.prs-val--blocked { color: #ff9d9d; }
+
+.prs-score-track {
+  height: 7px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.prs-score-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, var(--brand-aqua), var(--brand-emerald) 60%, var(--brand-amber));
+  transition: width 0.6s var(--ease);
+}
+
+.prs-gate-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.prs-gate-item:last-child { border-bottom: none; }
+.prs-gate-dot {
+  margin-top: 0.18rem;
+  display: inline-flex;
+  height: 14px;
+  width: 14px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-size: 9px;
+  font-weight: 800;
+}
+.prs-gate-dot--done { background: rgba(0, 199, 157, 0.2); color: #5ff0cf; }
+.prs-gate-dot--open { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.4); }
+
+.prs-freeze-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 122, 122, 0.32);
+  background: rgba(255, 99, 99, 0.1);
+  padding: 0.45rem 0.9rem;
+  font-size: 12px;
+  font-weight: 650;
+  color: #ffb4b4;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prs-panel,
+  .prs-score-fill {
+    transition: none;
+  }
+}
