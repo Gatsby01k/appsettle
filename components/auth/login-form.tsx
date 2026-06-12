@@ -3,7 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { useActionState } from "react";
-import { AlertCircle, Loader2, LockKeyhole, Mail } from "lucide-react";
+import { AlertCircle, LockKeyhole, Mail } from "lucide-react";
+import { RailDots } from "@/components/ui/settlement-rail-loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/auth/form-field";
@@ -103,7 +104,7 @@ export function LoginForm({
       >
         {isPending ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            <RailDots />
             Signing in…
           </>
         ) : (

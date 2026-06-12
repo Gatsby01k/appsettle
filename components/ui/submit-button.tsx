@@ -2,6 +2,7 @@
 
 import { useFormStatus } from "react-dom";
 import { Button, type ButtonProps } from "@/components/ui/button";
+import { RailDots } from "@/components/ui/settlement-rail-loader";
 import { cn } from "@/lib/utils";
 import {
   type SettlementAction,
@@ -54,11 +55,8 @@ export function SubmitButton({
       )}
     >
       {showPending ? (
-        <span className="inline-flex items-center gap-1.5">
-          <span
-            className="ops-submit-spinner reconciliation-spinner-enter inline-block h-3 w-3 rounded-full border-2 border-current/30 border-t-current"
-            aria-hidden="true"
-          />
+        <span className="reconciliation-spinner-enter inline-flex items-center gap-2">
+          <RailDots />
           <span className="font-medium">{label}</span>
         </span>
       ) : (
