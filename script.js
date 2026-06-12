@@ -41,6 +41,8 @@ if (!reducedMotion.matches && 'IntersectionObserver' in window) {
       const siblings = parent ? Array.from(parent.children) : [];
       const stagger = Math.min(Math.max(siblings.indexOf(entry.target), 0), 5) * 80;
 
+      entry.target.classList.add('revealed');
+
       entry.target.animate([
         { opacity: 0, transform: 'translateY(18px)' },
         { opacity: 1, transform: 'translateY(0)' }
@@ -54,7 +56,9 @@ if (!reducedMotion.matches && 'IntersectionObserver' in window) {
     });
   }, { threshold: .12 });
 
-  document.querySelectorAll('.card,.stat,.dashboard,.table,.contact-box').forEach((el) => obs.observe(el));
+  document
+    .querySelectorAll('.card,.stat,.dashboard,.table,.contact-box,.panel,.endpoint,.code-panel')
+    .forEach((el) => obs.observe(el));
 }
 
 (() => {

@@ -101,6 +101,87 @@ const MARKETING_POLISH_CSS = `
 .trust-card{transition:transform .22s var(--ease),box-shadow .22s var(--ease),border-color .22s var(--ease)}
 .trust-card:hover{transform:translateY(-2px);border-color:rgba(0,199,157,.16)}
 
+/* ============================================================
+   API SECTION — composition fix + motion.
+   Root cause of the overlap: .code-panel pre{min-width:420px}
+   plus a cramped 2-col endpoint grid with nowrap content. The
+   endpoints become a single-column rail; nothing can overlap.
+   ============================================================ */
+.split--api{grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:40px;align-items:start}
+.split--api>*{min-width:0}
+.split--api .endpoint-grid{grid-template-columns:1fr;gap:12px}
+.endpoint{min-width:0;position:relative;transition:transform .2s var(--ease),box-shadow .2s var(--ease),border-color .2s var(--ease)}
+.endpoint code{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.endpoint .ep-desc{flex-shrink:0}
+.endpoint:hover{transform:translateY(-2px);border-color:rgba(11,180,196,.30)}
+/* Selected endpoint (POST /v1/settlements): clear active border + soft glow */
+.endpoint.active{border-color:rgba(11,180,196,.55);
+  box-shadow:0 16px 38px rgba(7,17,31,.26),0 0 0 1px rgba(11,180,196,.30),0 0 26px rgba(11,180,196,.16)}
+.endpoint.active::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;
+  border-radius:999px;background:linear-gradient(180deg,#0bb4c4,#00c79d)}
+.endpoint.active code{color:#aef3f8}
+
+/* Code panel: premium but bounded — never forces overflow */
+.code-panel{min-width:0;max-width:100%;position:relative}
+.code-panel pre{min-width:0;overflow-x:auto}
+.code-top{display:flex;align-items:center;gap:12px;padding:13px 18px;
+  border-bottom:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
+.code-dots{display:flex;gap:7px}
+.code-dots i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.16)}
+.code-dots i:nth-child(3){background:rgba(0,199,157,.7)}
+.code-title{font:800 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.06em;
+  text-transform:uppercase;color:#7e93a8}
+.code-status{margin-left:auto;display:inline-flex;align-items:center;gap:7px;padding:5px 11px;
+  border-radius:999px;border:1px solid rgba(0,199,157,.30);background:rgba(0,199,157,.10);
+  color:#7df0d4;font:800 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;opacity:0}
+.code-status::before{content:"";width:6px;height:6px;border-radius:50%;background:#00c79d;
+  box-shadow:0 0 10px rgba(0,199,157,.8)}
+/* request -> response feeling: the status chip fades in after the panel reveals */
+.code-panel.revealed .code-status{animation:lpCodeStatus .5s var(--ease) .9s both}
+@keyframes lpCodeStatus{from{opacity:0;transform:translateX(6px)}to{opacity:1;transform:none}}
+.code-panel.revealed pre{animation:lpCodeReveal .7s var(--ease) .15s both}
+@keyframes lpCodeReveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* Tablet/mobile: stack cleanly with comfortable spacing */
+@media (max-width:980px){
+  .split--api{grid-template-columns:1fr;gap:24px}
+  .split--api .endpoint-grid{grid-template-columns:1fr 1fr}
+}
+@media (max-width:680px){
+  .split--api .endpoint-grid{grid-template-columns:1fr}
+}
+
+/* ============================================================
+   SIGNATURE BACKGROUND — settlement rails / proof flow.
+   Orbs travel the same SVG rail paths via CSS offset-path; the
+   dashed rails drift slowly. All of it dies under the global
+   prefers-reduced-motion rule (animation:none!important).
+   ============================================================ */
+.mkt-bg-orbs{position:absolute;top:-40px;left:50%;transform:translateX(-50%);
+  width:1680px;max-width:none;height:820px;pointer-events:none}
+.mkt-orb{position:absolute;top:0;left:0;width:7px;height:7px;border-radius:50%;opacity:0;
+  offset-rotate:0deg;will-change:offset-distance}
+.mkt-orb-a{background:#0bb4c4;box-shadow:0 0 16px rgba(11,180,196,.65),0 0 36px rgba(11,180,196,.25);
+  offset-path:path("M-60,250 C 340,90 660,330 1010,200 S 1500,140 1740,300");
+  animation:lpOrbTravel 36s linear infinite}
+.mkt-orb-b{width:6px;height:6px;background:#f2ad23;box-shadow:0 0 14px rgba(242,173,35,.55),0 0 30px rgba(242,173,35,.2);
+  offset-path:path("M-60,460 C 320,560 700,330 1060,480 S 1520,560 1740,420");
+  animation:lpOrbTravel 44s linear infinite;animation-delay:-18s}
+.mkt-orb-c{width:5px;height:5px;background:#0bb4c4;box-shadow:0 0 12px rgba(11,180,196,.5);
+  offset-path:path("M-60,150 C 380,300 720,70 1070,250 S 1540,330 1740,170");
+  animation:lpOrbTravel 52s linear infinite;animation-delay:-30s}
+@keyframes lpOrbTravel{
+  0%{offset-distance:0%;opacity:0}
+  6%{opacity:.85}
+  94%{opacity:.85}
+  100%{offset-distance:100%;opacity:0}
+}
+.mkt-rail-dash{animation:lpRailDrift 60s linear infinite}
+.mkt-rail-dash--slow{animation-duration:90s;animation-direction:reverse}
+@keyframes lpRailDrift{to{stroke-dashoffset:-220}}
+/* keep the background cheap on small screens */
+@media (max-width:760px){.mkt-bg-orbs{display:none}.mkt-rail-dash{animation:none}}
+
 /* ---- Desktop / base polish ---- */
 .nav-actions{display:flex;align-items:center;gap:8px}
 .nav-actions .btn{white-space:nowrap}
@@ -627,9 +708,9 @@ function MarketingBackground() {
           </radialGradient>
         </defs>
         <path d="M-60,250 C 340,90 660,330 1010,200 S 1500,140 1740,300" stroke="url(#railA)" strokeWidth="2" />
-        <path d="M-60,150 C 380,300 720,70 1070,250 S 1540,330 1740,170" stroke="url(#railB)" strokeWidth="1.6" strokeDasharray="2 9" />
+        <path className="mkt-rail-dash" d="M-60,150 C 380,300 720,70 1070,250 S 1540,330 1740,170" stroke="url(#railB)" strokeWidth="1.6" strokeDasharray="2 9" />
         <path d="M-60,460 C 320,560 700,330 1060,480 S 1520,560 1740,420" stroke="url(#railA)" strokeWidth="1.6" />
-        <path d="M-60,360 C 420,200 780,520 1140,360 S 1560,250 1740,420" stroke="url(#railB)" strokeWidth="1.2" strokeDasharray="2 10" />
+        <path className="mkt-rail-dash mkt-rail-dash--slow" d="M-60,360 C 420,200 780,520 1140,360 S 1560,250 1740,420" stroke="url(#railB)" strokeWidth="1.2" strokeDasharray="2 10" />
         <g>
           <circle cx="320" cy="150" r="26" fill="url(#node)" />
           <circle cx="320" cy="150" r="3.2" fill="#0bb4c4" />
@@ -641,6 +722,13 @@ function MarketingBackground() {
           <circle cx="1400" cy="250" r="3" fill="#f2ad23" />
         </g>
       </svg>
+      {/* Proof-flow orbs: soft pulses travelling along the rails (CSS offset-path,
+          so the global prefers-reduced-motion rule disables them entirely). */}
+      <div className="mkt-bg-orbs" aria-hidden="true">
+        <span className="mkt-orb mkt-orb-a" />
+        <span className="mkt-orb mkt-orb-b" />
+        <span className="mkt-orb mkt-orb-c" />
+      </div>
       <div className="mkt-bg-glow" />
     </div>
   );
