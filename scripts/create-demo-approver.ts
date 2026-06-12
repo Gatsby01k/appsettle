@@ -103,6 +103,32 @@ async function main() {
     },
   });
 
+  // ----- Optional cleanup: drop the approver's NON-anchor memberships -------
+  // Off by default. Only ever touches THIS demo approver's memberships, never
+  // the anchor membership, never other users, never organizations themselves.
+  // Fixes the stale active-org problem: a session pinned to an old org makes
+  // settlements in the anchor org 404. Idempotent (second run deletes nothing).
+  if (process.env.CLEAN_APPROVER_EXTRA_MEMBERSHIPS === "true") {
+    const extras = await prisma.membership.findMany({
+      where: { userId: approver.id, organizationId: { not: organization.id } },
+      include: { organization: true },
+    });
+    if (extras.length === 0) {
+      console.log("Cleanup: no extra approver memberships to remove.");
+    } else {
+      await prisma.membership.deleteMany({
+        where: { userId: approver.id, organizationId: { not: organization.id } },
+      });
+      console.log(`Cleanup: removed ${extras.length} extra approver membership(s):`);
+      for (const m of extras) {
+        console.log(`  - removed organizationId ${m.organizationId} (${m.organization.displayName})`);
+      }
+      console.log("NOTE: the approver must log out and back in — the session JWT pins the");
+      console.log("organizationId at login, and a removed membership now fails requireSession.");
+    }
+    console.log("");
+  }
+
   // ----- Diagnostics: prove the approver shares the operator's org ----------
   const [allApproverMemberships, settlementCount, latestSettlements] = await Promise.all([
     prisma.membership.findMany({
