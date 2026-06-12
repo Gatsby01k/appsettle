@@ -37,11 +37,16 @@ if (!reducedMotion.matches && 'IntersectionObserver' in window) {
     entries.forEach((entry) => {
       if (!entry.isIntersecting) return;
 
+      const parent = entry.target.parentElement;
+      const siblings = parent ? Array.from(parent.children) : [];
+      const stagger = Math.min(Math.max(siblings.indexOf(entry.target), 0), 5) * 80;
+
       entry.target.animate([
         { opacity: 0, transform: 'translateY(18px)' },
         { opacity: 1, transform: 'translateY(0)' }
       ], {
         duration: 520,
+        delay: stagger,
         easing: 'cubic-bezier(.2,.7,.2,1)',
         fill: 'both'
       });
@@ -158,6 +163,21 @@ const format = {
     el.textContent = value;
   }
 
+  // "synced Xs ago" behaves like a real operational signal: a refresh marks
+  // the sync moment ("synced just now"), then a 1s ticker counts up from it.
+  let lastSyncAt = Date.now();
+  const syncEl = $('[data-sync-age]');
+  function renderSyncAge() {
+    if (!syncEl) return;
+    const secs = Math.floor((Date.now() - lastSyncAt) / 1000);
+    const text = secs < 3 ? 'synced just now' : `synced ${secs}s ago`;
+    if (syncEl.textContent !== text) syncEl.textContent = text;
+  }
+  function markSynced() {
+    lastSyncAt = Date.now();
+    renderSyncAge();
+  }
+
   function updateMetrics() {
     const old = { ...state };
     state.inr = Math.min(220, Math.max(120, state.inr + (rand() - 0.46) * 8));
@@ -174,9 +194,18 @@ state.last = 1 + Math.floor(rand() * 6);
     setTextStable(delta('queue'), `${Math.max(1, Math.floor(state.queue * 0.22))} executing`);
 
     setTextStable($('[data-last-settlement]'), `${state.last}s ago`);
-    setTextStable($('[data-sync-age]'), `synced ${Math.max(2, Math.floor(rand()*10))}s ago`);
+    markSynced();
     setTextStable($('[data-uptime]'), `Operational`);
     setTextStable($('[data-ledger-hash]'), hash());
+
+    // Subtle operational pulse on the console header on each refresh.
+    const top = rail.querySelector('.dash-top');
+    if (top && !reducedMotion.matches) {
+      top.classList.remove('sync-flash');
+      void top.offsetWidth; // restart the animation
+      top.classList.add('sync-flash');
+      window.setTimeout(() => top.classList.remove('sync-flash'), 900);
+    }
 
     rail.querySelectorAll('[data-metric-card]').forEach((card) => {
       card.classList.add('value-fade');
@@ -211,7 +240,13 @@ state.last = 1 + Math.floor(rand() * 6);
   updateMetrics();
   updateFlow(first);
 
-  if (reducedMotion.matches) return;
+  if (reducedMotion.matches) {
+    renderSyncAge();
+    return;
+  }
+
+  const syncTicker = window.setInterval(renderSyncAge, 1000);
+  window.addEventListener('pagehide', () => window.clearInterval(syncTicker));
 
   let metricsTimer = window.setInterval(updateMetrics, 5200 + Math.floor(rand() * 2200));
   let feedTimer = window.setInterval(cycle, 7600 + Math.floor(rand() * 3200));

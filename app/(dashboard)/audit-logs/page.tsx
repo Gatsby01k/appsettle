@@ -1,11 +1,17 @@
 import { Suspense } from "react";
+import { ShieldCheck } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { formatDateTime } from "@/lib/utils";
-import { PageHeader } from "@/components/ops/page-header";
-import { MetricCard } from "@/components/ops/metric-card";
+import { cn, formatDateTime } from "@/lib/utils";
 import { EmptyState } from "@/components/ops/empty-state";
 import { FilterBar } from "@/components/ops/filter-bar";
+
+// Display-only labels for actor types — professional copy, same data.
+const ACTOR_LABEL: Record<string, string> = {
+  USER: "User action",
+  API: "Provider event",
+  SYSTEM: "System event",
+};
 
 type AuditPayload = {
   publicId?: string;
@@ -43,7 +49,7 @@ function eventDetail(log: { before: unknown; after: unknown }) {
   if (fromStatus && toStatus && fromStatus !== toStatus) return `${fromStatus} → ${toStatus}`;
   if (toStatus) return String(toStatus);
   if (after.amount && after.currency) return `${after.amount} ${after.currency}`;
-  return "Recorded";
+  return "Recorded event";
 }
 
 function auditTone(action: string): "neutral" | "success" | "warning" | "danger" | "info" {
@@ -99,26 +105,78 @@ export default async function AuditLogsPage({
 
   const settlementEvents = logs.filter((log) => log.resourceType === "settlement").length;
   const reconciliationEvents = logs.filter((log) => log.resourceType === "reconciliation_record").length;
+  // Provider/system events from the same dataset — actorType already exists on every log.
+  const providerEvents = logs.filter((log) => log.actorType === "API" || log.actorType === "SYSTEM").length;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Audit logs"
-        description="Immutable evidence trail for settlement, reconciliation, and configuration changes."
-        actions={demoFocus ? <DemoFocusBadge /> : undefined}
-      />
+    <div className="space-y-4">
+      {/* Command header: immutable evidence trail band (mirrors Settlements) */}
+      <section className="conf-hero ov-reveal p-5 sm:p-6">
+        <div className="relative flex flex-wrap items-start justify-between gap-5">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="overview-live-badge inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-emerald-700">
+                <span className="ops-pulse ops-pulse--subtle" aria-hidden="true" />
+                Immutable evidence trail
+              </span>
+              {demoFocus ? <DemoFocusBadge /> : null}
+            </div>
+            <h1 className="conf-hero__headline mt-3">Audit logs</h1>
+            <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-slate-500">
+              Track settlement, reconciliation, approval, and configuration events with actor, timestamp, and
+              resource history.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <span className="case-chip border-emerald-200 bg-emerald-50 text-emerald-700">Immutable history</span>
+              <span className="case-chip border-cyan-200 bg-cyan-50 text-cyan-800">Actor + timestamp</span>
+              <span className="case-chip case-chip--gold">Required for finality</span>
+              <span className="case-chip case-chip--demo">Provider + user events</span>
+            </div>
+          </div>
+          <div className="grid shrink-0 grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
+            {[
+              { label: "Total events", value: logs.length, tone: "text-slate-900" },
+              { label: "Settlement", value: settlementEvents, tone: "text-[#0a7d86]" },
+              { label: "Reconciliation", value: reconciliationEvents, tone: "text-[#9b6810]" },
+              { label: "Provider / system", value: providerEvents, tone: "text-brand-emerald-ink" },
+            ].map((stat) => (
+              <div key={stat.label} className="scase-stat">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.09em] text-slate-400">{stat.label}</p>
+                <p className={cn("scase-stat__value mt-1", stat.tone)}>{stat.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <MetricCard label="Total events" value={logs.length} hint="Latest 100" />
-        <MetricCard label="Settlement" value={settlementEvents} hint="Lifecycle events" tone="info" />
-        <MetricCard label="Reconciliation" value={reconciliationEvents} hint="Matching events" tone="warning" />
+      {/* Why this trail exists — UI copy only */}
+      <div className="flex items-start gap-2 rounded-xl border border-[var(--ops-line)] bg-white p-3">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand-emerald-ink" aria-hidden="true" />
+        <p className="text-xs leading-relaxed text-slate-600">
+          <span className="font-semibold text-slate-900">Auditable trail:</span> every settlement decision is
+          recorded for review, reporting, and finality control. The audit trail is one of the six pillars a
+          settlement needs to finalize.
+        </p>
       </div>
 
-      <Suspense fallback={null}>
-        <FilterBar searchPlaceholder="Search action, resource, reference..." />
-      </Suspense>
+      <div className="ops-panel ops-panel-accent overflow-hidden">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--ops-line-soft)] px-3 py-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Recorded events</p>
+            <p className="truncate text-xs text-slate-400">
+              Latest {logs.length} events · {filteredLogs.length} shown
+            </p>
+          </div>
+          <p className="hidden shrink-0 text-[10px] font-medium uppercase tracking-[0.07em] text-slate-400 sm:block">
+            Finality evidence
+          </p>
+        </div>
 
-      <div className="ops-panel p-4 sm:p-5">
+        <Suspense fallback={null}>
+          <FilterBar embedded searchPlaceholder="Search action, resource, reference..." />
+        </Suspense>
+
+        <div className="p-4 sm:p-5">
         {filteredLogs.length ? (
           <div className="audit-line space-y-0.5">
             {filteredLogs.map((log) => {
@@ -128,7 +186,9 @@ export default async function AuditLogsPage({
                 <div key={log.id} className={`audit-event audit-event--${actor}`}>
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <p className="text-[13px] font-medium tracking-tight text-slate-950">{log.action}</p>
-                    <span className={`audit-actor audit-actor--${actor}`}>{log.actorType}</span>
+                    <span className={`audit-actor audit-actor--${actor}`}>
+                      {ACTOR_LABEL[log.actorType] ?? log.actorType}
+                    </span>
                     {tone === "danger" ? (
                       <span className="case-chip case-chip--live">attention</span>
                     ) : null}
@@ -136,10 +196,12 @@ export default async function AuditLogsPage({
                       {formatDateTime(log.createdAt)}
                     </span>
                   </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
-                    <span className="font-medium text-slate-600">{resourceLabel(log)}</span>
-                    <span>{eventDetail(log)}</span>
-                    <span className="text-slate-400">{log.user?.email ?? log.actorType}</span>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+                    <span className="font-medium text-slate-700">{resourceLabel(log)}</span>
+                    <span className="text-slate-500">{eventDetail(log)}</span>
+                    <span className="text-slate-400">
+                      {log.user?.email ?? (log.actorType === "API" ? "Provider integration" : "System")}
+                    </span>
                   </div>
                 </div>
               );
@@ -148,6 +210,7 @@ export default async function AuditLogsPage({
         ) : (
           <EmptyState title="No audit events match" description="Try another search term or clear filters." />
         )}
+        </div>
       </div>
     </div>
   );

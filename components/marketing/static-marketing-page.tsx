@@ -56,6 +56,51 @@ const routeMap: Record<string, string> = {
 // timeline, tidy stacked sections/footer, fluid typography, and iOS safe-area
 // support — while preserving the institutional desktop direction.
 const MARKETING_POLISH_CSS = `
+/* ============================================================
+   HERO CONSOLE MOTION — premium, restrained micro-animation.
+   Additive only; the global prefers-reduced-motion rule in
+   styles.css (animation:none!important) disables all of it.
+   ============================================================ */
+/* Soft pulse on the operational status dot */
+.rail-meta .live-dot{animation:lpLiveDot 2.6s ease-in-out infinite}
+@keyframes lpLiveDot{
+  0%,100%{box-shadow:0 0 0 5px rgba(0,199,157,.12)}
+  50%{box-shadow:0 0 0 9px rgba(0,199,157,.05)}
+}
+/* Sync flash: gentle header shimmer + sync label emphasis on each refresh */
+.dash-top{position:relative}
+.dash-top.sync-flash::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(105deg,transparent 30%,rgba(0,199,157,.10) 50%,transparent 70%);
+  background-size:220% 100%;animation:lpSyncSweep .85s ease-out both}
+@keyframes lpSyncSweep{from{background-position:120% 0;opacity:1}to{background-position:-60% 0;opacity:0}}
+.dash-top.sync-flash .sync-age{color:#0a7d6a;transition:color .25s ease}
+.sync-age{transition:color .6s ease;font-variant-numeric:tabular-nums}
+
+/* KPI cards: smooth staggered entrance on load */
+.metric-grid .metric{animation:lpKpiIn .6s cubic-bezier(.2,.7,.2,1) both}
+.metric-grid .metric:nth-child(2){animation-delay:.09s}
+.metric-grid .metric:nth-child(3){animation-delay:.18s}
+@keyframes lpKpiIn{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
+
+/* Subtle connector/rail pulse between source and destination legs */
+.flow-card::before{animation:lpRailGlow 4.2s ease-in-out infinite}
+@keyframes lpRailGlow{0%,100%{opacity:.3}50%{opacity:.55}}
+
+/* Confirmed / Reconciled pills: gentle first-load emphasis */
+.settlement-list .pill{animation:lpPillIn .5s cubic-bezier(.2,.7,.2,1) both}
+.settlement-list .settlement-row:nth-child(2) .pill{animation-delay:.1s}
+.settlement-list .settlement-row:nth-child(3) .pill{animation-delay:.2s}
+.settlement-list .settlement-row:nth-child(4) .pill{animation-delay:.3s}
+@keyframes lpPillIn{from{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}to{opacity:1;transform:scale(1)}}
+
+/* Section cards: soft hover lift + brand glow (cards already lift; add glow) */
+.card:hover{border-color:rgba(0,199,157,.20);
+  box-shadow:0 24px 54px rgba(7,17,31,.10),0 0 0 1px rgba(0,199,157,.08)}
+.stat{transition:transform .22s var(--ease),box-shadow .22s var(--ease)}
+.stat:hover{transform:translateY(-2px);box-shadow:0 18px 44px rgba(7,17,31,.10)}
+.trust-card{transition:transform .22s var(--ease),box-shadow .22s var(--ease),border-color .22s var(--ease)}
+.trust-card:hover{transform:translateY(-2px);border-color:rgba(0,199,157,.16)}
+
 /* ---- Desktop / base polish ---- */
 .nav-actions{display:flex;align-items:center;gap:8px}
 .nav-actions .btn{white-space:nowrap}
