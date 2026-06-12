@@ -44,10 +44,12 @@ export async function POST(request: NextRequest) {
   const eventId = request.headers.get("x-pontis-event-id") ?? "";
 
   if (!timestamp || !signature) {
+    await auditVerificationFailure("missing_signature_headers");
     return NextResponse.json({ error: "Missing webhook signature headers." }, { status: 400 });
   }
 
   if (!verifyWebhookSignature(timestamp, signature, rawBody)) {
+    await auditVerificationFailure("invalid_signature");
     return NextResponse.json({ error: "Invalid webhook signature." }, { status: 401 });
   }
 
@@ -108,6 +110,26 @@ export async function POST(request: NextRequest) {
     status,
     status_message: status_message ?? null,
   });
+}
+
+/**
+ * Best-effort audit of a webhook delivery that failed verification. The
+ * payload is UNVERIFIED at this point, so nothing from the request body or
+ * headers is recorded — only the rejection reason (no secrets, no
+ * attacker-controlled data). Never throws; the HTTP rejection still stands.
+ */
+async function auditVerificationFailure(reason: "missing_signature_headers" | "invalid_signature") {
+  try {
+    await writeAuditLog({
+      action: "webhook.verification_failed",
+      resourceType: "provider",
+      resourceId: "PontisGlobe",
+      actorType: AuditActorType.SYSTEM,
+      after: { provider: "PontisGlobe", reason },
+    });
+  } catch (error) {
+    console.error("[pontis.webhook] failed to audit verification failure:", error);
+  }
 }
 
 function rememberEventId(eventId: string) {

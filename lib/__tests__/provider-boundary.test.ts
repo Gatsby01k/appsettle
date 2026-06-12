@@ -33,6 +33,11 @@ import {
   verifyWebhookSignature as verifyRemitQuicklySignature,
 } from "../providers/remitquickly/client";
 import { applyPayoutResolution, mapPontisStatus } from "../providers/pontis/settlement";
+import {
+  applyPayoutResolution as applyRemitQuicklyResolution,
+  buildPayoutRequest,
+  mapPayoutStatus as mapRemitQuicklyStatus,
+} from "../providers/remitquickly/settlement";
 
 // ---------------------------------------------------------------------------
 // Test credentials (fake, test-only — never real secrets).
@@ -247,5 +252,94 @@ describe("Pontis payout resolution idempotency", () => {
     expect(mapPontisStatus(undefined)).toBe("pending");
     expect(mapPontisStatus("reversed")).toBe("reversed");
     expect(mapPontisStatus("completed")).toBe("success");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RemitQuickly payout resolution idempotency + stable correlation id
+// ---------------------------------------------------------------------------
+describe("RemitQuickly payout resolution idempotency", () => {
+  const baseSettlement = {
+    id: "set-rq-1",
+    publicId: "SET-RQ-1",
+    organizationId: "org-1",
+    createdById: "user-1",
+    status: "EXECUTING",
+    sourceCurrency: "USDT",
+    targetCurrency: "INR",
+    sourceAmount: "10",
+    targetAmount: "850",
+    sourceAccount: "USDT Treasury Wallet",
+    targetAccount: "1234567890",
+    reference: "PILOT-RQ-1",
+  } as never;
+
+  const input = (overrides: Record<string, unknown>) =>
+    ({
+      settlement: baseSettlement,
+      userId: "user-1",
+      organizationId: "org-1",
+      payoutId: 88004,
+      ...overrides,
+    }) as never;
+
+  it("success from EXECUTING records proof BEFORE transitioning to SETTLED", async () => {
+    prismaMock.settlement.findFirst.mockResolvedValue({ ...(baseSettlement as object), status: "EXECUTING" });
+    const result = await applyRemitQuicklyResolution(input({ outcome: "success", providerStatus: "success" }));
+    expect(recordProviderProofMock).toHaveBeenCalledTimes(1);
+    expect(transitionSettlementMock).toHaveBeenCalledWith(
+      "set-rq-1",
+      "SETTLED",
+      "user-1",
+      "org-1",
+      expect.stringContaining("Awaiting independent reconciliation"),
+    );
+    expect(recordProviderProofMock.mock.invocationCallOrder[0]).toBeLessThan(
+      transitionSettlementMock.mock.invocationCallOrder[0],
+    );
+    expect(result).toMatchObject({ settlementId: "set-rq-1", status: "SETTLED" });
+  });
+
+  it("duplicate webhook delivery after SETTLED is a no-op (no duplicate final state)", async () => {
+    prismaMock.settlement.findFirst.mockResolvedValue({ ...(baseSettlement as object), status: "SETTLED" });
+    const result = await applyRemitQuicklyResolution(input({ outcome: "success", providerStatus: "success" }));
+    expect(result).toMatchObject({ skipped: true });
+    expect(recordProviderProofMock).not.toHaveBeenCalled();
+    expect(transitionSettlementMock).not.toHaveBeenCalled();
+    expect(writeAuditLogMock).not.toHaveBeenCalled();
+  });
+
+  it("duplicate failed delivery is a no-op", async () => {
+    prismaMock.settlement.findFirst.mockResolvedValue({ ...(baseSettlement as object), status: "FAILED" });
+    const result = await applyRemitQuicklyResolution(input({ outcome: "failed", providerStatus: "failed" }));
+    expect(result).toMatchObject({ skipped: true });
+    expect(recordProviderProofMock).not.toHaveBeenCalled();
+    expect(transitionSettlementMock).not.toHaveBeenCalled();
+  });
+
+  it("reversed requires review: proof + audit, lifecycle NOT auto-failed", async () => {
+    prismaMock.settlement.findFirst.mockResolvedValue({ ...(baseSettlement as object), status: "EXECUTING" });
+    const result = await applyRemitQuicklyResolution(input({ outcome: "reversed", providerStatus: "reversed" }));
+    expect(recordProviderProofMock).toHaveBeenCalledTimes(1);
+    expect(writeAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "remitquickly.payout.reversed_review_required" }),
+    );
+    expect(transitionSettlementMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ reviewRequired: true, status: "EXECUTING" });
+  });
+
+  it("unknown statuses map to pending, never failed", () => {
+    expect(mapRemitQuicklyStatus("weird-bank-code-77")).toBe("pending");
+    expect(mapRemitQuicklyStatus(null)).toBe("pending");
+    expect(mapRemitQuicklyStatus("transaction reversed by bank")).toBe("reversed");
+  });
+
+  it("merchantRecognitionId is the settlement public id and stays STABLE across retries; isTest defaults true", () => {
+    const first = buildPayoutRequest(baseSettlement, undefined);
+    const second = buildPayoutRequest(baseSettlement, undefined);
+    expect(first.merchantRecognitionId).toBe("SET-RQ-1");
+    expect(second.merchantRecognitionId).toBe(first.merchantRecognitionId);
+    expect(first.isTest).toBe(true); // sandbox-only: never silently live
+    expect(buildPayoutRequest(baseSettlement, undefined, {}).isTest).toBe(true);
   });
 });
