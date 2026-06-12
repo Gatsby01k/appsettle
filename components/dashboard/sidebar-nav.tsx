@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  BadgeCheck,
   Building2,
   BookOpen,
   FileBarChart,
@@ -27,6 +28,7 @@ const ICONS: Record<string, typeof LayoutDashboard> = {
   "/counterparties": Building2,
   "/accounts": Wallet,
   "/providers": ShieldCheck,
+  "/kyb": BadgeCheck,
   "/reports": FileBarChart,
   "/audit-logs": FileClock,
   "/team": Users,
@@ -50,6 +52,7 @@ const groups = [
       { href: "/counterparties", label: "Counterparties" },
       { href: "/accounts", label: "Accounts" },
       { href: "/providers", label: "Providers" },
+      { href: "/kyb", label: "KYB" },
       { href: "/reports", label: "Reports" },
     ],
   },
