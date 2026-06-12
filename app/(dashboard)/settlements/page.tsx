@@ -19,6 +19,7 @@ import {
   RECONCILIATION_SOURCE_LABEL,
   isIndependentReconciliationSource,
 } from "@/lib/reconciliation";
+import { lifecycleApprovalViolation } from "@/lib/settlement-actions";
 import { MODE_LABEL, getShadowConfig, safetyFor, type SettlementMode } from "@/lib/shadow-mode";
 import { canApproveSettlement, canCreateSettlement, roleErrorMessage } from "@/lib/permissions";
 import { counterpartyForCorridor } from "@/lib/treasury";
@@ -333,6 +334,25 @@ async function transition(formData: FormData) {
   if (!canApproveSettlement(membership.role)) redirect("/settlements");
   const status = String(formData.get("status")) as SettlementStatus;
   const settlementId = String(formData.get("settlementId"));
+
+  // P1 lifecycle dual-control: the creator may not approve their own
+  // settlement (REQUESTED -> APPROVED). Finality dual-control is enforced
+  // separately in the shadow console and is unchanged.
+  if (status === SettlementStatus.APPROVED) {
+    const target = await prisma.settlement.findFirst({
+      where: { id: settlementId, organizationId: organization.id },
+      select: { createdById: true },
+    });
+    const violation = lifecycleApprovalViolation({
+      targetStatus: status,
+      creatorId: target?.createdById,
+      approverId: user.id,
+    });
+    if (violation) {
+      redirect(`/settlements?error=${encodeURIComponent(violation)}`);
+    }
+  }
+
   let finalStatus: string = status;
   try {
     // When a payout provider is configured, executing a settlement creates a real

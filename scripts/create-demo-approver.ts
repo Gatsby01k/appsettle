@@ -16,9 +16,38 @@
 import { loadEnvConfig } from "@next/env";
 loadEnvConfig(process.cwd());
 
-import { Role } from "@prisma/client";
+import { AuditActorType, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma";
+
+/**
+ * Script-local audit writer (same shape as lib/audit.writeAuditLog, but
+ * avoids the "@/" path alias which is not guaranteed to resolve under tsx).
+ * Safe metadata only — never passwords, secrets, or raw env values.
+ */
+function writeAuditLog(input: {
+  action: string;
+  resourceType: string;
+  resourceId?: string;
+  organizationId?: string;
+  userId?: string;
+  before?: unknown;
+  after?: unknown;
+  actorType?: AuditActorType;
+}) {
+  return prisma.auditLog.create({
+    data: {
+      action: input.action,
+      resourceType: input.resourceType,
+      resourceId: input.resourceId,
+      organizationId: input.organizationId,
+      userId: input.userId,
+      before: input.before === undefined ? undefined : JSON.parse(JSON.stringify(input.before)),
+      after: input.after === undefined ? undefined : JSON.parse(JSON.stringify(input.after)),
+      actorType: input.actorType ?? AuditActorType.SYSTEM,
+    },
+  });
+}
 
 const APPROVER_EMAIL = "approver@inrsettle.com";
 const APPROVER_NAME = "INRSettle Demo Approver";
@@ -88,6 +117,13 @@ async function main() {
   // Ensure membership in the anchor's EXACT organization. Idempotent on the
   // (userId, organizationId) unique constraint; corrects the role if needed.
   // Memberships in other orgs are left untouched (listed below).
+  const existingMembership = await prisma.membership.findUnique({
+    where: {
+      userId_organizationId: { userId: approver.id, organizationId: organization.id },
+    },
+    select: { role: true },
+  });
+
   await prisma.membership.upsert({
     where: {
       userId_organizationId: {
@@ -102,6 +138,43 @@ async function main() {
       role: APPROVER_ROLE,
     },
   });
+
+  // P1 RBAC: membership changes are audit-logged. Safe metadata only —
+  // never passwords, secrets, or raw env values. Idempotent: an unchanged
+  // re-run writes no event.
+  if (!existingMembership) {
+    await writeAuditLog({
+      action: "membership.created",
+      resourceType: "membership",
+      resourceId: approver.id,
+      organizationId: organization.id,
+      userId: approver.id,
+      actorType: AuditActorType.SYSTEM,
+      after: {
+        userEmail: APPROVER_EMAIL,
+        organizationId: organization.id,
+        newRole: APPROVER_ROLE,
+        script: "create-demo-approver",
+      },
+    });
+  } else if (existingMembership.role !== APPROVER_ROLE) {
+    await writeAuditLog({
+      action: "membership.role_changed",
+      resourceType: "membership",
+      resourceId: approver.id,
+      organizationId: organization.id,
+      userId: approver.id,
+      actorType: AuditActorType.SYSTEM,
+      before: { userEmail: APPROVER_EMAIL, previousRole: existingMembership.role },
+      after: {
+        userEmail: APPROVER_EMAIL,
+        organizationId: organization.id,
+        previousRole: existingMembership.role,
+        newRole: APPROVER_ROLE,
+        script: "create-demo-approver",
+      },
+    });
+  }
 
   // ----- Optional cleanup: drop the approver's NON-anchor memberships -------
   // Off by default. Only ever touches THIS demo approver's memberships, never

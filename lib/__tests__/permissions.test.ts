@@ -52,6 +52,31 @@ describe("role × capability matrix", () => {
   });
 });
 
+describe("RBAC helpers match docs/rbac-matrix.md", () => {
+  // One row per role, mirroring the capability matrix in docs/rbac-matrix.md:
+  // [createQuote, createSettlement, writeRecon, autoMatch, approve, manageSettings]
+  const DOC_MATRIX: Record<Role, [boolean, boolean, boolean, boolean, boolean, boolean]> = {
+    [Role.OWNER]: [true, true, true, true, true, true],
+    [Role.ADMIN]: [true, true, true, true, true, true],
+    [Role.TREASURY_MANAGER]: [true, true, true, true, true, false],
+    [Role.SETTLEMENT_OPERATOR]: [true, true, true, true, false, false],
+    [Role.COMPLIANCE_OFFICER]: [false, false, false, false, false, false],
+    [Role.FINANCE_VIEWER]: [false, false, false, false, false, false],
+  };
+
+  it("every helper agrees with the documented matrix", () => {
+    for (const role of ALL_ROLES) {
+      const [quote, settlement, recon, match, approve, settings] = DOC_MATRIX[role];
+      expect(canCreateQuote(role)).toBe(quote);
+      expect(canCreateSettlement(role)).toBe(settlement);
+      expect(canWriteReconciliation(role)).toBe(recon);
+      expect(canRunReconciliationMatch(role)).toBe(match);
+      expect(canApproveSettlement(role)).toBe(approve);
+      expect(canManageSettings(role)).toBe(settings);
+    }
+  });
+});
+
 describe("COMPLIANCE_OFFICER is read/compliance-only", () => {
   it("cannot create quotes, settlements, or reconciliation evidence", () => {
     expect(canCreateQuote(Role.COMPLIANCE_OFFICER)).toBe(false);

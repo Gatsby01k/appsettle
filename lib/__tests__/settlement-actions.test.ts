@@ -1,9 +1,45 @@
 import { describe, expect, it } from "vitest";
-import { reconciliationPendingActions } from "../settlement-actions";
+import { lifecycleApprovalViolation, reconciliationPendingActions } from "../settlement-actions";
 
 // Regression guard for the Settlements "Awaiting independent reconciliation"
 // panel: exactly one action area, no duplicate auto-match, and no unavailable
 // (ghost/disabled) actions ever in the list.
+
+describe("lifecycle dual-control (P1): creator never approves own settlement", () => {
+  it("the creator cannot approve their own lifecycle APPROVED transition", () => {
+    const violation = lifecycleApprovalViolation({
+      targetStatus: "APPROVED",
+      creatorId: "user-creator",
+      approverId: "user-creator",
+    });
+    expect(violation).toMatch(/Dual control/);
+    expect(violation).toMatch(/different operator/);
+  });
+
+  it("a separate approver CAN approve the lifecycle", () => {
+    expect(
+      lifecycleApprovalViolation({
+        targetStatus: "APPROVED",
+        creatorId: "user-creator",
+        approverId: "user-approver",
+      }),
+    ).toBeNull();
+  });
+
+  it("only the APPROVED target is dual-controlled — execution/settle transitions unaffected", () => {
+    for (const targetStatus of ["EXECUTING", "SETTLED", "CANCELLED"]) {
+      expect(
+        lifecycleApprovalViolation({ targetStatus, creatorId: "u1", approverId: "u1" }),
+      ).toBeNull();
+    }
+  });
+
+  it("a missing creator id never blocks (legacy rows fail open on lifecycle, finality still gates)", () => {
+    expect(
+      lifecycleApprovalViolation({ targetStatus: "APPROVED", creatorId: null, approverId: "u1" }),
+    ).toBeNull();
+  });
+});
 
 describe("reconciliation-pending action list", () => {
   it("always offers Open reconciliation as the primary action", () => {
