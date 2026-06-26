@@ -37,29 +37,29 @@ export default async function AccountsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Accounts"
-        description="Fiat operating and settlement accounts alongside stablecoin treasury wallets."
+        description="Reference balances you record for operations. INRSettle holds no funds and provides no liquidity."
       />
 
       <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
         <MetricCard
-          label="Available INR"
+          label="Recorded INR"
           value={formatCurrencyCompact(inr, "INR")}
           valueTitle={formatCurrencyFull(inr, "INR")}
-          hint="Fiat accounts"
+          hint="Reference only"
           tone="success"
         />
         <MetricCard
-          label="Available USDT"
+          label="Recorded USDT"
           value={formatCurrencyCompact(usdt, "USDT")}
           valueTitle={formatCurrencyFull(usdt, "USDT")}
-          hint="Treasury wallet"
+          hint="Reference only"
           tone="info"
         />
         <MetricCard
-          label="Available USDC"
+          label="Recorded USDC"
           value={formatCurrencyCompact(usdc, "USDC")}
           valueTitle={formatCurrencyFull(usdc, "USDC")}
-          hint="Reserve"
+          hint="Reference only"
           tone="info"
         />
         <MetricCard label="Accounts" value={ACCOUNTS.length} hint="Across institutions" />

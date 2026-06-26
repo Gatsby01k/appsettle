@@ -423,7 +423,7 @@ function addHomepageConsoleCtas(html: string, fileName: string) {
   return html.replace(
     /<div class="hero-ctas">[\s\S]*?<\/div><div class="hero-proof"/,
     '<div class="hero-ctas">' +
-      '<a class="btn primary" href="/contact?intent=access">Request Access</a>' +
+      '<a class="btn primary" href="/contact?intent=access">Start a proof pilot</a>' +
       '<a class="btn" href="/contact?intent=sales">Talk to Sales</a>' +
       '</div><div class="hero-proof"',
   );
@@ -582,10 +582,10 @@ const finalCtaBand = `
     <div class="cta-band">
       <div class="cta-inner">
         <div class="eyebrow">Get started</div>
-        <h2>Modernize Your India Settlement Stack</h2>
-        <p>Bring INR ↔ USDT settlement, treasury visibility, and auto-reconciliation onto one corridor-native operating layer.</p>
+        <h2>Add the settlement control layer your providers don&rsquo;t give you.</h2>
+        <p>Prove finality on the payouts you already run &mdash; provider proof, independent reconciliation, audit trail and finality review. INRSettle does not move funds.</p>
         <div class="hero-ctas">
-          <a class="btn primary" href="/contact?intent=access">Request Access</a>
+          <a class="btn primary" href="/contact?intent=access">Start a proof pilot</a>
           <a class="btn" href="/contact?intent=sales">Talk to Sales</a>
         </div>
       </div>

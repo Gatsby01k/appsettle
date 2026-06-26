@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -70,6 +71,75 @@ export function RailLoaderInline({ label, className }: { label?: string; classNa
       <RailLoader compact label={label} />
     </div>
   );
+}
+
+/* ----------------------------------------------------------------------
+   Settlement Proof Engine Loader (v2) — the signature full-page loader.
+   A glass/navy capsule holding the mark, an orbital rail that draws in,
+   four evidence nodes (Proof / Recon / Finality / Audit) that activate as
+   a teal pulse orbits, and a cycling status line resting on "Workspace
+   ready". Pure CSS; reduced motion renders a static, all-active engine.
+   ---------------------------------------------------------------------- */
+
+const ENGINE_NODES = ["Proof", "Recon", "Finality", "Audit"] as const;
+const ENGINE_STATUS = [
+  "Capturing provider proof",
+  "Matching independent evidence",
+  "Checking finality controls",
+  "Preparing audit trail",
+] as const;
+
+/** The signature loader graphic. Use the page/inline wrappers below. */
+export function ProofEngineLoader() {
+  return (
+    <div className="proof-engine" role="status" aria-live="polite" aria-label="Initializing settlement workspace">
+      <div className="proof-engine__stage" aria-hidden="true">
+        <svg className="proof-engine__ring" viewBox="0 0 168 168">
+          <circle cx="84" cy="84" r="64" />
+          <circle cx="84" cy="84" r="64" />
+        </svg>
+        <div className="proof-engine__orbiter" />
+        {ENGINE_NODES.map((node, index) => (
+          <span key={node} className={`pe-node pe-node--${index + 1}`}>
+            <i />
+            <span>{node}</span>
+          </span>
+        ))}
+        <span className="proof-engine__capsule">
+          <Image src="/assets/mark.png" alt="INRSettle" width={38} height={38} priority />
+        </span>
+      </div>
+      <div className="proof-engine__status">
+        {ENGINE_STATUS.map((line) => (
+          <span key={line}>{line}</span>
+        ))}
+        <span>Workspace ready</span>
+      </div>
+    </div>
+  );
+}
+
+/** Full-page signature loader for app initial load / route `loading.tsx`. */
+export function FullPageProofEngineLoader() {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <ProofEngineLoader />
+    </div>
+  );
+}
+
+/** Compact inline proof-rail loader for a single panel/card. */
+export function InlineProofRailLoader({ label, className }: { label?: string; className?: string }) {
+  return (
+    <div className={cn("flex items-center justify-center py-8", className)}>
+      <RailLoader compact label={label} />
+    </div>
+  );
+}
+
+/** Pending-button indicator (three brand pulse dots, inherits text color). */
+export function ButtonProofLoader() {
+  return <RailDots />;
 }
 
 /** Pending-button indicator (three brand pulse dots, inherits text color). */

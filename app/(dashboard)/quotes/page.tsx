@@ -494,7 +494,7 @@ export default async function QuotesPage({
                 Execution terms
               </p>
               <div className="ticket-param">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-400">Execution lane</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-400">Provider rail</p>
                 <p className="mt-1.5 text-xs font-semibold text-slate-700">External provider rail</p>
                 <p className="mt-0.5 text-[10px] leading-snug text-slate-400">
                   RemitQuickly / PontisGlobe sandbox · INRSettle does not move funds
@@ -537,7 +537,7 @@ export default async function QuotesPage({
                   pendingText="Locking quote..."
                   className="quote-ticket-cta shrink-0"
                 >
-                  Generate executable quote
+                  Generate quote
                 </SubmitButton>
               </div>
             </form>

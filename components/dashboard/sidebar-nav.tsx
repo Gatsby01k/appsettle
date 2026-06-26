@@ -144,7 +144,7 @@ export function SidebarContent({
           <span className="ops-pulse" />
           <p className="text-[11px] font-medium text-white/55">Settlement rails live</p>
         </div>
-        <p className="mt-1.5 text-[11px] leading-relaxed text-white/35">Treasury operations console</p>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-white/35">Settlement operations console</p>
       </div>
     </div>
   );

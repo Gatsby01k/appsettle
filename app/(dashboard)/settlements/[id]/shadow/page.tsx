@@ -394,7 +394,7 @@ export default async function ShadowConsolePage({
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--ops-line-soft)] pb-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
-              Shadow test console
+              Finality review · settlement control
             </p>
             <h1 className="mt-1 text-xl font-semibold text-slate-950">{settlement.publicId}</h1>
             <p className="text-sm text-slate-500">{settlement.reference}</p>
