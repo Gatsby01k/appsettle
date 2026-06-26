@@ -80,93 +80,55 @@
   <strong>Settlement API</strong>
   <i aria-hidden="true"></i>
   <strong>Reconciliation</strong>
-</div><div class="trust-row"><div class="trust-card"><strong>24/7</strong><span class="muted">Treasury visibility</span></div><div class="trust-card"><strong>API-ready</strong><span class="muted">Settlement workflows</span></div><div class="trust-card"><strong>KYB-first</strong><span class="muted">Institutional onboarding</span></div></div></div><div class="dashboard live-rail trust-console" data-live-rail>
+</div><div class="trust-row"><div class="trust-card"><strong>24/7</strong><span class="muted">Treasury visibility</span></div><div class="trust-card"><strong>API-ready</strong><span class="muted">Settlement workflows</span></div><div class="trust-card"><strong>KYB-first</strong><span class="muted">Institutional onboarding</span></div></div></div><div class="dashboard live-rail trust-console cr-console" data-live-rail>
   <div class="dash-top">
     <div class="dots"><span></span><span></span><span></span></div>
     <div class="rail-meta">
       <span class="live-dot"></span>
-      <span class="status" data-rail-status>Operational treasury rail</span>
-      <span class="sync-age" data-sync-age>synced 4s ago</span>
+      <span class="status">Live settlement evidence</span>
+      <span class="sync-age" data-sync-age>synced just now</span>
     </div>
   </div>
-  <div class="dash-body">
-    <div class="assurance-strip" aria-label="Operational controls">
-      <span><b></b> KYB verified flows</span>
-      <span><b></b> Audit trail active</span>
-      <span><b></b> Signed webhooks</span>
-      <span><b></b> SLA monitored</span>
+  <div class="dash-body cr-body">
+    <div class="cr-chips" aria-label="Evidence controls">
+      <span class="cr-chip cr-chip--ok"><i></i>Provider proof active</span>
+      <span class="cr-chip cr-chip--ok"><i></i>Independent recon</span>
+      <span class="cr-chip cr-chip--ok"><i></i>Audit trail active</span>
+      <span class="cr-chip cr-chip--amber"><i></i>Finality monitored</span>
     </div>
 
-    <div class="metric-grid">
-      <div class="metric" data-metric-card>
-        <span>Available INR</span>
-<strong class="fixed-value" data-metric="inr">₹42.8M</strong>
-<em data-delta="inr">+₹0.4M</em>
-      </div>
-      <div class="metric" data-metric-card>
-        <span>USDT (reference)</span>
-<strong class="fixed-value" data-metric="usdt">4.2k</strong>
-<em data-delta="usdt">+320</em>
-      </div>
-      <div class="metric" data-metric-card>
-        <span>Queue</span>
-        <strong class="fixed-value" data-metric="queue">18</strong>
-        <em data-delta="queue">4 executing</em>
-      </div>
+    <div class="cr-metrics">
+      <div class="cr-metric"><small>Provider status</small><strong class="cr-ok">Completed</strong><span>via provider API</span></div>
+      <div class="cr-metric"><small>Recon status</small><strong class="cr-amber" data-recon-status>Pending</strong><span>bank / PSP record</span></div>
+      <div class="cr-metric"><small>Finality queue</small><strong>3 checks</strong><span>awaiting review</span></div>
     </div>
 
-    <div class="flow-card active-flow">
-      <div class="flow-rail"><span></span><i></i><b></b></div>
-      <div class="risk-ledger">
-        <span>Execution controls</span>
-        <strong data-control-state>Reserve locked · route verified</strong>
+    <div class="cr-flow">
+      <div class="cr-leg">
+        <p class="cr-leg__tag">Provider leg</p>
+        <p class="cr-leg__title">Payout provider</p>
+        <p class="cr-leg__meta">Status completed via API</p>
       </div>
-      <div class="flow-line">
-        <div class="currency active">
-          <small data-source-label>Source leg</small>
-          <strong data-source-leg>INR Treasury</strong>
-          <span data-source-meta>Reserve allocated</span>
-        </div>
-        <div class="settlement-engine" aria-hidden="true">
-          <span class="engine-line engine-line-left"></span>
-          <span class="engine-line engine-line-right"></span>
-          <span class="engine-orbit engine-orbit-a"></span>
-          <span class="engine-orbit engine-orbit-b"></span>
-          <span class="engine-core"><img src="/assets/mark.png" alt="" width="34" height="34"></span>
-          <span class="engine-pulse"></span>
-          <span class="engine-packet engine-packet-a"></span>
-          <span class="engine-packet engine-packet-b"></span>
-        </div>
-        <div class="currency">
-          <small data-destination-label>Destination leg</small>
-          <strong data-destination-leg>USDT Wallet</strong>
-          <span data-destination-meta>Execution window active</span>
-        </div>
+      <div class="cr-hub" aria-hidden="true">
+        <span class="cr-hub__ring"></span>
+        <span class="cr-hub__core"><img src="/assets/mark.png" alt="" width="30" height="30"></span>
+        <p class="cr-hub__name">INRSettle</p>
+        <p class="cr-hub__sub">Proof &bull; Recon &bull; Finality</p>
       </div>
-      <div class="execution-strip">
-        <span data-execution-id>SET-9F42</span>
-        <span data-execution-route>Mumbai corridor</span>
-        <span data-execution-window>12s ago</span>
+      <div class="cr-leg cr-leg--right">
+        <p class="cr-leg__tag">Settlement record</p>
+        <p class="cr-leg__title">Independent reconciliation</p>
+        <p class="cr-leg__meta">Awaiting finality review</p>
       </div>
     </div>
 
-    <div class="rail-footer">
-      <div><span class="label">System status</span><strong data-system-status>Operational</strong></div>
-      <div><span class="label">Treasury Status</span><strong data-uptime>Operational</strong></div>
-      <div><span class="label">Last Sync</span><strong data-last-settlement>2m ago</strong></div>
-    </div>
-
-    <div class="settlement-list stable-feed" data-settlement-list aria-label="Live settlement activity">
-      <div class="settlement-row"><span>PSP settlement · Mumbai corridor</span><small>SET-9F42 · 12s ago</small><span class="pill ok">Reconciled</span></div>
-      <div class="settlement-row"><span>Merchant payout batch · 284 items</span><small>PAY-31B8 · 28s ago</small><span class="pill pending">Executing</span></div>
-      <div class="settlement-row"><span>Liquidity rebalance · INR/USDT</span><small>TRS-74D1 · 41s ago</small><span class="pill ok">Confirmed</span></div>
-      <div class="settlement-row"><span>Reconciliation export · PSP ledger</span><small>REC-28A1 · 54s ago</small><span class="pill neutral">Queued</span></div>
-    </div>
-
-    <div class="ledger-note">
-      <span>Ledger checkpoint</span>
-      <code data-ledger-hash>0x7c9a···42f1</code>
-      <span data-ledger-copy>immutable event log active</span>
+    <div class="cr-stream" data-cr-stream aria-label="Live settlement evidence stream">
+      <div class="cr-event" data-cr-event><i></i><span>Provider status received</span></div>
+      <div class="cr-event" data-cr-event><i></i><span>Proof record attached</span></div>
+      <div class="cr-event" data-cr-event><i></i><span>Independent record matched</span></div>
+      <div class="cr-event" data-cr-event><i></i><span>Audit trail updated</span></div>
+      <div class="cr-event" data-cr-event><i></i><span>Finality review ready</span></div>
+      <div class="cr-event" data-cr-event><i></i><span>Settlement report generated</span></div>
     </div>
   </div>
 </div></div></section><section class="proof-band"><div class="container"><div class="proof-strip">
@@ -174,7 +136,7 @@
   <div class="proof-item"><div class="ico amber"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4 3 7 7 9 4-2 7-5 7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div><div><strong>Trusted infrastructure</strong><span>KYB-first, audit-logged operations</span></div></div>
   <div class="proof-item"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.8 2.6 15.2 0 18M12 3c-2.6 2.8-2.6 15.2 0 18"/></svg></div><div><strong>Global reach</strong><span>India corridors to stablecoin rails</span></div></div>
   <div class="proof-item"><div class="ico amber"><svg viewBox="0 0 24 24"><path d="M9 7 4 12l5 5"/><path d="M15 7l5 5-5 5"/></svg></div><div><strong>Works with your stack</strong><span>API for quotes, settlements, proof and reports</span></div></div>
-</div></div></section><section class="section alt"><div class="container"><div class="section-head"><div><div class="eyebrow">The problem</div><h2>“Completed” is what the provider says. Not proof the money settled.</h2></div><p>When a payout provider marks a payment completed, your settlement still isn’t final. You still need the provider’s proof, a matching bank or PSP record, an audit trail, and someone to approve finality.</p></div><div class="grid-4"><div class="card"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></div><h3>Completed isn’t final</h3><p>A provider marking a payout completed doesn’t prove the money actually arrived.</p></div><div class="card"><div class="ico amber"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="9" r="2.4"/><path d="M6 8.4v7.2"/><path d="M18 11.4c0 4.2-6 1.8-6 6.6"/></svg></div><h3>No independent check</h3><p>Without a matching bank or PSP record, you’re trusting one side’s word.</p></div><div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4h-4"/></svg></div><h3>No clear audit trail</h3><p>When a payout is questioned later, you can’t show what happened, step by step.</p></div><div class="card"><div class="ico amber"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h4"/></svg></div><h3>Manual reconciliation</h3><p>Spreadsheets and chat messages can’t prove a settlement is final.</p></div></div></div></section><section class="section"><div class="container"><div class="section-head"><div><div class="eyebrow">How it works</div><h2>From provider payout to a settlement you can prove.</h2></div><p>Every payout moves through the same simple steps, so you always know if it’s really settled.</p></div><div class="workflow-rail"><div class="wf-step"><div class="wf-node"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h3"/></svg></div><b>Quote</b><span>Terms &amp; window</span></div><div class="wf-step"><div class="wf-node"><svg viewBox="0 0 24 24"><path d="M7 8h12l-3-3"/><path d="M17 16H5l3 3"/></svg></div><b>Settlement</b><span>Payout request created</span></div><div class="wf-step"><div class="wf-node"><svg viewBox="0 0 24 24"><path d="M13 3 5 13h6l-1 8 8-11h-6z"/></svg></div><b>Provider proof</b><span>Provider’s completed status captured</span></div><div class="wf-step"><div class="wf-node"><svg viewBox="0 0 24 24"><path d="M3 12l4 4 7-8"/><path d="M13 16l1.5 1.5L21 9"/></svg></div><b>Reconciliation</b><span>Matched to a bank/PSP record</span></div><div class="wf-step"><div class="wf-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg></div><b>Finality review</b><span>Someone approves finality</span></div><div class="wf-step"><div class="wf-node"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 3.5h6V7H9z"/><path d="M9 11h6"/><path d="M9 15h4"/></svg></div><b>Settlement report</b><span>Proof you can share</span></div></div></div></section><section class="section alt"><div class="container"><div class="feature-split"><div><div class="eyebrow">What you get</div><h2>See every payout from “completed” to finalized.</h2><p class="lead">Check the provider’s proof against a bank or PSP record, work the queue, and approve finality — all in one place.</p><ul class="feature-list"><li>Provider proof captured per settlement</li><li>Independent bank/PSP reconciliation</li><li>Finality review with approval</li><li>Audit trail and settlement report</li></ul></div><div class="panel"><div class="panel-head"><span>Operational view</span><em>Illustrative</em></div><div class="tile-grid"><div class="tile"><small>Available INR</small><strong>₹42.8M</strong><span class="sub">+₹0.4M today</span></div><div class="tile"><small>USDT (reference)</small><strong>4.2k</strong><span class="sub">recorded</span></div><div class="tile"><small>Settlement queue</small><strong>18</strong><span class="sub">4 executing</span></div><div class="tile"><small>Exceptions</small><strong>2</strong><span class="sub">under review</span></div></div><div class="recon-flow"><div class="recon-row"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5"/><path d="M16 6.5a3 3 0 0 1 0 5.5"/><path d="M18 14c2 .6 3 2 3 4"/></svg></div><b>Counterparties</b><span>24 active</span></div><div class="recon-row"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5z"/><path d="M3 13l9 5 9-5"/></svg></div><b>Accounts</b><span>12 linked</span></div><div class="recon-row"><div class="ico amber"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 3.5h6V7H9z"/><path d="M9 11h6"/><path d="M9 15h4"/></svg></div><b>Audit logs</b><span>streaming</span></div></div></div></div></div></section><section class="section"><div class="container"><div class="feature-split reverse"><div class="panel"><div class="panel-head"><span>Reconciliation engine</span><em>100% matched</em></div><div class="recon-flow"><div class="recon-row"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 4v10"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg></div><b>External record imported</b><span>PSP ledger</span></div><div class="recon-row"><div class="ico"><svg viewBox="0 0 24 24"><path d="M3 12l4 4 7-8"/><path d="M13 16l1.5 1.5L21 9"/></svg></div><b>Auto-match</b><span>100%</span></div><div class="recon-row"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg></div><b>Reconciled settlement</b><span>SET-9F42</span></div><div class="recon-row"><div class="ico amber"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4 3 7 7 9 4-2 7-5 7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div><b>Audit event written</b><span>immutable</span></div></div></div><div><div class="eyebrow">Reconciliation</div><h2>Match every payout to an independent record.</h2><p class="lead">Bring in your bank and PSP records and match them to settlements. A provider’s own status never counts as the match — only an independent record does.</p><ul class="feature-list"><li>Import bank/PSP records</li><li>Automatic matching, manual review for the rest</li><li>Provider claims excluded by design</li><li>Every match written to the audit trail</li></ul></div></div></div></section><section class="section alt"><div class="container"><div class="section-head"><div><div class="eyebrow">Developers</div><h2>API-native settlement, reconciliation, and reporting.</h2></div><a class="btn" href="/developers">Explore the API</a></div><div class="split split--api"><div class="endpoint-grid"><div class="endpoint"><span class="verb post">POST</span><code>/v1/quotes</code><span class="ep-desc">Create quote</span></div><div class="endpoint active" aria-current="true"><span class="verb post">POST</span><code>/v1/settlements</code><span class="ep-desc">Open settlement</span></div><div class="endpoint"><span class="verb post">POST</span><code>/v1/reconciliation</code><span class="ep-desc">Match records</span></div><div class="endpoint"><span class="verb get">GET</span><code>/v1/audit</code><span class="ep-desc">Audit events</span></div><div class="endpoint"><span class="verb get">GET</span><code>/v1/reports</code><span class="ep-desc">Export reports</span></div></div><div class="code-panel"><div class="code-top"><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-title">Sample request</span><span class="code-status">settlement opened</span></div><pre>POST /v1/settlements
+</div></div></section><section class="section alt"><div class="container"><div class="section-head"><div><div class="eyebrow">The problem</div><h2>“Completed” is what the provider says. Not proof the money settled.</h2></div><p>When a payout provider marks a payment completed, your settlement still isn’t final. You still need the provider’s proof, a matching bank or PSP record, an audit trail, and someone to approve finality.</p></div><div class="grid-4"><div class="card"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></div><h3>Completed isn’t final</h3><p>A provider marking a payout completed doesn’t prove the money actually arrived.</p></div><div class="card"><div class="ico amber"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="9" r="2.4"/><path d="M6 8.4v7.2"/><path d="M18 11.4c0 4.2-6 1.8-6 6.6"/></svg></div><h3>No independent check</h3><p>Without a matching bank or PSP record, you’re trusting one side’s word.</p></div><div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4h-4"/></svg></div><h3>No clear audit trail</h3><p>When a payout is questioned later, you can’t show what happened, step by step.</p></div><div class="card"><div class="ico amber"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h4"/></svg></div><h3>Manual reconciliation</h3><p>Spreadsheets and chat messages can’t prove a settlement is final.</p></div></div></div></section><section class="section"><div class="container"><div class="section-head"><div><div class="eyebrow">How it works</div><h2>From provider payout to a settlement you can prove.</h2></div><p>Every payout moves through the same simple steps, so you always know if it’s really settled.</p></div><div class="workflow-rail"><div class="wf-step"><div class="wf-node"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h3"/></svg></div><b>Quote</b><span>Terms &amp; window</span></div><div class="wf-step"><div class="wf-node"><svg viewBox="0 0 24 24"><path d="M7 8h12l-3-3"/><path d="M17 16H5l3 3"/></svg></div><b>Settlement</b><span>Payout request created</span></div><div class="wf-step"><div class="wf-node"><svg viewBox="0 0 24 24"><path d="M13 3 5 13h6l-1 8 8-11h-6z"/></svg></div><b>Provider proof</b><span>Provider’s completed status captured</span></div><div class="wf-step"><div class="wf-node"><svg viewBox="0 0 24 24"><path d="M3 12l4 4 7-8"/><path d="M13 16l1.5 1.5L21 9"/></svg></div><b>Reconciliation</b><span>Matched to a bank/PSP record</span></div><div class="wf-step"><div class="wf-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg></div><b>Finality review</b><span>Someone approves finality</span></div><div class="wf-step"><div class="wf-node"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 3.5h6V7H9z"/><path d="M9 11h6"/><path d="M9 15h4"/></svg></div><b>Settlement report</b><span>Proof you can share</span></div></div></div></section><section class="section alt"><div class="container"><div class="feature-split"><div><div class="eyebrow">What you get</div><h2>See every payout from “completed” to finalized.</h2><p class="lead">Check the provider’s proof against a bank or PSP record, work the queue, and approve finality — all in one place.</p><ul class="feature-list"><li>Provider proof captured per settlement</li><li>Independent bank/PSP reconciliation</li><li>Finality review with approval</li><li>Audit trail and settlement report</li></ul></div><div class="panel"><div class="panel-head"><span>Operational view</span><em>Illustrative</em></div><div class="tile-grid"><div class="tile"><small>Proven final</small><strong>146</strong><span class="sub">this month</span></div><div class="tile"><small>Awaiting recon</small><strong>7</strong><span class="sub">bank/PSP record</span></div><div class="tile"><small>Finality queue</small><strong>3</strong><span class="sub">checks pending</span></div><div class="tile"><small>Exceptions</small><strong>2</strong><span class="sub">under review</span></div></div><div class="recon-flow"><div class="recon-row"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5"/><path d="M16 6.5a3 3 0 0 1 0 5.5"/><path d="M18 14c2 .6 3 2 3 4"/></svg></div><b>Counterparties</b><span>24 active</span></div><div class="recon-row"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5z"/><path d="M3 13l9 5 9-5"/></svg></div><b>Accounts</b><span>12 linked</span></div><div class="recon-row"><div class="ico amber"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 3.5h6V7H9z"/><path d="M9 11h6"/><path d="M9 15h4"/></svg></div><b>Audit logs</b><span>streaming</span></div></div></div></div></div></section><section class="section"><div class="container"><div class="feature-split reverse"><div class="panel"><div class="panel-head"><span>Reconciliation engine</span><em>100% matched</em></div><div class="recon-flow"><div class="recon-row"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 4v10"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg></div><b>External record imported</b><span>PSP ledger</span></div><div class="recon-row"><div class="ico"><svg viewBox="0 0 24 24"><path d="M3 12l4 4 7-8"/><path d="M13 16l1.5 1.5L21 9"/></svg></div><b>Auto-match</b><span>100%</span></div><div class="recon-row"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg></div><b>Reconciled settlement</b><span>SET-9F42</span></div><div class="recon-row"><div class="ico amber"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4 3 7 7 9 4-2 7-5 7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div><b>Audit event written</b><span>immutable</span></div></div></div><div><div class="eyebrow">Reconciliation</div><h2>Match every payout to an independent record.</h2><p class="lead">Bring in your bank and PSP records and match them to settlements. A provider’s own status never counts as the match — only an independent record does.</p><ul class="feature-list"><li>Import bank/PSP records</li><li>Automatic matching, manual review for the rest</li><li>Provider claims excluded by design</li><li>Every match written to the audit trail</li></ul></div></div></div></section><section class="section alt"><div class="container"><div class="section-head"><div><div class="eyebrow">Developers</div><h2>API-native settlement, reconciliation, and reporting.</h2></div><a class="btn" href="/developers">Explore the API</a></div><div class="split split--api"><div class="endpoint-grid"><div class="endpoint"><span class="verb post">POST</span><code>/v1/quotes</code><span class="ep-desc">Create quote</span></div><div class="endpoint active" aria-current="true"><span class="verb post">POST</span><code>/v1/settlements</code><span class="ep-desc">Open settlement</span></div><div class="endpoint"><span class="verb post">POST</span><code>/v1/reconciliation</code><span class="ep-desc">Match records</span></div><div class="endpoint"><span class="verb get">GET</span><code>/v1/audit</code><span class="ep-desc">Audit events</span></div><div class="endpoint"><span class="verb get">GET</span><code>/v1/reports</code><span class="ep-desc">Export reports</span></div></div><div class="code-panel"><div class="code-top"><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-title">Sample request</span><span class="code-status">settlement opened</span></div><pre>POST /v1/settlements
 {
   "corridor": "INR_USDT",
   "amount": "2500000.00",
