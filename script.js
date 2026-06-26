@@ -67,18 +67,32 @@ if (!reducedMotion.matches && 'IntersectionObserver' in window) {
 
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const steps = Array.from(rail.querySelectorAll('[data-cr-event]'));
+  const caps = Array.from(rail.querySelectorAll('[data-cr-cap]'));
   const sync = rail.querySelector('[data-sync-age]');
 
-  // Calm traveling highlight across the case timeline (purely cosmetic).
-  if (!reduce && steps.length) {
+  // Map each event-stream row to the state capsule it activates:
+  // rows: 0 provider status, 1 proof captured, 2 recon matched,
+  //       3 audit updated, 4 finality ready, 5 report generated
+  // caps: 0 provider proof, 1 independent recon, 2 audit trail, 3 finality
+  const capForStep = [0, 0, 1, 2, 3, 3];
+
+  if (reduce) return; // static scene already reads as complete
+
+  // Sequential stage activation: a pulse travels the chain and lights the
+  // matching capsule, looping softly.
+  if (steps.length) {
     let i = 0;
     const tick = () => {
       steps.forEach((el) => el.classList.remove('is-pulse'));
+      caps.forEach((c) => c.classList.remove('is-live'));
       const el = steps[i % steps.length];
       if (el) el.classList.add('is-pulse');
+      const cap = caps[capForStep[i % steps.length]];
+      if (cap) cap.classList.add('is-live');
       i += 1;
     };
-    const loop = window.setInterval(tick, 1400);
+    tick();
+    const loop = window.setInterval(tick, 1500);
     window.addEventListener('pagehide', () => window.clearInterval(loop));
   }
 
@@ -89,11 +103,9 @@ if (!reducedMotion.matches && 'IntersectionObserver' in window) {
       const secs = Math.floor((Date.now() - last) / 1000);
       sync.textContent = secs < 3 ? 'synced just now' : `synced ${secs}s ago`;
     };
-    if (!reduce) {
-      const t = window.setInterval(render, 1000);
-      window.addEventListener('pagehide', () => window.clearInterval(t));
-      document.addEventListener('visibilitychange', () => { if (!document.hidden) { last = Date.now(); render(); } });
-    }
+    const t = window.setInterval(render, 1000);
+    window.addEventListener('pagehide', () => window.clearInterval(t));
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { last = Date.now(); render(); } });
   }
 })();
 

@@ -86,16 +86,10 @@
     </div>
 
     <div class="hs-pills">
-      <span class="hs-pill hs-pill--ok"><i></i>Provider proof active</span>
-      <span class="hs-pill hs-pill--ok"><i></i>Independent recon</span>
-      <span class="hs-pill hs-pill--ok"><i></i>Audit trail active</span>
-      <span class="hs-pill hs-pill--amber"><i></i>Finality monitored</span>
-    </div>
-
-    <div class="hs-metrics">
-      <div class="hs-metric"><small>Provider status</small><strong class="cr-ok">Completed</strong></div>
-      <div class="hs-metric"><small>Recon status</small><strong class="cr-ok" data-recon-status>Matched</strong></div>
-      <div class="hs-metric"><small>Finality queue</small><strong>3 checks</strong></div>
+      <span class="hs-pill hs-pill--ok" data-cr-cap><i></i>Provider proof active</span>
+      <span class="hs-pill hs-pill--ok" data-cr-cap><i></i>Independent recon matched</span>
+      <span class="hs-pill hs-pill--ok" data-cr-cap><i></i>Audit trail active</span>
+      <span class="hs-pill hs-pill--amber" data-cr-cap><i></i>Finality review ready</span>
     </div>
 
     <div class="hs-node" aria-label="INRSettle verifying evidence">
@@ -109,25 +103,26 @@
     <div class="hs-case">
       <div class="hs-case__head">
         <div>
-          <p class="hs-case__eyebrow">Settlement case</p>
+          <p class="hs-case__eyebrow">Evidence stream</p>
           <p class="hs-case__id">SET-E6D1</p>
         </div>
-        <span class="hs-case__badge">In finality review</span>
+        <span class="hs-case__badge">5/6 complete</span>
       </div>
       <ol class="hs-timeline">
-        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Provider status received</b><em>marked completed</em></div><span class="hs-step__time">41s ago</span></li>
-        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Proof attached</b><em>provider proof recorded</em></div><span class="hs-step__time">22s ago</span></li>
-        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Recon matched</b><em>independent bank / PSP record</em></div><span class="hs-step__time">12s ago</span></li>
+        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Provider status received</b><em>marked completed</em></div><span class="hs-step__time">1s ago</span></li>
+        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Proof record captured</b><em>provider proof recorded</em></div><span class="hs-step__time">2s ago</span></li>
+        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Independent record matched</b><em>bank / PSP record</em></div><span class="hs-step__time">4s ago</span></li>
         <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Audit trail updated</b><em>immutable evidence</em></div><span class="hs-step__time">6s ago</span></li>
         <li class="hs-step is-active" data-cr-event><span class="hs-step__dot"></span><div><b>Finality review ready</b><em>awaiting approval</em></div><span class="hs-step__time">now</span></li>
-        <li class="hs-step" data-cr-event><span class="hs-step__dot"></span><div><b>Settlement report</b><em>generated on approval</em></div><span class="hs-step__time">queued</span></li>
+        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Settlement report generated</b><em>shareable evidence</em></div><span class="hs-step__time">now</span></li>
       </ol>
     </div>
 
     <div class="hs-summary">
+      <div><small>Case</small><strong>SET-E6D1</strong></div>
       <div><small>Provider</small><strong>PayPartner</strong></div>
-      <div><small>Corridor</small><strong>USD &rarr; INR</strong></div>
-      <div><small>Last sync</small><strong>just now</strong></div>
+      <div><small>Corridor</small><strong>INR &rarr; USDT</strong></div>
+      <div><small>Evidence</small><strong class="cr-ok">5/6 complete</strong></div>
       <div><small>Confidence</small><strong class="cr-ok">High</strong></div>
     </div>
   </div>

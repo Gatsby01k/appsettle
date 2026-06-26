@@ -696,3 +696,25 @@ table.table {
   .hs-node__state{display:none}            /* drop the side tag, keep brand + microcopy */
   .hs-step__time{display:none}             /* keep the chain itself uncluttered on tiny screens */
 }
+
+/* =====================================================================
+   Landing hero scene — v3.3: sequential capsule activation, active log
+   row highlight, 5-field compact summary. Reduced-motion safe.
+   ===================================================================== */
+/* State capsules: base calm, JS adds .is-live to the active one in sequence */
+.hs-pill{transition:transform .25s var(--ease),box-shadow .25s var(--ease),border-color .25s var(--ease)}
+.hs-pill.is-live{transform:translateY(-1px)}
+.hs-pill--ok.is-live{border-color:rgba(0,199,157,.5);box-shadow:0 0 0 3px rgba(0,199,157,.12),0 8px 18px rgba(0,199,157,.12)}
+.hs-pill--amber.is-live{border-color:rgba(242,173,35,.5);box-shadow:0 0 0 3px rgba(242,173,35,.14),0 8px 18px rgba(242,173,35,.12)}
+@media (prefers-reduced-motion:no-preference){
+  .hs-pill.is-live i{animation:crDot 1.2s ease-in-out infinite}
+}
+
+/* Active event-stream row gets a soft highlight as the pulse passes */
+.hs-step{border-radius:10px;transition:background-color .3s var(--ease)}
+.hs-step.is-active{background:rgba(242,173,35,.06)}
+.hs-step.is-pulse{background:rgba(0,199,157,.05)}
+
+/* Compact 5-field summary: 3 across (3+2), 2 across on mobile */
+.hs-summary{grid-template-columns:repeat(3,1fr)}
+@media (max-width:560px){.hs-summary{grid-template-columns:repeat(2,1fr)}}
