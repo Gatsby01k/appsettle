@@ -66,61 +66,35 @@ if (!reducedMotion.matches && 'IntersectionObserver' in window) {
   if (!rail) return;
 
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const events = Array.from(rail.querySelectorAll('[data-cr-event]'));
-  const recon = rail.querySelector('[data-recon-status]');
+  const steps = Array.from(rail.querySelectorAll('[data-cr-event]'));
   const sync = rail.querySelector('[data-sync-age]');
-  const total = events.length;
 
-  function setRecon(matched) {
-    if (!recon) return;
-    recon.textContent = matched ? 'Matched' : 'Pending';
-    recon.classList.toggle('cr-ok', matched);
-    recon.classList.toggle('cr-amber', !matched);
+  // Calm traveling highlight across the case timeline (purely cosmetic).
+  if (!reduce && steps.length) {
+    let i = 0;
+    const tick = () => {
+      steps.forEach((el) => el.classList.remove('is-pulse'));
+      const el = steps[i % steps.length];
+      if (el) el.classList.add('is-pulse');
+      i += 1;
+    };
+    const loop = window.setInterval(tick, 1400);
+    window.addEventListener('pagehide', () => window.clearInterval(loop));
   }
 
-  // Reduced motion: show the settled, all-revealed state.
-  if (reduce) {
-    events.forEach((el) => el.classList.add('is-on'));
-    setRecon(true);
-    return;
+  // Live "synced Ns ago" signal.
+  if (sync) {
+    let last = Date.now();
+    const render = () => {
+      const secs = Math.floor((Date.now() - last) / 1000);
+      sync.textContent = secs < 3 ? 'synced just now' : `synced ${secs}s ago`;
+    };
+    if (!reduce) {
+      const t = window.setInterval(render, 1000);
+      window.addEventListener('pagehide', () => window.clearInterval(t));
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) { last = Date.now(); render(); } });
+    }
   }
-
-  // 1) Reveal the evidence stream once, staggered (the "wow" on load).
-  events.forEach((el, i) => window.setTimeout(() => el.classList.add('is-on'), 180 + i * 260));
-
-  // 2) Then loop a calm pulse through the stream; recon flips Pending -> Matched
-  //    on the "Independent record matched" step (index 2) and resets each cycle.
-  let i = 0;
-  const tick = () => {
-    events.forEach((e) => e.classList.remove('is-active'));
-    const el = events[i % total];
-    if (el) el.classList.add('is-active');
-    setRecon((i % total) >= 2);
-    i += 1;
-  };
-  let loopTimer = null;
-  const startTimer = window.setTimeout(() => {
-    tick();
-    loopTimer = window.setInterval(tick, 2200);
-  }, 180 + total * 260);
-
-  // 3) Live "synced Ns ago" signal.
-  let last = Date.now();
-  const renderSync = () => {
-    if (!sync) return;
-    const secs = Math.floor((Date.now() - last) / 1000);
-    sync.textContent = secs < 3 ? 'synced just now' : `synced ${secs}s ago`;
-  };
-  const syncTimer = window.setInterval(renderSync, 1000);
-
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) { last = Date.now(); renderSync(); }
-  });
-  window.addEventListener('pagehide', () => {
-    window.clearTimeout(startTimer);
-    if (loopTimer) window.clearInterval(loopTimer);
-    window.clearInterval(syncTimer);
-  });
 })();
 
 (() => {
