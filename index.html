@@ -98,6 +98,14 @@
       <div class="hs-metric"><small>Finality queue</small><strong>3 checks</strong></div>
     </div>
 
+    <div class="hs-node" aria-label="INRSettle verifying evidence">
+      <span class="hs-node__chip">
+        <span class="hs-node__mark"><img src="/assets/mark.png" alt="" width="22" height="22"></span>
+        <span class="hs-node__txt"><b>INRSettle</b><small>Proof &bull; Recon &bull; Finality</small></span>
+        <span class="hs-node__state"><i></i>verifying evidence</span>
+      </span>
+    </div>
+
     <div class="hs-case">
       <div class="hs-case__head">
         <div>
@@ -107,12 +115,12 @@
         <span class="hs-case__badge">In finality review</span>
       </div>
       <ol class="hs-timeline">
-        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Provider completed</b><em>via provider API</em></div></li>
-        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Proof attached</b><em>provider proof recorded</em></div></li>
-        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Independent record matched</b><em>bank / PSP record</em></div></li>
-        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Audit updated</b><em>immutable trail</em></div></li>
-        <li class="hs-step is-active" data-cr-event><span class="hs-step__dot"></span><div><b>Finality review ready</b><em>awaiting approval</em></div></li>
-        <li class="hs-step" data-cr-event><span class="hs-step__dot"></span><div><b>Report generated</b><em>shareable proof</em></div></li>
+        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Provider status received</b><em>marked completed</em></div><span class="hs-step__time">41s ago</span></li>
+        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Proof attached</b><em>provider proof recorded</em></div><span class="hs-step__time">22s ago</span></li>
+        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Recon matched</b><em>independent bank / PSP record</em></div><span class="hs-step__time">12s ago</span></li>
+        <li class="hs-step is-done" data-cr-event><span class="hs-step__dot"></span><div><b>Audit trail updated</b><em>immutable evidence</em></div><span class="hs-step__time">6s ago</span></li>
+        <li class="hs-step is-active" data-cr-event><span class="hs-step__dot"></span><div><b>Finality review ready</b><em>awaiting approval</em></div><span class="hs-step__time">now</span></li>
+        <li class="hs-step" data-cr-event><span class="hs-step__dot"></span><div><b>Settlement report</b><em>generated on approval</em></div><span class="hs-step__time">queued</span></li>
       </ol>
     </div>
 
